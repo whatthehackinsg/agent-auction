@@ -1,0 +1,13 @@
+.shuffleParent {
+  display: inline-block;
+  white-space: normal;
+  word-wrap: break-word;
+  will-change: transform;
+  line-height: 1;
+  text-transform: uppercase;
+  visibility: hidden;
+}
+
+.isReady {
+  visibility: visible;
+}
