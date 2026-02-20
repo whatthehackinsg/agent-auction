@@ -1,0 +1,76 @@
+{
+  "basic_info": {
+    "name": "Google Agent Payments Protocol (AP2)",
+    "type": "off-chain standard",
+    "status": "Production (spec published; 60+ launch partners; integrated into Google Wallet and Google Pay ecosystem)",
+    "ecosystem": "Cloud/Enterprise (payment-agnostic; supports traditional payment rails, stablecoins, and crypto including x402). Not blockchain-specific.",
+    "launch_date": "September 2025 (announced at Google Cloud event; 60+ partners including Visa, Mastercard, PayPal, Stripe, Adyen, Shopify, Square, Coinbase)"
+  },
+  "onboarding_flow": {
+    "registration_steps": "1. PSP or merchant registers with AP2 ecosystem by implementing the mandate specification. 2. Agent developer integrates AP2 SDK to enable mandate issuance/presentation. 3. Human principal creates an Intent Mandate (W3C VC) specifying spending limits, approved merchants/categories, time constraints. 4. Agent receives Intent Mandate. 5. When purchasing, agent presents Intent Mandate to merchant. 6. Merchant generates Commerce Mandate (VC) with transaction details. 7. Agent combines mandates to request Payment Mandate from PSP. 8. PSP validates chain, issues Payment Mandate. 9. Agent presents Payment Mandate to complete transaction.",
+    "human_involvement": "approve-only (human creates initial Intent Mandate; agent handles all subsequent steps autonomously)",
+    "agent_autonomy": "High within delegated authority. Agent can autonomously discover, negotiate, purchase, and pay within Intent Mandate constraints.",
+    "time_to_first_action": "minutes (once Intent Mandate created and SDK integrated)"
+  },
+  "identity_model": {
+    "identity_type": "W3C Verifiable Credentials (mandates as identity assertion + authorization). Compatible with DIDs, OAuth tokens, platform-specific systems.",
+    "key_management": "Delegates to underlying identity/payment systems. Mandates signed using standard VC mechanisms (JSON-LD, JWS). Intent Mandates have built-in expiration. Payment Mandates typically single-use.",
+    "multi_instance_support": "Yes. Intent Mandate can be presented by multiple instances sharing same spending budget enforced at PSP level. [uncertain]",
+    "recovery_mechanism": "Mandate revocation by human principal invalidates all downstream mandates. Standard VC revocation mechanisms (revocation lists, status lists) apply.",
+    "versioning_support": "Not explicitly addressed. Mandates contain version/schema info as W3C VC metadata. [uncertain]"
+  },
+  "security": {
+    "authentication_method": "VC presentation (multi-party: human signs Intent, merchant signs Commerce, PSP signs Payment Mandate)",
+    "known_vulnerabilities": "1. Mandate theft/replay (mitigated by expiration/limits). 2. Commerce Mandate manipulation by malicious merchants. 3. Over-broad mandates increase attack surface. 4. PSP trust dependency. 5. Prompt injection could manipulate agent purchases. 6. Credential storage compromise. [uncertain]",
+    "revocation_speed": "seconds to minutes (Intent Mandate revocation near-instant; Payment Mandates typically short-lived/single-use)",
+    "anti_sybil": "Delegated to payment infrastructure (KYC/AML on human principal, spending limits, merchant fraud detection)",
+    "data_exposure_risk": "Moderate. Mandates contain spending limits, merchant categories, agent identity, transaction details. Selective disclosure via VC model.",
+    "bot_to_bot_attack_surface": "Moderate. Mandate chain provides cryptographic verification but risks include misleading Commerce Mandates, price manipulation, prompt injection influencing purchases.",
+    "skill_plugin_vetting": "Not directly addressed. AP2 is payment protocol, not skill framework. Mandates can restrict merchant categories as indirect vetting.",
+    "attestation_mechanism": "W3C Verifiable Credentials provide cryptographic proof of authorization chain. No TEE attestation in core protocol."
+  },
+  "offchain_onchain_linking": {
+    "linking_support": "yes (payment-agnostic, supports both on-chain and off-chain rails)",
+    "linking_mechanism": "x402 as crypto rail within AP2. Payment Mandate can authorize x402 stablecoin payment. Mandate chain can reference on-chain identities (DIDs, wallet addresses) or off-chain (OAuth accounts).",
+    "transfer_behavior": "N/A for protocol itself. Mandates are authorization credentials, not transferable assets. [uncertain]"
+  },
+  "delegation_and_authorization": {
+    "delegation_model": "AP2 mandates (W3C VC delegation chain): Intent Mandate (human->agent, spending authority) -> Commerce Mandate (merchant->agent, transaction details) -> Payment Mandate (PSP->agent, payment authorization). Verifiable, cryptographic delegation.",
+    "authorization_granularity": "Intent-aware (mandate-based). Supports per-transaction limits, cumulative limits, merchant categories (MCC), specific merchants, time windows, geographic restrictions, product type restrictions, recurring payments."
+  },
+  "discovery_and_interoperability": {
+    "discovery_mechanism": "Relies on existing commerce discovery. Merchants advertise AP2 acceptance. No AP2-specific agent discovery; uses A2A Agent Cards for agent discovery.",
+    "capability_declaration": "Intent Mandates declare agent's authorized purchasing capabilities. Integrates with A2A Agent Cards for AP2 support declaration.",
+    "cross_platform_portability": "Highly portable. W3C VCs inherently portable. Same mandate structure works across traditional finance and crypto rails.",
+    "standards_compliance": "W3C Verifiable Credentials, W3C DID, JSON-LD, OAuth 2.0/2.1, HTTP/HTTPS. Composes with A2A. EMV for cards, ISO 20022 for bank transfers, EIP-3009/Permit2 for x402.",
+    "protocol_composability": "Very high. Composes with: A2A (agent communication), MCP (tool access), x402 (crypto payments), ERC-8004 (on-chain identity), traditional payment networks (Visa, Mastercard, PayPal, Stripe)."
+  },
+  "push_pull_communication": {
+    "push_support": "Webhook (payment status notifications); relies on A2A push mechanisms for agent coordination [uncertain]",
+    "pull_support": "REST API (mandate verification, payment status, transaction history)",
+    "subscription_model": "Payment provider-specific notification systems. No AP2-specific subscription protocol. [uncertain]"
+  },
+  "trust_and_reputation": {
+    "trust_model": "Delegated (credential chains). Trust flows through mandate chain with each party performing verification. Payment providers add institutional trust via KYC/AML.",
+    "reputation_system": "None native to AP2. Handled by payment provider history, ERC-8004, or A2A-level mechanisms. [uncertain]"
+  },
+  "payment_and_economics": {
+    "payment_integration": "AP2 IS a payment protocol. Supports: traditional (Visa, Mastercard, PayPal, Stripe, bank transfers), crypto (x402 stablecoins), digital wallets (Google Pay, Apple Pay).",
+    "economic_model": "Free (open spec, no licensing). Transaction costs depend on rail: cards 1.5-3%, x402 sub-$0.01 on L2, bank transfers vary. No protocol token or staking."
+  },
+  "governance_and_compliance": {
+    "regulatory_alignment": "Strong through payment provider layer (PCI-DSS, PSD2/PSD3, AML/KYC). Mandate chain supports EU AI Act transparency, NIST AI RMF. [uncertain]",
+    "audit_trail_capability": "Signed events (W3C VCs). Each mandate cryptographically signed/timestamped. Selective disclosure for audits. x402 rail adds on-chain records.",
+    "lifecycle_management": "Mandate lifecycle: creation -> active -> expiration -> revocation. Agent lifecycle handled by companion protocols (A2A, MCP)."
+  },
+  "uncertain": [
+    "multi_instance_support",
+    "versioning_support",
+    "known_vulnerabilities",
+    "transfer_behavior",
+    "push_support",
+    "subscription_model",
+    "reputation_system",
+    "regulatory_alignment"
+  ]
+}

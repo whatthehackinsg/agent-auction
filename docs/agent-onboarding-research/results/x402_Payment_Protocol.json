@@ -1,0 +1,71 @@
+{
+  "basic_info": {
+    "name": "x402 Payment Protocol",
+    "type": "hybrid (off-chain HTTP protocol with on-chain settlement)",
+    "status": "Production (live on Base, Ethereum, Arbitrum, Polygon, Solana; 156K+ weekly transactions; x402 Foundation established)",
+    "ecosystem": "Multi-chain EVM (Base primary, Ethereum, Arbitrum, Optimism, Polygon) + Solana. Primary asset: USDC. Built by Coinbase + Cloudflare.",
+    "launch_date": "April 2025 (initial release); September 2025 (x402 Foundation established; Cloudflare Workers integration)"
+  },
+  "onboarding_flow": {
+    "registration_steps": "Client (paying agent): 1. Get crypto wallet with USDC (EIP-3009 or Permit2 compatible). Merchant (Resource Server): 1. Set up HTTP server returning 402 with payment requirements. 2. Choose Facilitator (Coinbase-hosted or self-hosted). Flow: Agent gets 402 -> parses requirements -> signs EIP-3009 authorization -> retries with X-PAYMENT header -> Merchant verifies via Facilitator -> serves resource -> Facilitator settles on-chain.",
+    "human_involvement": "approve-only (human funds wallet initially; agent handles all payments autonomously)",
+    "agent_autonomy": "Very high. Once funded, agent autonomously: detects 402, parses requirements, evaluates, signs, retries. No registration needed. Wallet address IS identity.",
+    "time_to_first_action": "seconds (zero registration; funded wallet can pay immediately)"
+  },
+  "identity_model": {
+    "identity_type": "Wallet address (Ethereum EOA or smart contract wallet). No separate registration, DID, or API key needed.",
+    "key_management": "Standard Ethereum wallet keys (secp256k1 EVM, Ed25519 Solana). EIP-3009 signatures with built-in validBefore/validAfter expiration. Supports KMS, TEE wallets, MPC wallets, smart contract wallets (ERC-4337). Key rotation = switch wallets.",
+    "multi_instance_support": "Yes. Multiple instances can share wallet (coordinate nonces) or each use own wallet. Smart contract wallets support multiple signers.",
+    "recovery_mechanism": "Standard wallet recovery: seed phrase, social recovery (smart contract wallets), multisig guardians. Lost keys = lost funds.",
+    "versioning_support": "N/A. Stateless protocol. Payment history on-chain provides implicit activity versioning."
+  },
+  "security": {
+    "authentication_method": "Wallet signature (EIP-3009 transferWithAuthorization). Signature IS authentication.",
+    "known_vulnerabilities": "1. Push payment irreversibility (no chargeback/escrow). 2. Facilitator trust (could fail to settle or front-run). 3. Replay attacks (mitigated by nonce/expiration). 4. MITM on 402 responses. 5. Wallet draining if key compromised. 6. Gas price manipulation delaying settlement.",
+    "revocation_speed": "seconds (authorizations have validBefore timestamps; wallet funds can be moved immediately on compromise)",
+    "anti_sybil": "Economic barrier (need funded wallet). No registration = no Sybil registration surface. Payment cost IS anti-Sybil.",
+    "data_exposure_risk": "Low to moderate. On-chain: wallet addresses + amounts public. HTTP: payment requirements in headers. No PII or API keys. Pseudonymous but linkable.",
+    "bot_to_bot_attack_surface": "Low. Simple request-pay-receive with crypto verification. Risks: price gouging, service non-delivery, payment flooding. Agent-side limits mitigate.",
+    "skill_plugin_vetting": "N/A. Payment protocol, not skill framework. No merchant vetting. Agent implements own allowlists/price limits.",
+    "attestation_mechanism": "Cryptographic payment proof: signed EIP-3009 authorization + on-chain settlement tx. Can feed into ERC-8004 reputation (proofOfPayment). No TEE attestation."
+  },
+  "offchain_onchain_linking": {
+    "linking_support": "yes (native — HTTP off-chain + on-chain settlement bridge)",
+    "linking_mechanism": "Wallet address links both layers. HTTP 402 off-chain, token transfers on-chain. ERC-8004 registration files can include x402 endpoints.",
+    "transfer_behavior": "N/A. Wallet-based identity, not transferable tokens. Agent changes wallets by funding new one. Payment history stays with old address."
+  },
+  "delegation_and_authorization": {
+    "delegation_model": "EIP-3009 transferWithAuthorization (single-level: wallet owner -> Facilitator for specific payment). Multi-level via AP2 mandates. Smart contract wallets enable session keys and spending limits.",
+    "authorization_granularity": "Fine-grained per-payment. Each authorization specifies exact amount, recipient, token, time window, nonce. Wallet-level limits via smart contracts. Intent-aware when combined with AP2."
+  },
+  "discovery_and_interoperability": {
+    "discovery_mechanism": "HTTP-native. Agents discover x402 by receiving 402 responses. No registry needed. ERC-8004 can declare x402 endpoints.",
+    "capability_declaration": "HTTP 402 response IS the capability declaration (amount, asset, recipient, chain, expiration, scheme).",
+    "cross_platform_portability": "Highly portable. Works with any HTTP client, any EVM-compatible wallet, any chain. Any agent framework can integrate via HTTP middleware.",
+    "standards_compliance": "HTTP RFC 7231 (402), EIP-3009, EIP-2612 (Permit), Permit2, ERC-20, JSON. Compatible with W3C VC via AP2.",
+    "protocol_composability": "High. Composes with: AP2 (crypto payment rail), A2A (agent commerce), ERC-8004 (identity + proofOfPayment), MCP (tool access with payment), Cloudflare Workers (edge middleware), Coinbase AgentKit (wallet management)."
+  },
+  "push_pull_communication": {
+    "push_support": "None native. On-chain event subscriptions for settlement monitoring. Facilitator may offer webhooks. [uncertain]",
+    "pull_support": "REST API (HTTP GET/POST for resources; Facilitator /verify and /settle endpoints). On-chain reads for settlement.",
+    "subscription_model": "Smart contract events (ERC-20 Transfer). No protocol-level subscription. Blockchain indexing services available. [uncertain]"
+  },
+  "trust_and_reputation": {
+    "trust_model": "Cryptographic (trustless payment verification via signatures + blockchain consensus + Facilitator trust).",
+    "reputation_system": "None native. On-chain payment history provides implicit reputation. ERC-8004 can incorporate x402 proofOfPayment."
+  },
+  "payment_and_economics": {
+    "payment_integration": "x402 IS a payment protocol. USDC primary, EURC, any EIP-3009 token. Permit2 fallback for other ERC-20. Multi-chain. Sub-$0.001 micropayments on L2. Crypto rail in AP2.",
+    "economic_model": "Per-transaction only: gas fees (sub-$0.01 on L2), Facilitator fees (varies). No protocol token, staking, subscription, or registration costs."
+  },
+  "governance_and_compliance": {
+    "regulatory_alignment": "Partial. USDC regulated (Circle). Coinbase regulated. Protocol itself has no KYC/AML. Compliance falls on Facilitators/issuers. AP2 mandates add traceability. [uncertain]",
+    "audit_trail_capability": "Blockchain anchoring (native). Every settlement is immutable on-chain tx. Off-chain signed authorizations + on-chain records = complete audit trail.",
+    "lifecycle_management": "Minimal by design. Stateless: no registration, no activation, no suspension. Wallet active if funded. Payment history immutable. Agent lifecycle via companion protocols."
+  },
+  "uncertain": [
+    "push_support",
+    "subscription_model",
+    "regulatory_alignment"
+  ]
+}

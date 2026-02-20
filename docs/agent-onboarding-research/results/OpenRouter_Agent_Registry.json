@@ -1,0 +1,74 @@
+{
+  "basic_info": {
+    "name": "OpenRouter",
+    "type": "off-chain",
+    "status": "Production",
+    "ecosystem": "N/A (cloud-based AI model routing platform; supports crypto payments via Coinbase/USDC on-chain but not blockchain-native)",
+    "launch_date": "2023 (founded by Alex Atallah, former OpenSea CTO, and Louis Vichy; scaled to $100M+ annualized inference spend by late 2024; $40M Series A led by a16z and Menlo Ventures with Sequoia participation)"
+  },
+  "onboarding_flow": {
+    "registration_steps": "1. Create an account on openrouter.ai (email-based registration or OAuth via GitHub/Google). 2. Add credits on the Credits page (credit card via Stripe, AliPay, or cryptocurrency via Coinbase USDC). 3. Create API key from dashboard or programmatically via Management API (POST /api/v1/keys). 4. Configure API key with optional credit limits, model restrictions, and rate limits. 5. Integrate using OpenAI-compatible SDK (Python/TypeScript) by setting base_url to https://openrouter.ai/api/v1 and providing API key as Bearer token. 6. Select model(s) by model identifier string (e.g. anthropic/claude-opus-4-6). 7. Start making chat/completions requests. Alternative OAuth PKCE flow: redirect user to OpenRouter /auth URL with callback_url, receive authorization code, exchange for user-controlled API key via /api/v1/auth/keys endpoint.",
+    "human_involvement": "full-setup (human must create account, add payment method, generate API keys; no autonomous agent self-registration)",
+    "agent_autonomy": "Agent cannot self-register. After human provides API key, agent can autonomously make API calls, select models, use tools/function calling, and manage conversations. Programmatic key provisioning allows SaaS applications to auto-create keys for customers, but initial provisioning key requires human setup.",
+    "time_to_first_action": "minutes (account creation and first API call can be completed in under 5 minutes; free tier available with 50 requests/day limit)"
+  },
+  "identity_model": {
+    "identity_type": "API key (Bearer token authentication; two key types: standard API keys for model inference, and Provisioning API keys for key management operations only)",
+    "key_management": "API keys generated via dashboard UI or programmatically via Management API endpoints under /api/v1/keys. Provisioning API keys enable automated CRUD operations on standard API keys (create, read, update, delete). Keys can have credit limits, model restrictions, and usage tracking. OAuth PKCE flow available for user-delegated key generation with code_challenge/code_verifier. BYOK (Bring Your Own Keys) supported for direct provider key usage with automatic failover to OpenRouter credits. Keys can be disabled programmatically when exceeding usage limits. No automatic rotation schedule; manual rotation via key management API. [uncertain]",
+    "multi_instance_support": "Yes. Multiple API keys can be created per account, each with independent credit limits and usage tracking. Provisioning API enables programmatic creation of keys for different instances/customers. BYOK allows multiple provider keys for the same provider with load balancing across them.",
+    "recovery_mechanism": "Dashboard-based key regeneration. Lost API keys cannot be recovered (only the key hash is stored server-side). New keys must be generated to replace lost ones. Account recovery via standard email/OAuth account recovery flow. [uncertain]",
+    "versioning_support": "No agent code/model versioning. Model versions are tracked by provider (e.g. specific model IDs include version info). No on-chain hash appending or metadata versioning for agent state."
+  },
+  "security": {
+    "authentication_method": "API key (Bearer token in Authorization header); OAuth 2.0 PKCE flow for user-delegated authentication; Provisioning API keys for management operations (separate from inference keys). All requests over HTTPS.",
+    "known_vulnerabilities": "No major publicly disclosed security breaches as of February 2026. Potential risks: (1) API key leakage if embedded in client-side code (GitGuardian monitors for exposed OpenRouter API keys). (2) Disappearing API keys reported by some users (potential billing/compliance issue). (3) As a centralized proxy, OpenRouter is a high-value target -- compromise would expose all routed prompts. (4) Free tier abuse potential with 50 requests/day limit. (5) BYOK key storage security -- provider keys are 'securely encrypted' but centralized. [uncertain]",
+    "revocation_speed": "instant (API keys can be deleted/disabled immediately via dashboard or Management API; takes effect on next request)",
+    "anti_sybil": "Rate limiting (50 requests/day for free users, 20 rpm; higher limits for paid users). Credit-based access control (purchasing credits unlocks higher rate limits). Email verification for account creation. No staking, proof-of-work, or formal anti-sybil mechanism. [uncertain]",
+    "data_exposure_risk": "API keys exposed in transit (mitigated by HTTPS). Prompts and completions are NOT logged by default (zero data retention policy available). Custom data policies can restrict routing to trusted providers. Provider keys (BYOK) stored encrypted on OpenRouter servers. For enterprise: EU region locking available. Risk: centralized API key as single point of failure for all model access.",
+    "bot_to_bot_attack_surface": "Low direct risk (OpenRouter is a model routing API, not an agent communication platform). No agent-to-agent messaging. Indirect risks: prompt injection through model responses, model poisoning at provider level. Tool/function calling could be exploited if agent does not validate tool outputs. OpenRouter does not inspect or filter prompt content.",
+    "skill_plugin_vetting": "N/A in traditional sense. OpenRouter plugins (web search, PDF processing, response healing) are first-party maintained by OpenRouter. No third-party plugin marketplace. Model capabilities (tool calling, structured output) are provider-verified and documented per model.",
+    "attestation_mechanism": "None. No TEE attestation, no code hash verification, no Verifiable Credentials. Trust is based on HTTPS + API key authentication. OpenRouter maintains a Trust Center (trust.openrouter.ai) with security controls documentation but no cryptographic attestation of agent integrity."
+  },
+  "offchain_onchain_linking": {
+    "linking_support": "Partial (crypto payment integration only). Coinbase on-chain payments (USDC) for credits, but no on-chain identity binding for agents or API keys.",
+    "linking_mechanism": "Coinbase Commerce integration for crypto payments: POST /api/v1/credits/coinbase creates a charge; once transaction succeeds on-chain, credits are added to account. Transaction hash provided for tracking. No wallet signature challenge, no EIP-712, no smart contract registration for identity.",
+    "transfer_behavior": "N/A (no on-chain identity token; credits are account-bound and non-transferable)"
+  },
+  "delegation_and_authorization": {
+    "delegation_model": "API key delegation (parent account creates child API keys with scoped permissions via Provisioning API). OAuth PKCE for user-delegated key creation. No agent-to-agent delegation. No OAuth OBO or OIDC-A chains. SaaS applications can distribute auto-created keys to end-users/agents with per-key credit limits.",
+    "authorization_granularity": "Coarse (role/scope). API keys can be restricted by: credit limits, model access restrictions, rate limits. Provisioning keys are exclusively for management (cannot make inference calls). No fine-grained ABAC, no intent-aware authorization, no per-tool or per-action scoping."
+  },
+  "discovery_and_interoperability": {
+    "discovery_mechanism": "Model catalog API (GET /api/v1/models returns all available models with capabilities, pricing, context length). Models page at openrouter.ai/models for browsing. Collections (e.g. tool-calling-models). No agent discovery, no DNS-based discovery, no .well-known endpoint for agents.",
+    "capability_declaration": "Model-level capability metadata: tool/function calling support, structured output support, multimodal support, context window size, pricing per token. Declared per model in catalog. OpenAPI specification for full API documentation. No agent-level capability manifests or Agent Cards.",
+    "cross_platform_portability": "Partially portable. OpenAI-compatible API means existing OpenAI SDK integrations work with minimal changes (swap base_url and API key). Credits are locked to OpenRouter account. API keys are platform-specific. Model identifiers use provider prefix format (e.g. anthropic/claude-opus-4-6).",
+    "standards_compliance": "OpenAI Chat API compatible (de facto standard for LLM APIs); OAuth 2.0 PKCE; OpenAPI specification for API documentation; SSE for streaming. No W3C DID, no W3C VC, no SPIFFE, no ERC-721/ERC-8004.",
+    "protocol_composability": "OpenAI SDK compatibility enables integration with any framework supporting OpenAI API (LangChain, LlamaIndex, Anthropic Agent SDK, Continue, LiveKit, n8n, etc.). MCP integration via third-party tools (OpenClaw integration documented). No native A2A protocol, no AP2, no ACP support."
+  },
+  "push_pull_communication": {
+    "push_support": "SSE (Server-Sent Events for streaming model responses with stream: true parameter; SSE keepalive comments to prevent timeout; streaming cancellation supported)",
+    "pull_support": "REST API (OpenAI-compatible /chat/completions and /completions endpoints; model catalog API; key management API; credits API; all under https://openrouter.ai/api/v1/)",
+    "subscription_model": "None for events/updates. API is request-response based. No webhook registration, no event subscription, no smart contract events. Usage tracking available via API key metadata queries. [uncertain]"
+  },
+  "trust_and_reputation": {
+    "trust_model": "Centralized (platform-verified). OpenRouter acts as trusted intermediary routing requests to verified model providers. Trust Center at trust.openrouter.ai publishes security controls and compliance documentation. Provider verification is internal to OpenRouter. Users trust OpenRouter to correctly route and not log prompts.",
+    "reputation_system": "None for agents. Model-level community feedback exists (model ratings, usage statistics visible on models page). No on-chain reputation registry, no VC-based reputation, no staking history. Provider reputation is implicit (major providers like OpenAI, Anthropic, Google are trusted by default)."
+  },
+  "payment_and_economics": {
+    "payment_integration": "Fiat (Stripe: credit cards, AliPay) and crypto (Coinbase Commerce: USDC on-chain). Credits system: prepaid balance used across all models. No AP2, no ACP, no x402, no native token.",
+    "economic_model": "Pay-as-you-go with prepaid credits. No markup on provider pricing (pass-through pricing). Free tier: 50 requests/day on free models. Purchasing 10+ credits unlocks 1000 requests/day on free models. 1 million free BYOK requests/month. Crypto payments charged 5% fee. Enterprise plans with SLAs available. $40M Series A funding indicates venture-backed growth model."
+  },
+  "governance_and_compliance": {
+    "regulatory_alignment": "GDPR (EU region locking, data processing agreements, standard contractual clauses under Article 46); SOC 2 (independent third-party audits); enterprise compliance features (exportable audit trails, org-wide policy enforcement). No explicit EU AI Act or ISO 42001 compliance claimed. [uncertain]",
+    "audit_trail_capability": "Enterprise-grade: exportable audit trails of all API requests across all users. Request logging available (opt-in, disabled by default for privacy). No hash chain, no signed events, no blockchain anchoring. Audit trails are platform-managed, not cryptographically immutable.",
+    "lifecycle_management": "Partial. Registration (account creation) / Activation (API key generation) / Suspension (key disable/delete via Management API) / Upgrade (credit additions, plan changes). No formal migration, agent upgrade, or decommissioning protocols. Key rotation via create-new-delete-old pattern."
+  },
+  "uncertain": [
+    "key_management",
+    "recovery_mechanism",
+    "known_vulnerabilities",
+    "anti_sybil",
+    "subscription_model",
+    "regulatory_alignment"
+  ]
+}

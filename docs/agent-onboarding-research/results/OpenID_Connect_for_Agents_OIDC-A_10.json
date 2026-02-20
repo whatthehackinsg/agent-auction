@@ -1,0 +1,78 @@
+{
+  "basic_info": {
+    "name": "OpenID Connect for Agents (OIDC-A) 1.0",
+    "type": "standard",
+    "status": "Spec-only",
+    "ecosystem": "Cloud/Enterprise (identity-layer standard; framework-agnostic; designed to extend existing OIDC infrastructure for LLM-based AI agents)",
+    "launch_date": "2025 (arXiv preprint 2509.25974; academic proposal stage, not yet an OpenID Foundation official specification)"
+  },
+  "onboarding_flow": {
+    "registration_steps": "1. Agent developer registers the agent as an OIDC client with an OIDC-A-compliant Identity Provider (IdP): provides agent metadata including agent type (LLM model family), model version, capabilities, and operator organization. 2. IdP issues agent-specific credentials: the agent receives a client_id and client_secret (or certificate) along with OIDC-A-extended claims registration. 3. Agent authenticates to the IdP using standard OIDC flows (client credentials or authorization code with delegation): IdP validates the agent identity and issues an ID token containing OIDC-A extended claims (agent_type, model_id, model_version, agent_capabilities, operator_org, attestation_status). 4. If delegation is required: the human principal authenticates first, then delegates authority to the agent via OIDC-A delegation chain claims embedded in the token (delegator_sub, delegation_scope, delegation_chain). 5. Agent presents OIDC-A tokens to resource servers/relying parties: the RP validates agent identity claims, checks attestation status, evaluates attribute-based authorization policies, and grants access. 6. Agent begins operations within authorized scope defined by OIDC-A claims and ABAC policies.",
+    "human_involvement": "approve-only (human principal must authenticate and authorize delegation; agent handles the rest of the OIDC flow autonomously)",
+    "agent_autonomy": "Agent can autonomously authenticate, obtain tokens, and present credentials once initial registration and delegation are configured. Self-registration is not specified - an administrator or developer must register the agent client with the IdP. Runtime token acquisition and renewal are fully autonomous.",
+    "time_to_first_action": "minutes (once registered with the IdP and delegation is configured, agent can authenticate and obtain access tokens within seconds to minutes)"
+  },
+  "identity_model": {
+    "identity_type": "OIDC client identity with extended agent claims. The agent is represented as an OIDC client with additional OIDC-A claim types: agent_type (e.g., llm, tool-agent, orchestrator), model_id (specific model identifier), model_version, agent_capabilities (structured capability declarations), operator_org (organization operating the agent), and attestation_status (verified/unverified). Identity is expressed via JWT ID tokens and access tokens containing these claims.",
+    "key_management": "Follows standard OIDC/OAuth 2.0 client credential management. Agents authenticate using client_secret, private_key_jwt (signed JWTs), or mTLS client certificates. Key rotation follows OIDC client credential rotation best practices. The spec recommends short-lived tokens and supports token refresh. Private key JWT authentication is preferred for higher-security deployments. Key management is delegated to the IdP infrastructure (e.g., Keycloak, Entra ID, Auth0).",
+    "multi_instance_support": "Yes. Multiple runtime instances of the same agent share the same OIDC client registration and can independently obtain tokens. Each instance receives its own access token with the same agent identity claims. Load balancing and horizontal scaling are supported through standard OIDC patterns.",
+    "recovery_mechanism": "Standard OIDC client credential recovery: administrator can reset client secrets or reissue certificates via the IdP admin interface. Delegation chains can be re-established by the human principal re-authenticating. Token revocation (RFC 7009) supported for compromised tokens. No agent-specific recovery mechanism beyond standard OIDC practices. [uncertain]",
+    "versioning_support": "Yes, built-in. OIDC-A defines specific claims for agent versioning: model_id and model_version claims are included in every token, enabling resource servers to make authorization decisions based on the agent model version. Operator organizations can update the registered model version, and RPs can enforce minimum version requirements through ABAC policies. This is a core differentiator of OIDC-A - version-aware identity."
+  },
+  "security": {
+    "authentication_method": "OIDC authentication with OIDC-A extended claims. Standard OIDC flows (authorization code, client credentials) plus: agent-specific claim validation at the RP, attestation verification (IdP attests agent properties), and attribute-based access control evaluated against agent claims. Challenge-response via OIDC token exchange. Supports mTLS and private_key_jwt for client authentication.",
+    "known_vulnerabilities": "1. Token theft/replay: OIDC-A tokens, if intercepted, grant access until expiry. Mitigated by short token lifetimes, token binding, and proof-of-possession tokens. 2. Claim spoofing: If an IdP is compromised or misconfigured, false agent claims (model_version, attestation_status) could be issued. Mitigated by IdP trust and attestation verification. 3. Delegation chain manipulation: Malicious agents could attempt to extend or modify delegation chains. Mitigated by cryptographic signing of delegation chain claims. 4. Over-broad delegation scopes: Human principals may delegate excessively broad authority. Mitigated by ABAC policy enforcement at RPs. 5. Model version downgrade attacks: An agent might present outdated model version claims to bypass security checks. Mitigated by RP-enforced minimum version policies. 6. As an academic proposal, the spec has not undergone the security review process of a formal OpenID Foundation specification. [uncertain]",
+    "revocation_speed": "seconds to minutes (follows OIDC token revocation: RFC 7009 revocation endpoint for immediate token invalidation; short-lived access tokens naturally expire; delegation revocation by human principal takes effect on next token refresh)",
+    "anti_sybil": "Delegated to the OIDC Identity Provider: IdP controls client registration and can enforce rate limiting, organizational verification, and approval workflows. Operator organization claims link agents to verified entities. No staking or proof-of-work mechanisms (enterprise identity trust model). Anti-sybil strength depends on IdP policies.",
+    "data_exposure_risk": "Moderate. OIDC-A tokens contain agent identity metadata: agent_type, model_id, model_version, operator organization, capabilities, and attestation status. These claims are visible to any relying party that receives the token. Delegation chain claims reveal the delegating human subject identifier and scope. Standard OIDC claim minimization practices (selective disclosure, pairwise subject identifiers) can reduce exposure.",
+    "bot_to_bot_attack_surface": "OIDC-A provides structural defenses: (1) Agent identity claims enable RPs to distinguish between agents and apply agent-specific policies; (2) Delegation chain verification ensures agents only act within delegated authority; (3) Model version claims allow RPs to reject agents with known-vulnerable model versions; (4) Attestation status claims enable RPs to require verified agent integrity. Risks include: prompt injection causing agents to misuse delegated authority (mitigated by ABAC scope constraints), token forwarding between agents (mitigated by audience-restricted tokens), and social engineering between agents to expand delegation scope.",
+    "skill_plugin_vetting": "Not directly addressed by OIDC-A. The specification focuses on agent identity and authorization, not skill/plugin management. Agent capabilities are declared as claims and can be used in ABAC policies to restrict which operations an agent can perform, but the spec does not define a skill vetting, signing, or sandboxing mechanism. [uncertain]",
+    "attestation_mechanism": "Built-in attestation framework. OIDC-A defines an attestation_status claim that indicates whether the agent identity properties have been independently verified by the IdP. The IdP can perform attestation verification through: (1) Code hash verification, (2) TEE remote attestation integration, (3) Third-party audit certificates, (4) Operator organization verification. The attestation_status claim communicates the result (verified/unverified/partial) to relying parties, enabling attestation-aware authorization decisions."
+  },
+  "offchain_onchain_linking": {
+    "linking_support": "planned (OIDC-A is designed as an off-chain identity standard but acknowledges interoperability with decentralized identity; DID-based subject identifiers are compatible with OIDC-A claims) [uncertain]",
+    "linking_mechanism": "OIDC-A agent claims can include DID-based subject identifiers (sub claim as a DID). The delegation chain mechanism can reference both OIDC and DID-based identities. W3C Verifiable Credentials can be used alongside OIDC-A tokens for cross-ecosystem identity bridging. No native on-chain registration mechanism, but the claim structure is designed to be extensible for blockchain-based identity integration. [uncertain]",
+    "transfer_behavior": "N/A. OIDC-A is a purely off-chain identity standard. No on-chain token component exists. Agent identity lifecycle is managed through the OIDC Identity Provider."
+  },
+  "delegation_and_authorization": {
+    "delegation_model": "OIDC-A delegation chains: The spec defines a structured delegation model where human-to-agent authorization is cryptographically recorded in token claims. Key delegation claims include: delegator_sub (human principal subject identifier), delegation_scope (explicit authorization boundaries), delegation_chain (ordered list of delegation steps for multi-hop agent-to-agent delegation), delegation_purpose (human-readable intent description), and delegation_constraints (time-based, resource-based, or operation-based limits). Multi-hop delegation is supported: Human -> Agent A -> Agent B, where each hop adds a link to the delegation_chain with its own scope constraints. The chain is cryptographically signed, preventing modification. Relying parties validate the entire chain to ensure authorization at every hop.",
+    "authorization_granularity": "Fine-grained (ABAC). OIDC-A enables attribute-based access control using agent claims as attributes. Authorization decisions can consider: agent_type, model_version, attestation_status, delegation_scope, operator_org, and agent_capabilities. RPs define ABAC policies evaluated against these claims."
+  },
+  "discovery_and_interoperability": {
+    "discovery_mechanism": "Standard OIDC Discovery (/.well-known/openid-configuration) at the IdP level. OIDC-A extends the discovery metadata to indicate support for agent-specific claims and flows. Agent-specific discovery (finding individual agents) is not defined by the spec. [uncertain]",
+    "capability_declaration": "Agent capabilities are declared as structured claims in OIDC-A tokens (agent_capabilities claim). These claims describe what the agent can do and are verified by the IdP. RPs can use capability claims in ABAC policies to restrict access based on declared capabilities. [uncertain]",
+    "cross_platform_portability": "Partially portable. OIDC-A builds on OIDC, which is widely supported across platforms. An agent with OIDC-A tokens from one IdP can authenticate to any RP that trusts that IdP and understands OIDC-A claims. Cross-IdP portability requires federation.",
+    "standards_compliance": "OpenID Connect Core 1.0 (extension), OAuth 2.0 (RFC 6749), JWT (RFC 7519), JWS (RFC 7515), OAuth Token Exchange (RFC 8693), OAuth Token Introspection (RFC 7662), OAuth Token Revocation (RFC 7009). Designed to be compatible with W3C DID and W3C VC.",
+    "protocol_composability": "High. OIDC-A is designed as a composable identity layer: it can be combined with A2A Protocol, MCP, OAuth 2.0 On-Behalf-Of IETF draft, ERC-8004, and SPIFFE/SPIRE."
+  },
+  "push_pull_communication": {
+    "push_support": "none (OIDC-A is an identity/authorization standard, not a communication protocol)",
+    "pull_support": "REST API (standard OIDC endpoints: token endpoint, userinfo endpoint, introspection endpoint, revocation endpoint; all extended with OIDC-A agent claims)",
+    "subscription_model": "N/A. OIDC-A does not define event subscription mechanisms."
+  },
+  "trust_and_reputation": {
+    "trust_model": "Federated (trust registries). Trust is anchored in OIDC Identity Providers. Multiple IdPs can form a federation. Attestation claims add a verification layer beyond simple IdP trust.",
+    "reputation_system": "None native to OIDC-A. The attestation_status claim provides a binary trust signal (verified/unverified) but not a reputation score. [uncertain]"
+  },
+  "payment_and_economics": {
+    "payment_integration": "None. OIDC-A is an identity and authorization standard, not a payment protocol.",
+    "economic_model": "Free (open specification). No licensing fees, staking requirements, gas fees, or token purchases."
+  },
+  "governance_and_compliance": {
+    "regulatory_alignment": "The spec addresses regulatory alignment as a design goal: EU AI Act transparency, auditable delegation chains, attestation mechanisms. No formal regulatory certification yet. [uncertain]",
+    "audit_trail_capability": "Signed events (JWT). Every OIDC-A token is a cryptographically signed audit artifact containing agent identity, delegation chain, attestation status, and timestamps.",
+    "lifecycle_management": "Partial. Registration, Activation, Suspension, Upgrade supported. Migration and decommissioning handled at IdP level. No built-in lifecycle automation policies. [uncertain]"
+  },
+  "uncertain": [
+    "recovery_mechanism",
+    "known_vulnerabilities",
+    "skill_plugin_vetting",
+    "linking_support",
+    "linking_mechanism",
+    "discovery_mechanism",
+    "capability_declaration",
+    "reputation_system",
+    "regulatory_alignment",
+    "lifecycle_management"
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "basic_info": {
+    "name": "Agent Network Protocol (ANP)",
+    "type": "off-chain",
+    "status": "Spec-only (specification published and evolving; reference implementations available on GitHub; W3C AI Agent Protocol Community Group established June 2025; not yet widely adopted in production systems)",
+    "ecosystem": "Framework-agnostic (designed as an open protocol independent of any blockchain or cloud platform; W3C Community Group hosted; DID-based identity layer is chain-agnostic but can integrate with any DID method including Ethereum-based did:ethr or did:web)",
+    "launch_date": "2024 (initial specification and GitHub repository published in late 2024 by the AgentNetworkProtocol project; W3C AI Agent Protocol Community Group officially established June 2025 to formalize and advance the specification)"
+  },
+
+  "onboarding_flow": {
+    "registration_steps": "1) Generate a DID (Decentralized Identifier): The agent creates or is provisioned a W3C DID (e.g., did:web or did:key) which serves as its persistent identity. The DID Document contains the agent's public keys, service endpoints, and authentication methods. 2) Create an Agent Description Document (ADP): Using the Agent Description Protocol, the agent publishes a machine-readable description of its capabilities, supported protocols, service endpoints, and metadata. This is analogous to an Agent Card but richer and DID-anchored. 3) Register in Discovery System: The agent's ADP is made discoverable through the ANP discovery mechanism. For did:web this means hosting the DID Document and ADP at a well-known URL on the agent's domain. 4) Establish Encrypted Communication Channel: Using the identity layer (Layer 1), the agent can establish DID-authenticated, end-to-end encrypted communication channels with other agents using DIDComm-style messaging. 5) Meta-Protocol Negotiation (Layer 2): When two agents connect, they use the meta-protocol layer to negotiate which application-layer protocols they will use for interaction, discovering compatible communication formats dynamically. 6) Application Protocol Execution (Layer 3): The agents exchange messages using the negotiated application protocol for their specific use case (e.g., task delegation, data exchange, commerce).",
+    "human_involvement": "full-setup (human or DevOps must provision the DID, configure service endpoints, write and publish the Agent Description Document, and deploy the agent with the ANP stack; once deployed, agents can autonomously discover and interact with each other)",
+    "agent_autonomy": "After initial setup by a human, agents have high autonomy: they can autonomously discover other agents via ADP, negotiate communication protocols via the meta-protocol layer, establish encrypted channels, and interact through application protocols. Self-registration is partially possible if the agent has tooling to create its own DID and publish its ADP, but infrastructure provisioning (hosting, domain, etc.) typically requires human involvement.",
+    "time_to_first_action": "minutes to hours (DID creation is instant; ADP publication depends on hosting setup; once published, first encrypted agent-to-agent communication can occur within seconds; overall setup time depends on infrastructure provisioning and DID method chosen)"
+  },
+
+  "identity_model": {
+    "identity_type": "DID (W3C Decentralized Identifier). The agent's primary identity is a DID which resolves to a DID Document containing public keys, service endpoints, and authentication methods. ANP supports multiple DID methods (did:web, did:key, did:ethr, etc.) making the identity layer flexible and standards-compliant.",
+    "key_management": "Key management follows W3C DID standards. The DID Document specifies verification methods (public keys) for authentication, assertion, key agreement, and capability delegation. Keys are typically Ed25519 or X25519 for DIDComm-style encryption. Key generation is done locally or via a KMS. Rotation is supported by updating the DID Document with new keys (adding new verification methods and removing old ones). For did:web, rotation involves updating the hosted DID Document. For blockchain-anchored DID methods, rotation requires an on-chain transaction. The protocol supports multiple keys per DID for different purposes (signing, encryption, authentication). Rotation frequency is not mandated by the protocol. [uncertain]",
+    "multi_instance_support": "Yes. A single DID can have multiple verification methods and service endpoints in its DID Document, allowing multiple runtime instances to authenticate under the same identity. Different keys can be used for different instances, all resolvable to the same DID. The meta-protocol negotiation layer handles routing to the appropriate instance. [uncertain]",
+    "recovery_mechanism": "Depends on the DID method used. For did:web: recovery involves updating the DID Document at the hosting domain (requires domain control). For did:key: no recovery possible (the DID is the key). For blockchain-anchored DIDs (did:ethr): recovery through smart contract mechanisms (controller changes, social recovery). The protocol itself does not mandate a specific recovery mechanism but inherits the recovery capabilities of the chosen DID method. Backup keys can be listed as additional verification methods in the DID Document. [uncertain]",
+    "versioning_support": "DID Documents can be versioned through their hosting mechanism. For did:web, the document at the URL can be updated over time. For blockchain-anchored DIDs, each update creates a new on-chain transaction providing version history. The Agent Description Protocol (ADP) documents can include version metadata. No explicit protocol-level version hash appending or mandatory versioning scheme. [uncertain]"
+  },
+
+  "security": {
+    "authentication_method": "DID-based authentication (challenge-response using DID verification methods); agents authenticate by proving control of the private key associated with their DID. The identity layer (Layer 1) provides mutual authentication between agents before establishing encrypted channels. DIDComm-style authentication with signed and/or encrypted message envelopes. [uncertain]",
+    "known_vulnerabilities": "1) DID method-dependent risks: did:web relies on DNS and web hosting security (domain hijacking, TLS certificate compromise could impersonate an agent). 2) Early-stage specification: as a relatively new protocol still under active development in the W3C Community Group, the specification may have undiscovered design weaknesses. 3) Meta-protocol negotiation attacks: a malicious agent could attempt to downgrade the negotiated protocol to a less secure variant. 4) ADP spoofing: without a trusted registry, fake Agent Description Documents could be published to impersonate legitimate agents. 5) No formal security audit published for the protocol specification or reference implementations. [uncertain]",
+    "revocation_speed": "minutes to hours (depends on DID method: for did:web, updating the DID Document to remove a compromised key takes effect as fast as HTTP caching allows; for blockchain-anchored DIDs, revocation requires an on-chain transaction which could take seconds to minutes; agents caching DID Documents may not immediately reflect revocations until their cache expires) [uncertain]",
+    "anti_sybil": "No built-in anti-Sybil mechanism at the protocol level. DID creation is generally free and permissionless for most DID methods (did:key, did:web). Blockchain-anchored DID methods may impose gas fees as a minor barrier. The protocol relies on external trust frameworks, reputation systems, or application-level mechanisms to prevent mass registrations. [uncertain]",
+    "data_exposure_risk": "DID Documents are public by design and expose: public keys, service endpoints (URLs/IP addresses), authentication methods, and capability information. Agent Description Protocol documents expose: agent capabilities, supported protocols, service metadata. During encrypted communication (Layer 1), message contents are protected by end-to-end encryption. However, communication metadata (who is talking to whom, when, frequency) may be observable at the network level.",
+    "bot_to_bot_attack_surface": "The three-layer architecture provides some structural protection: Layer 1 (identity/encryption) ensures authenticated and encrypted channels preventing impersonation and eavesdropping. Layer 2 (meta-protocol) negotiation could be a target for protocol downgrade attacks. Layer 3 (application) depends on the specific application protocol's security properties. No built-in protection against prompt injection or semantic attacks at the protocol level. The DID-based identity prevents trivial impersonation but does not protect against a compromised agent sending malicious content over an authenticated channel. [uncertain]",
+    "skill_plugin_vetting": "No built-in skill/plugin vetting mechanism. Agent capabilities are declared in ADP documents but there is no verification that declared capabilities are trustworthy or safe. The protocol focuses on discovery and communication rather than capability validation. Trust in agent capabilities is left to application-level verification or external trust frameworks. [uncertain]",
+    "attestation_mechanism": "DID-based cryptographic proof of identity (agent proves control of DID through digital signatures). The DID Document itself serves as a verifiable declaration of the agent's keys and endpoints. W3C Verifiable Credentials can be layered on top of the DID identity to provide additional attestations (e.g., capability certifications, organizational affiliation). No native TEE attestation or code hash verification built into the protocol, but the DID/VC framework is extensible to support such mechanisms. [uncertain]"
+  },
+
+  "offchain_onchain_linking": {
+    "linking_support": "yes (through DID methods that bridge off-chain and on-chain, such as did:ethr for Ethereum or did:web for domain-based identity)",
+    "linking_mechanism": "DID method flexibility enables native off-chain/on-chain linking. An agent using did:ethr has an on-chain identity anchored to an Ethereum smart contract, while its service endpoints and ADP are off-chain. An agent using did:web has off-chain identity linked to a domain. Cross-linking is possible by including multiple verification methods in the DID Document (e.g., an Ethereum address alongside Ed25519 keys). W3C Verifiable Credentials issued to the DID can attest to on-chain holdings or registrations. [uncertain]",
+    "transfer_behavior": "Depends on DID method. For blockchain-anchored DIDs (did:ethr): the DID controller can be transferred via smart contract, which transfers identity control but preserves the DID itself. For did:web: no transfer mechanism; identity is tied to domain control. For did:key: not transferable (identity is the key pair). The protocol does not define transfer behavior at the protocol level. [uncertain]"
+  },
+
+  "delegation_and_authorization": {
+    "delegation_model": "DID-based delegation through DID Document controller relationships and W3C Verifiable Credentials. A human or organization DID can be listed as the controller of an agent's DID, establishing a delegation chain. Verifiable Credentials can express authorization scopes and delegation permissions. The meta-protocol negotiation layer (Layer 2) can include authorization exchanges. No built-in OAuth OBO or OIDC-A flows, but the DID/VC framework supports equivalent functionality through capability delegation chains. [uncertain]",
+    "authorization_granularity": "Potentially fine-grained through Verifiable Credentials (VCs can encode arbitrary authorization claims including scopes, permissions, constraints, and expiration). At the protocol level, authorization granularity depends on the application protocol (Layer 3) implementation. The meta-protocol layer enables negotiation of authorization requirements. In practice, implementations may range from coarse (DID-level trust) to fine-grained (VC-based attribute authorization). [uncertain]"
+  },
+
+  "discovery_and_interoperability": {
+    "discovery_mechanism": "Agent Description Protocol (ADP): agents publish machine-readable description documents that other agents can discover and parse. Discovery methods include: DID resolution (resolving a DID to find service endpoints and ADP references), well-known URL patterns, and potential integration with decentralized registries. ADP enables capability-based discovery where agents find peers by matching required capabilities.",
+    "capability_declaration": "Agent Description Protocol (ADP) documents: JSON-LD or structured format describing the agent's name, description, capabilities, supported application protocols, service endpoints, DID reference, authentication requirements, and metadata. Similar to Agent Cards but designed to be DID-anchored and W3C-aligned. The meta-protocol layer also facilitates runtime capability discovery during agent-to-agent negotiation.",
+    "cross_platform_portability": "Highly portable via DID. Since identity is based on W3C DIDs, it is inherently cross-platform and not locked to any specific vendor or blockchain. The same DID can be used across different ANP implementations, other DID-compatible systems, and even non-ANP protocols that support DID authentication. Portability is a core design principle of the three-layer architecture.",
+    "standards_compliance": "W3C DID (Decentralized Identifiers v1.0), W3C DID Document (for identity representation), W3C Verifiable Credentials (for attestation and delegation), DIDComm (for encrypted messaging patterns), JSON-LD (for structured data). The W3C AI Agent Protocol Community Group aims to align ANP with emerging W3C standards for AI agent interoperability. [uncertain]",
+    "protocol_composability": "High composability by design. The three-layer architecture is explicitly designed for composability: Layer 1 (DID identity) composes with any DID-compatible system; Layer 2 (meta-protocol) enables dynamic negotiation of arbitrary application protocols; Layer 3 (application) can host any domain-specific protocol. Can potentially compose with A2A (as an application protocol), MCP (as a tool protocol), ERC-8004 (via did:ethr linking), and AP2/x402 (as payment application protocols). The meta-protocol layer is specifically designed to enable protocol interoperability. [uncertain]"
+  },
+
+  "push_pull_communication": {
+    "push_support": "DIDComm messaging (push-based agent-to-agent encrypted messages delivered to service endpoints); WebSocket support likely for real-time communication; specific transport mechanisms depend on the service endpoints declared in the DID Document and ADP [uncertain]",
+    "pull_support": "DID resolution (pull agent identity and endpoints by resolving their DID); ADP document retrieval (pull capability descriptions); REST API endpoints declared in DID Document service entries [uncertain]",
+    "subscription_model": "Not explicitly defined at the protocol level. The meta-protocol layer (Layer 2) could negotiate subscription patterns as part of application protocol setup. Specific subscription mechanisms would be defined by application protocols (Layer 3). [uncertain]"
+  },
+
+  "trust_and_reputation": {
+    "trust_model": "Decentralized (DID-based peer trust). Trust is established through: (1) DID verification (proving identity cryptographically), (2) Verifiable Credentials (third-party attestations of trustworthiness, capabilities, or organizational affiliation), (3) DID Document controller chains (establishing organizational trust hierarchies). No centralized trust authority; trust is built through cryptographic proofs and credential chains. Can integrate with federated trust registries through VC verification. [uncertain]",
+    "reputation_system": "No built-in reputation system. Reputation can be layered through W3C Verifiable Credentials (agents accumulate VCs attesting to their performance, reliability, or quality). External reputation systems can issue VCs to agents' DIDs. No on-chain reputation registry native to the protocol. Community or application-level reputation tracking would need to be implemented separately. [uncertain]"
+  },
+
+  "payment_and_economics": {
+    "payment_integration": "No native payment protocol. The three-layer architecture can accommodate payment protocols at Layer 3 (application protocol level). Through meta-protocol negotiation, agents can agree on payment methods. Compatible with AP2, x402, or native token payments as application-layer protocols. The DID-based identity can link to wallet addresses for crypto payments. [uncertain]",
+    "economic_model": "Free (the protocol specification is open and free; DID creation is free for most methods like did:key and did:web; no staking, gas fees, or subscription required at the protocol level; operational costs are limited to hosting/infrastructure for DID Documents and ADP endpoints; blockchain-anchored DID methods may incur gas fees for DID operations)"
+  },
+
+  "governance_and_compliance": {
+    "regulatory_alignment": "The W3C AI Agent Protocol Community Group provides a governance structure for the protocol specification itself. The use of W3C standards (DID, VC) aligns with emerging digital identity regulations. No explicit EU AI Act, NIST AI RMF, or ISO 42001 compliance built into the protocol, but the VC framework can encode regulatory compliance attestations. [uncertain]",
+    "audit_trail_capability": "DID Document update history (for blockchain-anchored DIDs, all changes are recorded on-chain). Agent-to-agent messages can be logged with cryptographic signatures for non-repudiation. Verifiable Credentials provide timestamped, signed attestations. No built-in hash chain or mandatory logging at the protocol level; audit trail capabilities depend on the DID method and application protocol implementation. [uncertain]",
+    "lifecycle_management": "Partial. Registration (DID creation + ADP publication) / activation (service endpoints become reachable) / update (DID Document and ADP updates for capability or key changes) / decommissioning (DID deactivation per DID method specification). No formal suspension, migration, or upgrade procedures defined at the protocol level. The W3C DID specification includes a 'deactivated' flag for DID Documents. [uncertain]"
+  },
+
+  "uncertain": [
+    "key_management",
+    "multi_instance_support",
+    "recovery_mechanism",
+    "versioning_support",
+    "authentication_method",
+    "known_vulnerabilities",
+    "revocation_speed",
+    "anti_sybil",
+    "bot_to_bot_attack_surface",
+    "skill_plugin_vetting",
+    "attestation_mechanism",
+    "linking_mechanism",
+    "transfer_behavior",
+    "delegation_model",
+    "authorization_granularity",
+    "standards_compliance",
+    "protocol_composability",
+    "push_support",
+    "pull_support",
+    "subscription_model",
+    "trust_model",
+    "reputation_system",
+    "payment_integration",
+    "regulatory_alignment",
+    "audit_trail_capability",
+    "lifecycle_management"
+  ]
+}

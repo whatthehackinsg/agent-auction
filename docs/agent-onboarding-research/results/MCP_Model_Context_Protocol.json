@@ -1,0 +1,81 @@
+{
+  "basic_info": {
+    "name": "Model Context Protocol (MCP)",
+    "type": "off-chain",
+    "status": "Production",
+    "ecosystem": "Cloud/Enterprise (framework-agnostic; blockchain MCP servers available for Ethereum and EVM-compatible chains via third-party integrations)",
+    "launch_date": "November 25, 2024 (announced by Anthropic); major spec updates: 2025-03-26, 2025-06-18 (OAuth 2.1, Streamable HTTP), 2025-11-25 (latest spec); donated to Agentic AI Foundation (Linux Foundation) December 2025"
+  },
+
+  "onboarding_flow": {
+    "registration_steps": "1. Implement MCP Server: Build a server exposing tools, resources, and/or prompts via the MCP specification. Choose transport: stdio (local) or Streamable HTTP (remote). 2. Declare Capabilities: Define server capabilities during initialization handshake (tools, resources, prompts, logging). The server responds with its capabilities and metadata during the initialize request. 3. Configure Authentication (for remote servers): Set up OAuth 2.1 authorization server or delegate to a third-party authorization server. Configure PKCE support (mandatory), token endpoints, and optionally Dynamic Client Registration (DCR) endpoint for automatic client onboarding. 4. Client Connection: MCP client sends initialize request with its protocol version, capabilities (sampling, elicitation, roots), and implementation metadata. Server responds with compatible version and its capabilities. Client sends initialized notification to confirm readiness. 5. Dynamic Client Registration (optional): If DCR is enabled, new MCP clients can automatically register by sending basic details (application name, redirect URIs) to registration_endpoint; server returns client_id and optionally client_secret. URL-based client registration (SEP-991) allows clients to provide a self-hosted Client ID Metadata Document. 6. Operational Phase: Client discovers available tools (tools/list), resources (resources/list), and prompts (prompts/list). Agent begins invoking tools and accessing resources.",
+    "human_involvement": "full-setup (for remote servers: OAuth configuration, server deployment, endpoint setup require human DevOps work) / approve-only (for local stdio servers: user approves connection in host application; DCR can automate client registration)",
+    "agent_autonomy": "MCP clients can self-register via Dynamic Client Registration (DCR) without human intervention. URL-based client registration (SEP-991) enables trustless client identity establishment. However, the MCP server itself must be provisioned and configured by a human. Once connected, the agent operates autonomously: discovering tools, invoking actions, and managing sessions.",
+    "time_to_first_action": "seconds (for local stdio transport: near-instant after initialization handshake) to minutes (for remote Streamable HTTP: depends on OAuth flow and server provisioning)"
+  },
+
+  "identity_model": {
+    "identity_type": "OAuth 2.1 access tokens (for remote servers) / session IDs (Mcp-Session-Id header) / API keys (for simpler deployments). No built-in DID, wallet, or NFT identity. URL-based Client ID Metadata Documents (SEP-991) provide verifiable client identity.",
+    "key_management": "OAuth 2.1 token lifecycle: tokens have automatic expiration, granular permissions via scopes, and are revocable without changing underlying credentials. PKCE (Proof Key for Code Exchange) is mandatory for all clients. Session IDs should be globally unique and cryptographically secure (UUID, JWT, or cryptographic hash). For local stdio transport: no key management needed (process-level isolation). API keys stored in configuration files; best practices recommend secure vaults, regular rotation, and avoiding plaintext storage. No protocol-mandated rotation frequency.",
+    "multi_instance_support": "Yes, with caveats. Multiple server instances can run behind load balancers, but session state must be shared (e.g., via Redis or database). A single session ID can serve multiple authorization tokens. The spec does not specify if a session ID is limited to a single user.",
+    "recovery_mechanism": "OAuth token revocation is supported (invalidate tokens without changing underlying credentials). Session termination: server can invalidate session ID and return HTTP 404 for requests with invalidated session IDs. For credential loss: re-authentication via OAuth 2.1 flow. No built-in social recovery or backup key mechanisms. Server restart recovery requires external session state storage.",
+    "versioning_support": "Yes. Protocol version negotiation during initialization: client and server MUST agree on a single version for the session. Both MAY support multiple protocol versions simultaneously. Specification versions: 2024-11-05, 2025-03-26, 2025-06-18, 2025-11-25. No on-chain version tracking."
+  },
+
+  "security": {
+    "authentication_method": "OAuth 2.1 with PKCE (mandatory for all remote clients). MCP servers act as OAuth 2.0 Resource Servers. Supports Dynamic Client Registration (DCR), URL-based client registration (SEP-991). For local stdio: process-level isolation (no network authentication needed). Origin header validation required on all incoming connections to prevent DNS rebinding attacks.",
+    "known_vulnerabilities": "1. Tool Poisoning (CVE-related): Malicious instructions embedded in MCP tool descriptions can manipulate LLMs into executing unintended tool calls, bypassing security controls. 2. CVE-2025-6514: Critical OS command-injection bug in mcp-remote OAuth proxy. 3. Conversation Hijacking: Compromised MCP servers inject persistent instructions, manipulate AI responses, exfiltrate data. 4. Covert Tool Invocation: Hidden tool invocations and file system operations without user awareness. 5. Resource Theft via Sampling: Attackers abuse MCP sampling to drain AI compute quotas. 6. Cross-Server Data Exfiltration: Malicious MCP server silently exfiltrates data from legitimate servers in the same agent (e.g., WhatsApp history exfiltration via tool poisoning + whatsapp-mcp). 7. Shadow MCP Servers (OWASP MCP09): Unauthorized MCP servers operating without organization knowledge. 8. Centralized Token Storage Risk: MCP servers storing multiple service API keys create high-value breach targets ('keys to the kingdom'). 9. Unauthenticated DCR: Anyone can register any client without vetting. 10. 492+ publicly exposed MCP servers identified as vulnerable (lacking basic auth or encryption).",
+    "revocation_speed": "seconds to minutes (OAuth token revocation is near-instant; session ID invalidation returns HTTP 404 immediately; server-side session termination is immediate)",
+    "anti_sybil": "Rate limiting recommended but not mandated. Dynamic Client Registration can be abused for mass client registration if unauthenticated. URL-based client registration (SEP-991) provides some trust establishment for unknown clients. No staking, proof-of-work, or human verification in protocol. Origin header validation prevents some abuse vectors.",
+    "data_exposure_risk": "MCP servers are high-value targets: typically store authentication tokens for multiple connected services. If breached, attackers gain access to all connected service tokens. API keys often stored in configuration files in plaintext. Tool descriptions and server capabilities are exposed to clients. During operation, sensitive data flows through MCP servers (database contents, API responses, file system access). LLMs may inadvertently leak sensitive information from one tool context to another. No built-in data privacy or security controls by default.",
+    "bot_to_bot_attack_surface": "High risk area (primarily agent-to-tool, not agent-to-agent). Documented attacks: (1) Tool Poisoning - malicious tool descriptions manipulate LLM behavior; (2) Cross-Server Poisoning - malicious server influences LLM interactions with legitimate servers; (3) Indirect Prompt Injection via Resources - malicious content in fetched resources manipulates LLM; (4) Sampling-based attacks - MCP server manipulates client sampling requests; (5) Rug-pull attacks - server changes tool behavior after gaining trust. MCP is primarily a client-server (agent-to-tool) protocol, not agent-to-agent, so direct bot-to-bot attack surface is limited to multi-server scenarios.",
+    "skill_plugin_vetting": "No built-in vetting, sandboxing, or signing of tools/plugins. Community has proposed transparency logs for server updates, tool additions, and permission changes. OWASP MCP Top 10 project documents security risks. Reputation mechanisms proposed to incorporate security reviews, independent audits, and incident reports. Third-party tool registries emerging but not part of core protocol. November 2025 spec introduced official community-driven registry for discovering MCP servers.",
+    "attestation_mechanism": "None in core protocol. No TEE remote attestation, code hash verification, or Verifiable Credentials built in. Origin header validation provides basic request origin verification. OAuth 2.1 provides token-based identity assertion. Third-party integrations (e.g., TEE-backed security registries) available in blockchain MCP server ecosystem."
+  },
+
+  "offchain_onchain_linking": {
+    "linking_support": "Yes (via third-party blockchain MCP servers, not native)",
+    "linking_mechanism": "Third-party MCP servers provide blockchain integration: wallet management servers handle cryptographic keys and sign transactions; on-chain data query servers interface with blockchain RPC endpoints and smart contracts. The SettleMint MCP and similar projects bridge AI agents to on-chain operations. Private keys are designed to never leave the user's wallet. No native protocol-level on-chain linking mechanism.",
+    "transfer_behavior": "[uncertain] Not applicable to core MCP protocol. Blockchain MCP servers handle token transfers via their own mechanisms; behavior depends on specific server implementation."
+  },
+
+  "delegation_and_authorization": {
+    "delegation_model": "OAuth 2.1 delegation: MCP servers MAY support delegated authorization through third-party authorization servers. Server acts as both OAuth client (to third-party auth server) and OAuth authorization server (to MCP client). Supports standard OAuth flows: authorization code + PKCE, client credentials. Human-to-agent delegation via OAuth consent screens. No native agent-to-agent delegation (MCP is client-server, not peer-to-peer).",
+    "authorization_granularity": "Coarse to fine-grained (implementation-dependent). OAuth 2.0 scopes provide role-based access. Granularity ranges from single catch-all scope (app.access) to fine-grained per-tool or per-method scopes. Rich Authorization Requests (RAR) discussed for more granular authorization. Third-party solutions (e.g., Cerbos) can enforce fine-grained ABAC policies on MCP servers."
+  },
+
+  "discovery_and_interoperability": {
+    "discovery_mechanism": "Server registration in host application configuration. Official community-driven MCP server registry (introduced November 2025). No DNS-based or .well-known discovery in core protocol. Clients discover server capabilities via initialize handshake and tools/list, resources/list, prompts/list methods.",
+    "capability_declaration": "Initialization handshake: server declares capabilities (tools, resources, prompts, logging) during initialize response. Runtime discovery: tools/list returns tool names, descriptions, and input schemas (JSON Schema). resources/list returns available resources. prompts/list returns available prompt templates. Capabilities are dynamically discoverable at runtime.",
+    "cross_platform_portability": "Partially portable. MCP is framework-agnostic; clients and servers can be any language/platform. SDKs available for Python, TypeScript, C#, Java, Kotlin, Swift, Rust. However, identity is tied to OAuth tokens and session IDs, not portable DIDs. Server configurations are host-specific. Composable extension architecture allows cross-platform adoption.",
+    "standards_compliance": "OAuth 2.1 (mandatory for remote auth), PKCE (RFC 7636, mandatory), HTTP/HTTPS, JSON-RPC 2.0, Server-Sent Events (SSE), RFC 8615 (not used for discovery but compatible), Dynamic Client Registration (RFC 7591). Not W3C DID or W3C VC. Not SPIFFE. Protocol specification managed by Agentic AI Foundation under Linux Foundation.",
+    "protocol_composability": "High composability. MCP + A2A (complementary: MCP for agent-to-tool, A2A for agent-to-agent). MCP + blockchain servers (on-chain operations via third-party MCP servers). MCP + Stripe/payment servers (payment integration). MCP is designed as modular with composable authorization extensions. Multiple MCP servers can be connected to a single agent simultaneously."
+  },
+
+  "push_pull_communication": {
+    "push_support": "SSE (Server-Sent Events via Streamable HTTP transport for streaming responses and notifications)",
+    "pull_support": "REST API (JSON-RPC 2.0 over HTTP POST for requests; HTTP GET for opening SSE streams). Stdio transport for local process communication.",
+    "subscription_model": "Server-initiated notifications via JSON-RPC notification messages over SSE stream. Clients subscribe implicitly by maintaining SSE connection. Server can send notifications for resource updates (notifications/resources/updated), tool list changes (notifications/tools/list_changed), and progress updates. No explicit webhook registration mechanism."
+  },
+
+  "trust_and_reputation": {
+    "trust_model": "Centralized (platform/host-verified). Trust is established via OAuth 2.1 authentication with the authorization server. Host applications (Claude Desktop, IDEs) mediate trust between users and MCP servers. URL-based client registration (SEP-991) provides verifiable client identity for unknown clients. No decentralized or peer-based trust.",
+    "reputation_system": "None in core protocol. Community registry (November 2025) provides basic server discovery. Proposed enhancements include: transparency logs for server updates, reputation mechanisms incorporating security reviews and audit results. No on-chain reputation, staking history, or VC-based reputation."
+  },
+
+  "payment_and_economics": {
+    "payment_integration": "None native. Third-party MCP servers provide payment integration (e.g., Stripe MCP server for invoices, customer management, refunds). Can compose with A2A + AP2 for agent-led payments. Blockchain MCP servers enable cryptocurrency/stablecoin transactions.",
+    "economic_model": "Free (open protocol, no fees for core usage). Infrastructure costs depend on deployment (server hosting, OAuth provider costs). Third-party MCP server hosting may have subscription costs. No staking or token requirements."
+  },
+
+  "governance_and_compliance": {
+    "regulatory_alignment": "No explicit EU AI Act, NIST AI RMF, or ISO 42001 compliance in protocol specification. MCP's governance layers (identity, data governance, registries, monitoring) can support EU AI Act compliance when properly implemented. Third-party compliance suites (e.g., MCP Security & Compliance Suite) provide add-on compliance capabilities. Audit logging can be implemented to meet regulatory requirements.",
+    "audit_trail_capability": "Logging capability declared during initialization. Server can emit log messages at various severity levels. No built-in immutable hash chain or blockchain anchoring. Audit logging for compliance must be implemented at the application level. Third-party solutions provide structured audit trails linking agent actions to identities. GRC/SIEM integration recommended for compliance evidence.",
+    "lifecycle_management": "Three-phase lifecycle: Initialization (capability negotiation, version agreement) -> Operation (tool invocation, resource access, notifications) -> Shutdown (graceful transport disconnection). No formal suspension, migration, upgrade, or decommissioning procedures in protocol. Session management via Mcp-Session-Id enables stateful interactions. Server can terminate sessions by invalidating session IDs."
+  },
+
+  "uncertain": [
+    "transfer_behavior",
+    "regulatory_alignment"
+  ]
+}

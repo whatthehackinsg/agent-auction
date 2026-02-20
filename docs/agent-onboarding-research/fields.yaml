@@ -1,0 +1,186 @@
+topic: "Agent Onboarding for AI Agent Platforms"
+
+fields:
+  basic_info:
+    - name: name
+      description: "Platform/protocol name"
+      detail_level: brief
+
+    - name: type
+      description: "on-chain / off-chain / hybrid / standard"
+      detail_level: brief
+
+    - name: status
+      description: "Production / Beta / Spec-only / Deprecated"
+      detail_level: brief
+
+    - name: ecosystem
+      description: "Which blockchain/ecosystem (if applicable, e.g. Ethereum, Cosmos, Arbitrum, NEAR)"
+      detail_level: brief
+
+    - name: launch_date
+      description: "When the platform/protocol launched or was first published"
+      detail_level: brief
+
+  onboarding_flow:
+    - name: registration_steps
+      description: "Step-by-step onboarding process from zero to operational agent"
+      detail_level: detailed
+
+    - name: human_involvement
+      description: "What human intervention is required: none / approve-only / full-setup / optional"
+      detail_level: moderate
+
+    - name: agent_autonomy
+      description: "How much the agent can do on its own during onboarding (self-register / needs human / needs staking / etc.)"
+      detail_level: moderate
+
+    - name: time_to_first_action
+      description: "How fast from zero to first operational action (seconds / minutes / hours / days)"
+      detail_level: brief
+
+  identity_model:
+    - name: identity_type
+      description: "Primary identity primitive: wallet / DID / API key / NFT (ERC-721) / Ed25519 key / PKP / SVID / other"
+      detail_level: moderate
+
+    - name: key_management
+      description: "How keys are generated, stored, rotated, and revoked. Include rotation frequency if known"
+      detail_level: detailed
+
+    - name: multi_instance_support
+      description: "Can one identity have multiple runtime keys/instances running concurrently"
+      detail_level: moderate
+
+    - name: recovery_mechanism
+      description: "What happens if keys are lost: recovery path, backup keys, social recovery, etc."
+      detail_level: moderate
+
+    - name: versioning_support
+      description: "Whether the platform tracks agent code/model versions (on-chain hash appending, off-chain metadata, etc.)"
+      detail_level: moderate
+
+  security:
+    - name: authentication_method
+      description: "How agent identity is verified: challenge-response / OAuth / wallet signature / API key / TEE attestation / VC presentation"
+      detail_level: moderate
+
+    - name: known_vulnerabilities
+      description: "Documented security issues, breaches, design weaknesses, or attack incidents"
+      detail_level: detailed
+
+    - name: revocation_speed
+      description: "How fast compromised credentials can be killed: instant / seconds / minutes / hours / manual"
+      detail_level: brief
+
+    - name: anti_sybil
+      description: "Mechanisms to prevent fake/mass registrations: staking / proof-of-work / human verification / rate limiting / fee"
+      detail_level: moderate
+
+    - name: data_exposure_risk
+      description: "What sensitive data is exposed during/after onboarding (API keys, PII, wallet addresses, model configs, etc.)"
+      detail_level: moderate
+
+    - name: bot_to_bot_attack_surface
+      description: "Protections against agent-to-agent prompt injection, social engineering, influence operations"
+      detail_level: detailed
+
+    - name: skill_plugin_vetting
+      description: "Whether and how the platform vets, sandboxes, or signs skills/plugins/tools that agents use"
+      detail_level: moderate
+
+    - name: attestation_mechanism
+      description: "Cryptographic proof of agent integrity: TEE remote attestation / code hash verification / Verifiable Credentials / none"
+      detail_level: moderate
+
+  offchain_onchain_linking:
+    - name: linking_support
+      description: "Whether off-chain identity can link to on-chain and vice versa (yes / no / planned / N/A)"
+      detail_level: moderate
+
+    - name: linking_mechanism
+      description: "How linking works technically: wallet signature challenge / EIP-712 binding / VC issuance / smart contract registration"
+      detail_level: detailed
+
+    - name: transfer_behavior
+      description: "What happens to linked identity when on-chain token transfers (cleared / preserved / requires re-claim)"
+      detail_level: moderate
+
+  delegation_and_authorization:
+    - name: delegation_model
+      description: "How human-to-agent and agent-to-agent authorization works: OAuth OBO / OIDC-A chains / smart contract / AP2 mandates / direct key sharing"
+      detail_level: detailed
+
+    - name: authorization_granularity
+      description: "Coarse (role/scope) / fine-grained (ABAC) / intent-aware (mandate-based) / none"
+      detail_level: moderate
+
+  discovery_and_interoperability:
+    - name: discovery_mechanism
+      description: "How other agents/platforms find this agent: registry lookup / DNS / .well-known / Agent Card / on-chain query / search API"
+      detail_level: moderate
+
+    - name: capability_declaration
+      description: "How the agent advertises what it can do: JSON-LD / Agent Card / registration file / manifest / skill list / smart contract"
+      detail_level: moderate
+
+    - name: cross_platform_portability
+      description: "Can identity be used across platforms: portable / locked-in / partially portable via DID/VC"
+      detail_level: moderate
+
+    - name: standards_compliance
+      description: "Which formal standards implemented: W3C DID, W3C VC, OIDC/OIDC-A, SPIFFE, OAuth 2.0/2.1, ERC-721, ERC-8004, etc."
+      detail_level: moderate
+
+    - name: protocol_composability
+      description: "Whether identity/onboarding composes with other protocols (e.g. ERC-8004 + AP2 + A2A + MCP)"
+      detail_level: moderate
+
+  push_pull_communication:
+    - name: push_support
+      description: "Push notification mechanism: WebSocket / SSE / Webhook / Matrix / none"
+      detail_level: brief
+
+    - name: pull_support
+      description: "Pull/query mechanism: REST API / GraphQL / on-chain reads / none"
+      detail_level: brief
+
+    - name: subscription_model
+      description: "How agents subscribe to events/updates: token-based / channel-based / webhook registration / smart contract events"
+      detail_level: moderate
+
+  trust_and_reputation:
+    - name: trust_model
+      description: "Centralized (platform-verified) / federated (trust registries) / decentralized (peer reputation) / delegated (credential chains)"
+      detail_level: moderate
+
+    - name: reputation_system
+      description: "How agent reputation is tracked: on-chain registry (ERC-8004) / platform ratings / VC-based / staking history / none"
+      detail_level: moderate
+
+  payment_and_economics:
+    - name: payment_integration
+      description: "Payment protocols supported: AP2 / ACP / x402 / native token / fiat / none"
+      detail_level: moderate
+
+    - name: economic_model
+      description: "Costs for onboarding/operation: free / staking required / gas fees / subscription / token purchase"
+      detail_level: moderate
+
+  governance_and_compliance:
+    - name: regulatory_alignment
+      description: "Which regulatory frameworks supported: EU AI Act / NIST AI RMF / ISO 42001 / none / unknown"
+      detail_level: moderate
+
+    - name: audit_trail_capability
+      description: "Immutable logs linking agent actions to identities: hash chain / signed events / blockchain anchoring / none"
+      detail_level: moderate
+
+    - name: lifecycle_management
+      description: "Full lifecycle support: registration / activation / suspension / migration / upgrade / decommissioning"
+      detail_level: moderate
+
+uncertain:
+  # Reserved field — auto-filled during deep research phase
+  # Items where information is conflicting, unavailable, or requires verification
+  []

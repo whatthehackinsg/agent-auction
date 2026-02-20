@@ -1,0 +1,81 @@
+{
+  "basic_info": {
+    "name": "Agent2Agent Protocol (A2A)",
+    "type": "off-chain",
+    "status": "Production",
+    "ecosystem": "Cloud/Enterprise (framework-agnostic; ERC-8004 extension available for Ethereum on-chain agents)",
+    "launch_date": "April 9, 2025 (announced at Google Cloud Next); v0.3 released July 31, 2025; donated to Linux Foundation June 23, 2025"
+  },
+
+  "onboarding_flow": {
+    "registration_steps": "1. Publish an Agent Card: Create a JSON metadata document describing the agent's identity, capabilities, skills, service endpoint URL, authentication requirements, and supported protocols. Host it at /.well-known/agent-card.json (recommended per RFC 8615) or any discoverable URL. 2. Configure Authentication: Define securitySchemes in the Agent Card (Bearer tokens, OAuth 2.0, OpenID Connect, API keys, mTLS). Obtain credentials through out-of-band enterprise processes (e.g., OAuth client registration, API key provisioning). 3. Implement A2A Server Endpoint: Stand up an HTTP(S) endpoint that implements the JSON-RPC 2.0 A2A methods (message/send, message/stream, tasks/get, tasks/cancel, etc.). 4. Configure Transport Capabilities: Declare streaming (SSE), pushNotifications (webhook), and stateTransitionHistory support in the Agent Card capabilities field. 5. Register in Discovery System: Optionally register in a developer portal, enterprise registry, or DNS-based discovery for other agents to find the Agent Card. 6. Test Connectivity: Use SDK tooling (Python SDK, etc.) to verify agent card fetching, authentication handshake, and task lifecycle (submitted -> working -> completed).",
+    "human_involvement": "full-setup",
+    "agent_autonomy": "Agent cannot fully self-register. A human or DevOps process must provision the server, configure authentication credentials, and publish the Agent Card. Once deployed, the agent operates autonomously for task execution, delegation, and collaboration.",
+    "time_to_first_action": "minutes to hours (depends on infrastructure setup; once Agent Card is published and server is running, first task can be submitted within seconds)"
+  },
+
+  "identity_model": {
+    "identity_type": "Agent Card (JSON metadata document) + standard web identity primitives (OAuth 2.0 tokens, API keys, mTLS certificates, OpenID Connect). No protocol-native DID or wallet identity.",
+    "key_management": "A2A delegates key management to standard enterprise practices. OAuth tokens and API keys are provisioned out-of-band. Best practices recommend: short-lived scope-limited tokens stored in secure vaults, regular credential rotation, automated certificate renewal for TLS/mTLS. SPIFFE IDs and certificates can be auto-managed with managed trust domains. Agent Cards MAY be digitally signed using JSON Web Signature (JWS, RFC 7515) for authenticity and integrity. No protocol-mandated rotation frequency; left to implementation.",
+    "multi_instance_support": "Yes. The protocol treats agents as services; multiple runtime instances can serve the same Agent Card endpoint behind load balancers. Protocol versioning allows agents to expose multiple interfaces for the same transport under different URLs.",
+    "recovery_mechanism": "Not specified in the protocol. Recovery from key compromise or agent failure is left to implementation. Best practices include: credential revocation via OAuth token invalidation, re-provisioning Agent Cards, using infrastructure resilience patterns (e.g., Dapr resiliency API for retries, timeouts, circuit breakers).",
+    "versioning_support": "Yes. Agents can expose multiple protocol version interfaces. Tooling libraries and SDKs must provide mechanisms for protocol version negotiation. Agent Cards include version fields. No on-chain hash appending; versioning is off-chain metadata."
+  },
+
+  "security": {
+    "authentication_method": "Flexible, declared in Agent Card securitySchemes: OAuth 2.0, OpenID Connect Discovery, Bearer tokens, Basic Auth, API keys, mutual TLS (mTLS). Aligned with OpenAPI authentication schemes. Authentication is obtained out-of-band; the protocol itself does not perform credential exchange.",
+    "known_vulnerabilities": "1. Agent Card Spoofing/Shadowing: Malicious actors can clone legitimate agent skills or embed prompt-injection payloads in metadata fields (descriptions, skills) that get injected into downstream LLM system prompts. 2. Agent Session Smuggling (Palo Alto Unit42): Exploits A2A's stateful task model to inject covert malicious instructions into established cross-agent sessions. 3. Prompt Injection: Since the expected consumer is an LLM, prompt injection mitigations may be minimal; attackers can identify A2A endpoints and test common jailbreaks. 4. Agent Impersonation: Adversarial agents mimic trusted agent identity/capabilities due to weak identity management. 5. Sensitive Data Leakage: Payment credentials, identity documents, and personal data may traverse intermediate agents; malicious agents advertising data protection can steal sensitive information. 6. Coarse-grained Token Privileges: Tokens often grant more privileges than needed, enabling privilege escalation. 7. Multi-Agent Infection: Malicious prompts can self-replicate across interconnected agents like a virus. 8. JSON-RPC Attack Surface: Unicode normalization, nested object depth, oversized payloads. 9. Unauthenticated Agent Card Access: Without authentication, anyone can harvest capabilities, endpoint URLs, and sample prompts.",
+    "revocation_speed": "minutes (OAuth token revocation is near-instant; Agent Card updates depend on client caching/refresh intervals; compromised Agent Cards remain exposed until clients fetch updates)",
+    "anti_sybil": "Rate limiting and request throttling supported via centralized policy enforcement. Trust scores and service-level agreements can prioritize communications. No protocol-native staking, proof-of-work, or human verification. Cryptographically validated agent identities recommended. Dynamic trust lists and reputation systems recommended but not mandated.",
+    "data_exposure_risk": "Agent Cards expose: agent name, description, skills, capabilities, service endpoint URLs, authentication scheme details, sample prompts, provider information, and documentation URLs. Without proper authentication on Agent Card endpoints, attackers can harvest internal cloud storage buckets, private analytics endpoints, and administrative tokens. During task execution, sensitive data (payment credentials, identity documents, calendar entries, personal data) may traverse intermediate agents.",
+    "bot_to_bot_attack_surface": "High risk area. Documented attacks include: (1) Agent Card Shadowing - unauthorized cloning of legitimate agent skills to intercept tasks; (2) Agent Session Smuggling - injecting malicious instructions into established sessions; (3) Prompt Injection via Agent Metadata - embedding malicious instructions in Agent Card description/skill fields; (4) Multi-Agent Chain Infection - compromised agent influences others in delegation workflows; (5) Man-in-the-Middle via better skill advertising - malicious agent with superior advertising hijacks task routing. Mitigations recommended: input sanitization, task-scoped permissions, cryptographic agent identity validation, runtime monitoring.",
+    "skill_plugin_vetting": "No built-in skill vetting or sandboxing in the protocol. Skills are declared in Agent Cards as descriptive metadata. Validation of skill trustworthiness is left to client implementations. ERC-8004 extension adds on-chain validation registries for cryptographic and crypto-economic task verification. Best practice recommends automated tests ensuring Agent Cards expose only intended capabilities.",
+    "attestation_mechanism": "Agent Cards MAY be digitally signed using JSON Web Signature (JWS, RFC 7515) for authenticity and integrity (added in v0.3 as 'signed security cards'). ERC-8004 extension adds cryptographic proofs (zkTLS, TEE attestations) and crypto-economic validation (restaking, AVSs). No native TEE remote attestation or Verifiable Credentials in core protocol."
+  },
+
+  "offchain_onchain_linking": {
+    "linking_support": "Yes (via ERC-8004 extension)",
+    "linking_mechanism": "ERC-8004 provides a trustless extension for on-chain agents: Identity Registry for discoverable cross-chain agent IDs, Reputation Registry for structured verifiable feedback, Validation Registry for cryptographic and crypto-economic task verification. Core A2A protocol is off-chain only; ERC-8004 bridges to Ethereum smart contracts.",
+    "transfer_behavior": "[uncertain] Not specified in core A2A protocol. ERC-8004 extension likely preserves on-chain identity via registry contracts, but transfer behavior for linked tokens is not documented."
+  },
+
+  "delegation_and_authorization": {
+    "delegation_model": "Agent-to-agent delegation via task sub-delegation: agents can delegate sub-tasks, exchange information, and coordinate actions. Authorization uses standard enterprise OAuth 2.0 / OpenID Connect flows. Short-lived tokens scoped per task, expiring in minutes, to eliminate long-lived secrets. If an agent requires additional credentials for a different system, it transitions to auth-required state; the client obtains new credentials out-of-band and provides them in subsequent requests. Enterprise SSO integration supported.",
+    "authorization_granularity": "Coarse (role/scope) - tokens are typically coarse-grained, giving agents more privileges than needed. Protocol relies on OAuth 2.0 scopes. Fine-grained per-task scoping recommended but not enforced by protocol."
+  },
+
+  "discovery_and_interoperability": {
+    "discovery_mechanism": "/.well-known/agent-card.json (RFC 8615 convention); Developer Portals for registry-based discovery; DNS-based discovery; direct URL reference. Agent Cards are machine-readable JSON descriptors.",
+    "capability_declaration": "Agent Card (JSON document): declares name, description, skills (with descriptive metadata), capabilities (streaming, pushNotifications, stateTransitionHistory), supported authentication schemes, service endpoint URL, provider information, version, and documentation URL.",
+    "cross_platform_portability": "Partially portable. A2A is framework-agnostic and vendor-neutral; any agent implementing the protocol can interoperate regardless of underlying framework. However, identity is tied to the Agent Card and its hosting infrastructure; no portable DID. ERC-8004 extension enables cross-chain portability for on-chain agents.",
+    "standards_compliance": "HTTP/HTTPS, JSON-RPC 2.0, Server-Sent Events (SSE), gRPC (v0.3+), OAuth 2.0, OpenID Connect Discovery, OpenAPI authentication schemes, RFC 8615 (.well-known), RFC 7515 (JWS for signed Agent Cards), RFC 7807 (Problem Details for errors). Not W3C DID or W3C VC natively.",
+    "protocol_composability": "High composability. A2A + MCP (complementary: A2A for agent-to-agent, MCP for agent-to-tool). A2A + AP2 (Agent Payments Protocol for payment integration). A2A + ERC-8004 (on-chain identity/reputation/validation). A2A can integrate with enterprise middleware (Dapr, service meshes)."
+  },
+
+  "push_pull_communication": {
+    "push_support": "SSE (Server-Sent Events for streaming) + Webhook (HTTP POST push notifications to client-provided URLs for async/long-running tasks)",
+    "pull_support": "REST API (JSON-RPC 2.0 over HTTP: tasks/get for polling task status, message/send for synchronous request/response)",
+    "subscription_model": "Webhook registration: clients provide a callback URL during task creation for push notification delivery. Server sends HTTP POST updates to the registered webhook for task state changes. SSE streams provide real-time incremental updates for active connections."
+  },
+
+  "trust_and_reputation": {
+    "trust_model": "Federated (enterprise trust via OAuth/OIDC) with optional decentralized extension (ERC-8004 on-chain reputation). Trust is established via standard enterprise authentication; dynamic trust lists and reputation systems are recommended but not mandated. Cryptographically signed Agent Cards (JWS) provide authenticity verification.",
+    "reputation_system": "None in core protocol. ERC-8004 extension provides on-chain Reputation Registry for structured, verifiable feedback. Best practices recommend trust scores and service-level agreements for prioritizing agent communications."
+  },
+
+  "payment_and_economics": {
+    "payment_integration": "AP2 (Agent Payments Protocol) - open protocol by Google for agent-led payments, designed as A2A extension. Supports stablecoins, cryptocurrencies, and traditional payments. Uses one-time tokens with expiration for secure payment handoffs.",
+    "economic_model": "Free (open protocol, no staking or gas fees for core usage). Infrastructure costs depend on deployment (cloud hosting, compute). ERC-8004 extension may involve gas fees for on-chain registration."
+  },
+
+  "governance_and_compliance": {
+    "regulatory_alignment": "Unknown - no explicit EU AI Act, NIST AI RMF, or ISO 42001 compliance built into the protocol specification. The protocol's enterprise features (audit logging, authentication, authorization) can support regulatory compliance, but alignment is left to implementations.",
+    "audit_trail_capability": "Task state transition history (stateTransitionHistory capability in Agent Card). Tasks have defined lifecycle states (submitted, working, completed, canceled, rejected, failed) with status tracking. Signed Agent Cards (JWS) provide integrity verification. No built-in hash chain or blockchain anchoring in core protocol; ERC-8004 extension adds on-chain anchoring.",
+    "lifecycle_management": "Partial. Task lifecycle: submitted -> working -> completed/canceled/rejected/failed (terminal states). Agent lifecycle: deployment, Agent Card publication, operational phase. No formal protocol-level suspension, migration, upgrade, or decommissioning procedures; left to infrastructure management."
+  },
+
+  "uncertain": [
+    "transfer_behavior",
+    "regulatory_alignment"
+  ]
+}

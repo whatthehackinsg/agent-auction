@@ -1,0 +1,86 @@
+{
+  "basic_info": {
+    "name": "NEAR AI Agent Registry",
+    "type": "on-chain",
+    "status": "Production (NEAR AI Hub live since early 2025; agent registry integrated into NEAR AI platform; NEAR AI Assistant and agent framework operational)",
+    "ecosystem": "NEAR Protocol (Layer 1 blockchain with sharding via Nightshade; NEAR AI built on top of NEAR blockchain; integrates with Aurora EVM for cross-chain compatibility)",
+    "launch_date": "2024 (NEAR AI initiative announced mid-2024; NEAR AI Hub launched late 2024/early 2025; agent registry functionality integrated as part of the NEAR AI platform expansion; NEAR Foundation established the NEAR AI Inc. subsidiary in 2024) [uncertain]"
+  },
+  "onboarding_flow": {
+    "registration_steps": "1) Create or import a NEAR wallet (implicit accounts via Ed25519 key or named accounts like 'agent.near'). 2) Access the NEAR AI platform (app.near.ai) and authenticate with the NEAR wallet. 3) Register the agent by calling the agent registry smart contract, providing agent metadata: name, description, category/tags, version, and endpoint information. 4) The contract mints an on-chain record associating the agent identity with the NEAR account. 5) Optionally stake NEAR tokens to enhance discoverability and reputation score in the registry. 6) Configure the agent's capabilities and service endpoints (HTTP endpoints, supported protocols). 7) The agent becomes discoverable through the NEAR AI registry and can be invoked by other agents or users. 8) For agents built with the NEAR AI Agent Framework: deploy agent code through the NEAR AI Hub, which handles containerized execution and connects to the registry automatically.",
+    "human_involvement": "full-setup (human must create the NEAR wallet, initiate registration transaction, configure agent metadata, and optionally stake tokens; the NEAR AI Hub provides a UI-based setup flow that simplifies the process but still requires human-driven configuration)",
+    "agent_autonomy": "After initial human registration, agents can operate autonomously using their NEAR account for transactions, interact with other agents via the registry, and update their metadata/endpoints. Agents can self-update their registration details through contract calls signed with their runtime keys. However, initial wallet creation and staking require human action. The NEAR AI framework supports autonomous agent execution once deployed.",
+    "time_to_first_action": "minutes (NEAR blockchain has ~1 second finality; account creation and registration transactions complete within seconds; deploying through NEAR AI Hub may take additional minutes for container setup; named account registration requires a separate transaction)"
+  },
+  "identity_model": {
+    "identity_type": "NEAR account (Ed25519 key-based; supports both implicit accounts derived from public key and human-readable named accounts like 'myagent.near'). The NEAR account serves as both the identity primitive and the wallet. Each agent maps to a NEAR account ID registered in the agent registry smart contract.",
+    "key_management": "NEAR Protocol uses Ed25519 key pairs. Each NEAR account supports multiple access keys with different permission levels: (1) Full-access keys: complete control over the account, can sign any transaction, (2) Function-call access keys: restricted to calling specific smart contract methods with a limited gas allowance. Agents typically operate with function-call access keys for day-to-day operations while the full-access key is kept secure. Key rotation: new access keys can be added and old ones deleted via on-chain transactions at any time. NEAR accounts are smart contracts themselves, enabling programmable key management. The NEAR AI platform may manage keys on behalf of hosted agents within its infrastructure.",
+    "multi_instance_support": "Yes - NEAR accounts natively support multiple access keys. Multiple runtime instances of the same agent can each hold their own function-call access key, all tied to the same NEAR account (agent identity). This allows concurrent operation across different servers or environments while maintaining a single on-chain identity.",
+    "recovery_mechanism": "NEAR accounts support multiple full-access keys, enabling backup key recovery. If one key is lost, another full-access key can be used to add a replacement and delete the compromised key. Named accounts can also leverage social recovery patterns through helper contracts. Implicit accounts (derived from a single key) have no built-in recovery if that key is lost. The NEAR AI Hub may provide custodial recovery options for agents hosted on their platform. [uncertain]",
+    "versioning_support": "The NEAR AI platform supports agent versioning through its framework. Agent code deployed to the NEAR AI Hub is versioned (agents have version tags/numbers). On-chain, the registry contract can store metadata including version information. Code hashes can be stored as part of the agent metadata to verify integrity. The NEAR AI Hub tracks deployment history and allows rollback to previous versions. [uncertain]"
+  },
+  "security": {
+    "authentication_method": "Wallet signature (Ed25519 signatures on NEAR transactions). All interactions with the registry contract require valid NEAR account signatures. Function-call access keys provide scoped authentication for specific contract interactions. The NEAR AI platform may add additional authentication layers (API tokens, OAuth) for its hosted services.",
+    "known_vulnerabilities": "1) NEAR AI is relatively new, and the agent registry has not undergone the same level of public security scrutiny as established protocols. 2) The NEAR AI Hub (centralized infrastructure component) creates a single point of failure for hosted agents. 3) Function-call access keys, if over-permissioned, could allow unintended contract interactions. 4) Named account squatting: popular agent names could be registered preemptively. 5) The staking-based reputation system could be gamed by well-funded actors creating multiple accounts with stakes. 6) No major public security breaches have been reported as of early 2025. [uncertain]",
+    "revocation_speed": "seconds (NEAR blockchain finality is approximately 1-2 seconds; access key deletion takes effect immediately upon transaction confirmation; function-call keys can be revoked instantly by the full-access key holder)",
+    "anti_sybil": "staking (NEAR token staking required for enhanced visibility/reputation creates economic barrier); fee (gas fees and account creation costs on NEAR, though minimal at ~0.1 NEAR for named accounts); named accounts require minimum balance (storage staking). However, implicit accounts can be created freely from any key pair, making basic registration relatively low-cost. The staking-based reputation layer adds meaningful economic cost for maintaining credible identity. [uncertain]",
+    "data_exposure_risk": "Agent metadata (name, description, capabilities, endpoints) registered on-chain is publicly visible. NEAR account balances and transaction history are public. Staking amounts are transparent. Private operational data (API keys, model weights, internal configurations) should not be stored on-chain. The NEAR AI Hub's infrastructure may store agent code and logs with platform-level access controls.",
+    "bot_to_bot_attack_surface": "The NEAR AI platform includes an agent framework with structured communication patterns between agents. Agent-to-agent interactions go through defined interfaces. The staking-based reputation system provides a trust signal that can help filter malicious agents. However, no specific protections against prompt injection or agent-to-agent social engineering are documented at the protocol level. Application-layer protections depend on individual agent implementations. [uncertain]",
+    "skill_plugin_vetting": "The NEAR AI Hub provides a marketplace/registry for agent components and tools. Community-contributed agents and tools are listed but vetting mechanisms are not extensively documented. The open-source nature of the platform allows code inspection. No formal sandboxing or cryptographic signing of skills/plugins has been publicly documented. [uncertain]",
+    "attestation_mechanism": "On-chain registration provides proof of identity tied to a NEAR account. Transaction signatures serve as cryptographic proof of agent actions. No TEE remote attestation or zkML verification has been documented as part of the NEAR AI agent registry. Code hash verification may be supported through the NEAR AI Hub deployment pipeline. [uncertain]"
+  },
+  "offchain_onchain_linking": {
+    "linking_support": "yes (native - the NEAR AI platform bridges on-chain identity with off-chain agent execution; agents registered on-chain have endpoints pointing to off-chain services)",
+    "linking_mechanism": "Smart contract registration stores the mapping between NEAR account (on-chain identity) and agent service endpoints (off-chain). The agent's NEAR account signs transactions that update the registry, proving control. Off-chain services authenticate by signing challenges with the NEAR account's access keys. The NEAR AI Hub acts as an intermediary linking on-chain identity to containerized agent execution.",
+    "transfer_behavior": "NEAR named accounts can be transferred (the account itself is a namespace that can have its keys changed). If full-access keys are rotated to a new owner, the agent registration persists under the same account name. Implicit accounts cannot be transferred in the same way. Staking and reputation history remain associated with the account. The specifics of registry record behavior on key rotation are not extensively documented. [uncertain]"
+  },
+  "delegation_and_authorization": {
+    "delegation_model": "NEAR access key model provides native delegation. Full-access keys can create function-call access keys with specific permissions (limited to calling certain contract methods with a gas allowance). This enables: (1) Human owner holds full-access key, (2) Agent runtime instances use function-call keys scoped to registry operations, (3) Sub-agents or services can be granted limited keys for specific operations. No formal OAuth OBO or OIDC-A delegation chains documented.",
+    "authorization_granularity": "Fine-grained (function-call access keys). NEAR's access key model allows specifying: which contract can be called, which methods are allowed, and maximum gas budget per key. This provides method-level authorization granularity. However, within a method call, there is no further parameter-level access control at the key level. Application-level authorization logic can be implemented in smart contract code."
+  },
+  "discovery_and_interoperability": {
+    "discovery_mechanism": "On-chain registry lookup (query the agent registry smart contract to discover registered agents by category, capability, or search terms); the NEAR AI Hub provides a web-based discovery interface; agents can be searched and filtered through the platform's UI and API; on-chain metadata enables programmatic agent discovery through contract view calls.",
+    "capability_declaration": "Agent metadata stored in the registry contract includes: name, description, category tags, version, and service endpoint information. The NEAR AI framework allows agents to declare their capabilities through structured metadata. The exact schema follows the NEAR AI platform conventions rather than a universal standard like JSON-LD or Agent Cards. [uncertain]",
+    "cross_platform_portability": "Partially portable. NEAR account-based identity is specific to the NEAR ecosystem. Cross-chain portability requires bridges (e.g., Rainbow Bridge to Ethereum, Aurora for EVM compatibility). The agent's operational endpoints are accessible via standard HTTP regardless of chain. No W3C DID or universal portable identity layer documented. Integration with other agent protocols (A2A, MCP) would require additional adaptation layers. [uncertain]",
+    "standards_compliance": "NEAR Protocol standards (NEPs - NEAR Enhancement Proposals). Uses Ed25519 cryptography. No explicit compliance with W3C DID, W3C VC, OIDC, SPIFFE, OAuth 2.0, ERC-721, or ERC-8004. The NEAR AI platform follows NEAR-specific conventions. Some compatibility with Ethereum ecosystem through Aurora EVM. [uncertain]",
+    "protocol_composability": "Moderate. The NEAR AI platform is designed to work within the NEAR ecosystem. Composability with: (1) NEAR DeFi protocols for payment and staking, (2) Aurora EVM for Ethereum compatibility, (3) Cross-chain bridges for interoperability. Direct composability with A2A, MCP, or ERC-8004 is not natively supported but could be built as adapter layers. The NEAR AI Agent Framework provides internal composability for multi-agent systems within the platform. [uncertain]"
+  },
+  "push_pull_communication": {
+    "push_support": "Smart contract events (NEAR blockchain emits receipt/event logs); the NEAR AI Hub may provide WebSocket or webhook-based push notifications for agent events; NEAR Lake Indexer enables streaming of on-chain events. [uncertain]",
+    "pull_support": "On-chain reads (NEAR RPC view calls to query registry contract state); REST API (NEAR AI Hub provides API endpoints for querying agent information); NEAR blockchain RPC for direct contract state queries.",
+    "subscription_model": "Smart contract events can be consumed via NEAR Lake Indexer or NEAR RPC WebSocket subscriptions. The NEAR AI platform may provide higher-level event subscription mechanisms for agent-to-agent communication. Specific subscription model details are not extensively documented publicly. [uncertain]"
+  },
+  "trust_and_reputation": {
+    "trust_model": "Decentralized (staking-based reputation). Trust is established through: (1) On-chain identity via NEAR account, (2) NEAR token staking as economic commitment and reputation signal, (3) Transaction history and on-chain activity as implicit trust indicators, (4) The NEAR AI platform may add platform-level trust scoring based on agent performance metrics.",
+    "reputation_system": "Staking-based reputation in the agent registry contract. Agents that stake more NEAR tokens gain higher visibility and reputation scores. On-chain transaction history contributes to implicit reputation. The NEAR AI Hub may track performance metrics (response quality, uptime, user ratings) as additional reputation signals. No formal ERC-8004-style reputation registry or W3C VC-based reputation documented. [uncertain]"
+  },
+  "payment_and_economics": {
+    "payment_integration": "Native token (NEAR token for staking, gas fees, and agent service payments); NEAR DeFi ecosystem integration for broader payment options; potential integration with stablecoins on NEAR (e.g., USDT, USDC on NEAR). No documented integration with AP2, ACP, or x402 protocols.",
+    "economic_model": "Gas fees (NEAR gas for registration and contract interactions, typically fractions of a cent); staking required (NEAR token staking for reputation/visibility enhancement, amount varies); storage staking (NEAR requires storage deposits for on-chain data, ~0.01 NEAR per KB); named account creation costs ~0.1 NEAR. The NEAR AI Hub may have additional pricing for compute resources used by hosted agents. [uncertain]"
+  },
+  "governance_and_compliance": {
+    "regulatory_alignment": "unknown - no explicit regulatory framework compliance documented. NEAR Protocol is a public blockchain with transparent operations. The NEAR Foundation is incorporated in Switzerland. No specific EU AI Act, NIST AI RMF, or ISO 42001 alignment stated for the AI agent registry.",
+    "audit_trail_capability": "Blockchain anchoring (all registration transactions, staking events, and agent interactions are recorded on the NEAR blockchain with full immutability and traceability; NEAR blockchain provides native receipt/event logging; NEAR Lake Indexer enables comprehensive transaction history analysis; agent activity is tied to NEAR account providing persistent audit trail).",
+    "lifecycle_management": "Registration (agent metadata registered via smart contract call) / activation (agent becomes discoverable upon registration) / upgrade (agent metadata and endpoints can be updated via contract calls; NEAR AI Hub supports versioned deployments) / suspension (access keys can be revoked to disable agent operation; contract-level deactivation may be supported) / decommissioning (agent registration can potentially be removed or marked inactive; full account deletion is possible on NEAR by removing all keys and reclaiming storage deposit). Specific lifecycle management features depend on the registry contract implementation. [uncertain]"
+  },
+  "uncertain": [
+    "launch_date",
+    "recovery_mechanism",
+    "versioning_support",
+    "known_vulnerabilities",
+    "anti_sybil",
+    "bot_to_bot_attack_surface",
+    "skill_plugin_vetting",
+    "attestation_mechanism",
+    "transfer_behavior",
+    "capability_declaration",
+    "cross_platform_portability",
+    "standards_compliance",
+    "protocol_composability",
+    "push_support",
+    "subscription_model",
+    "reputation_system",
+    "economic_model",
+    "lifecycle_management"
+  ]
+}

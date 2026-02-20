@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+.npm-cache/
+npm-debug.log*
+
+# Secrets & environment
+.env
+.env.*
+!.env.example
+.mcp.json
+
+# AI agent local state (per-developer)
+.claude/
+.sisyphus/
+
+# OS junk
+.DS_Store
+Thumbs.db

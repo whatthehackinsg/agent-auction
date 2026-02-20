@@ -1,0 +1,152 @@
+topic: "Agent Onboarding for AI Agent Platforms"
+description: |
+  深度研究 AI Agent 如何最优 onboarding：Moltbook 安全隐患分析、off-chain（自建 agent）vs on-chain（ERC-8004）身份模型、
+  identity linking 策略、企业级 vs 去中心化方案对比、支付/信誉集成、新兴标准（OIDC-A / OAuth OBO / NIST / ANP）
+
+items:
+  # --- 既有平台/协议（原始 12 项）---
+  - id: 1
+    name: "Moltbook (by Molten)"
+    description: "Agent social directory; agents register profiles and discover each other. Known for massive security breaches (Reuters: data exposure, no identity verification, 1.5M API keys leaked via Wiz research)"
+    category: "off-chain-platform"
+
+  - id: 2
+    name: "ERC-8004 (Trustless Agents Standard)"
+    description: "On-chain agent identity via ERC-721; three registries: Identity, Reputation, Validation. agentURI + registration file. Co-authored by MetaMask, Ethereum Foundation, Google, Coinbase (Aug 2025)"
+    category: "on-chain-standard"
+
+  - id: 3
+    name: "ENS + DID for Agents"
+    description: "Ethereum Name Service as human-readable agent identity handle; W3C DID as decentralized identifier. ENSv2 on L2 with ZK proofs. ENS blog explicitly positions ENS + ERC-8004 as the agent identity stack"
+    category: "on-chain-identity"
+
+  - id: 4
+    name: "Virtuals Protocol"
+    description: "On-chain agent launchpad; agents tokenized as ERC-20. Now includes Revenue Network + Agent Commerce Protocol (ACP) for autonomous agent-to-agent commerce with built-in escrow"
+    category: "on-chain-platform"
+
+  - id: 5
+    name: "OpenClaw (formerly Clawdbot)"
+    description: "Open-source self-hosted AI agent (Peter Steinberger, Dec 2025). Went viral → massive security crisis: 512 vulnerabilities (8 critical), 12% malicious skills in ClawHub, 21,639 exposed instances leaking API keys/OAuth tokens"
+    category: "off-chain-platform"
+
+  - id: 6
+    name: "OpenRouter Agent Registry"
+    description: "Off-chain agent registry; API-key-based onboarding; capability declaration via manifests; model routing"
+    category: "off-chain-platform"
+
+  - id: 7
+    name: "A2A Protocol (Google)"
+    description: "Agent-to-Agent protocol; Agent Cards at /.well-known/agent.json; push notification config. v0.3 upgrade with streaming, multi-turn tasks, hybrid auth"
+    category: "protocol"
+
+  - id: 8
+    name: "MCP (Model Context Protocol, Anthropic)"
+    description: "Server registration; Streamable HTTP transport; OAuth 2.1 auth flow (June 2025 spec update). No built-in identity but has session management and Origin validation"
+    category: "protocol"
+
+  - id: 9
+    name: "NEAR AI Agent Registry"
+    description: "On-chain agent registration on NEAR; contract-based identity + staking for reputation"
+    category: "on-chain-platform"
+
+  - id: 10
+    name: "Fetch.ai Almanac"
+    description: "Agent registration contract on Cosmos; agents register endpoints + capabilities; staking-based discovery; 48-hour re-registration requirement"
+    category: "on-chain-platform"
+
+  - id: 11
+    name: "Autonolas (Olas) Registry"
+    description: "On-chain agent/service registry (ERC-721 based); agents register as NFTs with code hashes; composable multi-agent services; supports version appending"
+    category: "on-chain-platform"
+
+  - id: 12
+    name: "Lit Protocol Agent Wallet"
+    description: "Programmable Key Pairs (PKPs) for agents; distributed key generation; threshold signing. V1 (Naga) live; 7,000+ Vincent Agent Wallets; Rust SDK released"
+    category: "on-chain-identity"
+
+  # --- Web search 补充项（13-28）---
+  - id: 13
+    name: "Microsoft Entra Agent ID"
+    description: "Enterprise-grade AI agent identity in Microsoft Entra directory. First-class agent identity with Conditional Access policies, lifecycle management, governance. Public Preview at Ignite 2025"
+    category: "enterprise-identity"
+
+  - id: 14
+    name: "Amazon Bedrock AgentCore Identity + Policy"
+    description: "AWS purpose-built agent IAM: OAuth-based auth (OBO flows), third-party tool access, workload identity via SLR. AgentCore Policy with Cedar language + natural language + automated reasoning"
+    category: "enterprise-identity"
+
+  - id: 15
+    name: "Google Agent Payments Protocol (AP2)"
+    description: "Open protocol for agent-initiated payments (Sep 2025, 60+ partners). Uses W3C Verifiable Credentials as mandates: Intent/Commerce/Payment Mandate delegation chain. Payment-agnostic"
+    category: "payment-protocol"
+
+  - id: 16
+    name: "x402 Payment Protocol"
+    description: "HTTP-native 402 Payment Required for machine-to-machine micropayments (Coinbase + Cloudflare). 156K weekly tx, sub-$0.001 payments. x402 Foundation (Sep 2025). Crypto rail in AP2"
+    category: "payment-protocol"
+
+  - id: 17
+    name: "OpenID Connect for Agents (OIDC-A) 1.0"
+    description: "OIDC extension for LLM-based agent identity: agent type/model/version claims, attestation verification, delegation chains, attribute-based authorization. arXiv paper 2509.25974"
+    category: "standard"
+
+  - id: 18
+    name: "OAuth 2.0 On-Behalf-Of for AI Agents (IETF Draft)"
+    description: "IETF draft extending OAuth with requested_actor + actor_token for human-to-agent delegation. Scoped, auditable authorization"
+    category: "standard"
+
+  - id: 19
+    name: "NIST NCCoE Agent Identity Project"
+    description: "Feb 2026 concept paper: enterprise agent identity covering identification, authorization (OAuth 2.0+), access delegation, logging. Considers MCP, SPIFFE, SCIM, OIDC. Comments due Apr 2, 2026"
+    category: "governance"
+
+  - id: 20
+    name: "SPIFFE / SPIRE"
+    description: "CNCF-graduated workload identity framework: short-lived SVIDs, zero-trust attestation. HashiCorp/CyberArk positioned it for agentic AI in 2025. Uber scale: billions of attestations/day"
+    category: "enterprise-identity"
+
+  - id: 21
+    name: "Agent Network Protocol (ANP)"
+    description: "Three-layer protocol: DID-based identity/encrypted comms, meta-protocol negotiation, application protocol. W3C AI Agent Protocol Community Group (June 2025). Agent Description Protocol (ADP) for discovery"
+    category: "protocol"
+
+  - id: 22
+    name: "ElizaOS (ai16z)"
+    description: "TypeScript multi-agent framework; persistent personality via character configs. V2: unified message bus, agent wallet, registry. ELIZA token launchpad. Largest open-source crypto-AI agent framework"
+    category: "on-chain-platform"
+
+  - id: 23
+    name: "cheqd Trust Registry / Trust Graph"
+    description: "Cosmos-based VC infrastructure for agents. Trust Registries → Trust Graphs (2025). MCP servers for DID/VC operations. Partnership with ASI Alliance (Fetch.ai)"
+    category: "on-chain-identity"
+
+  - id: 24
+    name: "Virtuals Agent Commerce Protocol (ACP)"
+    description: "One-line onboarding: persistent identity + trustless escrow + evaluation via smart contracts + tokenization. 18,000+ agents. Revenue Network (Feb 2026)"
+    category: "on-chain-platform"
+
+  - id: 25
+    name: "Phala Network (TEE Agent Compute)"
+    description: "Blockchain-TEE hybrid; 30K+ TEE devices. Phala Cloud (Jan 2025). Decentralized Root of Trust (DeRoT) + Key Management Protocol. Privacy-preserving agent deployment"
+    category: "on-chain-identity"
+
+  - id: 26
+    name: "Morpheus (Decentralized AI Network)"
+    description: "P2P Smart Agents on Arbitrum via Lumerin routing. Permissionless access, crypto payments, $20M MOR rewards for compute. Wallet-based identity, stake-weighted reputation"
+    category: "on-chain-platform"
+
+  - id: 27
+    name: "Wayfinder (Agent Navigation)"
+    description: "Chain-agnostic agent routing (Ethereum/Solana/Base/Cosmos). 'Shells' (agents) guided by 'Wayfinding Paths'. PROMPT token for activation. Open alpha Aug 2025"
+    category: "on-chain-platform"
+
+  - id: 28
+    name: "Coinbase AgentKit / Agentic Wallets"
+    description: "Wallet-first agent identity on CDP. Gasless txs via Smart Wallet API, TEE-secured non-custodial wallets, fiat onramp. Multi-framework support (LangChain/OpenAI/Vercel AI)"
+    category: "on-chain-identity"
+
+execution:
+  batch_size: 4
+  items_per_agent: 2
+  output_dir: ./results

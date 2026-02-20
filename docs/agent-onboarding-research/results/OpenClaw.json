@@ -1,0 +1,75 @@
+{
+  "basic_info": {
+    "name": "OpenClaw (formerly Clawdbot, Moltbot)",
+    "type": "off-chain",
+    "status": "Production",
+    "ecosystem": "N/A (platform-agnostic, self-hosted; unofficial community integrations with Solana/Ethereum via third-party wallet plugins like Privy Agentic Wallets and ACP protocol)",
+    "launch_date": "November 2025 (initial Clawdbot release by Peter Steinberger); renamed Moltbot Jan 27 2026; renamed OpenClaw Jan 30 2026; went viral Jan 25 2026 with 9,000 GitHub stars in one day"
+  },
+  "onboarding_flow": {
+    "registration_steps": "1. Install OpenClaw on local machine (macOS, Linux, Windows, Docker). 2. Create minimal config file at ~/.openclaw/openclaw.json with a model identifier (e.g. agent.model). 3. Authenticate with LLM provider via OAuth (for subscriptions like Claude Pro/Max or ChatGPT) or API key in config. 4. Optionally configure messaging platform channels (WhatsApp, Telegram, Slack, Discord, Signal, iMessage, Microsoft Teams, Matrix, Google Chat, etc.) with their respective bot tokens or OAuth flows. 5. Gateway daemon starts on port 18789, establishing WebSocket control plane. 6. For DM-based access, unknown users receive a pairing code; operator approves with 'openclaw pairing approve <channel> <code>'. 7. Install skills from ClawHub or local skill directories. 8. Agent is operational and responds on configured channels.",
+    "human_involvement": "full-setup (initial installation, config file creation, LLM provider auth, messaging platform setup, and pairing approval for new users all require human intervention)",
+    "agent_autonomy": "After initial human setup, agent operates autonomously: self-executes tasks via LLM reasoning, installs/uses skills, manages memory, can write its own code for unknown tasks. However, agent cannot self-register -- needs human to configure credentials, approve pairings, and set access policies. Dangerous operations require human approval via push notification.",
+    "time_to_first_action": "minutes (minimal config takes minutes to set up; first operational action within 5-15 minutes for basic setup)"
+  },
+  "identity_model": {
+    "identity_type": "API key / OAuth token (primary identity is the LLM provider credential -- API key or OAuth session; messaging platform identity is derived from bot tokens for each channel; Gateway WebSocket token for operator/client authentication; no cryptographic agent identity primitive like DID or wallet address natively)",
+    "key_management": "Credentials stored per-agent in ~/.openclaw/agents/<agentId>/agent/auth-profiles.json with profile IDs following pattern <provider>:<identifier>. OAuth tokens auto-refreshed before expiry with file locking to prevent concurrent refresh collisions. API keys stored in JSON/Markdown config files in ~/.clawdbot/ or ~/.openclaw/ directory. Rotation supported via config changes and Composio dashboard 'Revoke' toggle. No automatic key rotation schedule by default. Critical weakness: credentials historically stored in plaintext, leading to massive exposure (21,639+ exposed instances leaking API keys, OAuth tokens, WhatsApp/Telegram/Discord credentials).",
+    "multi_instance_support": "Yes. Supports multiple isolated agents with separate workspace, agentDir, and sessions, plus multiple channel accounts (e.g. two WhatsApps) in one running Gateway. Production systems typically handle 10-20 concurrent agents. Critical: must never reuse agentDir across agents (causes auth/session collisions).",
+    "recovery_mechanism": "Community-proposed Git-based recovery: initialize ~/.openclaw/ as Git repo with cron-based auto-backup every 15 minutes. No official built-in recovery mechanism. If keys are lost, user must manually re-configure credentials. Composio integration provides external credential management with revoke/rotate capabilities.",
+    "versioning_support": "Minimal. Config meta field tracks lastTouchedVersion and lastTouchedAt timestamps. No on-chain hash appending or formal version registry. Community uses Git-based version tracking of the ~/.openclaw/ directory."
+  },
+  "security": {
+    "authentication_method": "Localhost trust (connections from 127.0.0.1 trusted without authentication by default); WebSocket token-based authentication for remote operator/client connections; DM pairing code for messaging platform users; OAuth for LLM provider authentication; bot tokens for messaging platform integration. Critical flaw: reverse proxy misconfiguration forwards all external requests as localhost, bypassing authentication entirely.",
+    "known_vulnerabilities": "SEVERE. 512 total vulnerabilities identified (8 critical). Key incidents: (1) CVE-2026-25253 (CVSS 8.8): One-click RCE via cross-site WebSocket hijacking -- Control UI trusts gatewayUrl from query string without validation, attacker steals auth token, gains operator.admin and operator.approvals scopes, disables user confirmation, escapes container. Patched in v2026.1.29. (2) 21,639+ exposed instances found publicly accessible on internet, many over unencrypted HTTP, leaking API keys, OAuth tokens, chat histories, WhatsApp/Telegram/Discord credentials. (3) ClawHub supply chain attack: 341 malicious skills out of 2,857 total (~12% of registry compromised), using techniques like Markdown HTML comments hiding curl|bash payloads. (4) Moltbook social network for agents created additional agent-to-agent attack surface. (5) Plaintext credential storage in JSON/Markdown files. (6) Default localhost trust model trivially bypassed via reverse proxy misconfiguration.",
+    "revocation_speed": "minutes (Composio dashboard provides instant 'Revoke' toggle for connected accounts; manual credential rotation requires config file changes and restart; CVE-2026-25253 patch required updating to v2026.1.29 plus rotating all tokens)",
+    "anti_sybil": "Minimal. DM pairing code mechanism provides basic identity verification for messaging platform users. Allowlists restrict who can communicate with the bot. No staking, proof-of-work, or formal anti-sybil mechanism. Rate limiting depends on messaging platform and LLM provider limits. ClawHub had no effective skill vetting, allowing 12% malicious skill uploads.",
+    "data_exposure_risk": "CRITICAL. Exposed data includes: API keys for LLM providers (OpenAI, Anthropic, etc.), OAuth tokens, WhatsApp credentials, Telegram bot tokens, Discord tokens, conversation histories stored in Markdown files, calendar data, email contents, account credentials for connected services. Over 1,800 exposed instances confirmed leaking credentials. Persistent memory retains long-term context, user preferences, and interaction history which can be shared with other agents including malicious ones.",
+    "bot_to_bot_attack_surface": "HIGH. (1) Agent-to-agent communication is a core feature; Moltbook social network enables AI agents to interact, creating prompt injection vectors through normal-seeming social interactions. (2) Indirect prompt injection via data sources ingested by OpenClaw (emails, webpages). (3) Compromised agent can influence other agents through shared memory and communication channels. (4) Malicious skills can inject instructions during tool execution. (5) No formal agent-to-agent authentication or attestation protocol. (6) Shell access combined with prompt injection creates RCE risk.",
+    "skill_plugin_vetting": "Weak. ClawHub serves as public skills registry with no effective vetting -- 341 malicious skills (12% of registry) were published with professional documentation and innocuous names. Skills are treated as trusted code per documentation ('Treat skill folders as trusted code and restrict who can modify them'). Malicious skills spiked 386 between Jan 31-Feb 2 2026. Techniques include hidden curl|bash in Markdown HTML comments. Community-created security audit skills exist (e.g. UseAI-pro/openclaw-skills-security) but are opt-in.",
+    "attestation_mechanism": "None natively. No TEE remote attestation, no code hash verification, no Verifiable Credentials. The system relies on trust of the local installation and skill source. Sandbox mode available (Docker-based per-session sandboxes for non-main sessions) but does not provide cryptographic attestation."
+  },
+  "offchain_onchain_linking": {
+    "linking_support": "No (native). Third-party integrations possible via Privy Agentic Wallets (Ethereum/Solana wallet creation for agents) and ACP protocol (Virtuals' on-chain commerce protocol with ERC-8004 + x402). No official on-chain identity binding.",
+    "linking_mechanism": "N/A natively. Third-party: Privy Agentic Wallets allow AI agents to hold wallets, sign transactions, and make payments autonomously. ACP enables verifiable on-chain payments. No EIP-712 binding or smart contract registration built into OpenClaw itself.",
+    "transfer_behavior": "N/A (no native on-chain identity token)"
+  },
+  "delegation_and_authorization": {
+    "delegation_model": "Direct credential sharing (agent uses human's API keys, OAuth tokens, and bot tokens configured in config files). Human delegates by sharing credentials and approving pairing codes. Agent operates 'as you' using your credentials. Advanced: Cedar policy engine integration possible as a policy enforcement point (PEP) for tool invocations, where delegation defines purpose, scope, duration, and conditions. No native OAuth OBO or OIDC-A chains. Composio provides external credential management with scoped access.",
+    "authorization_granularity": "Moderate. Channel allowlists, DM pairing approval, access groups (commands.useAccessGroups), mention gating for groups, sandbox mode (non-main sessions in Docker sandboxes), tool/device permission scoping. Cedar policy integration enables fine-grained ABAC with purpose/scope/duration constraints. Default is relatively coarse: approved users get full agent access."
+  },
+  "discovery_and_interoperability": {
+    "discovery_mechanism": "ClawHub (public skills registry for browsing, discovering, installing, updating skills). No DNS-based discovery, no .well-known endpoint, no Agent Card, no on-chain registry. Agents are discovered via messaging platform presence (WhatsApp, Telegram, Slack, etc.) by users who know the bot's contact.",
+    "capability_declaration": "Skills system with Markdown-based skill files organized in directories. Skills discovered from multiple sources (ClawHub, local directories, plugin skills) and merged into single skill registry. Plugin skills declared via openclaw.plugin.json. MCP server connectivity exposes tools as agent-callable capabilities. No formal JSON-LD or Agent Card manifest.",
+    "cross_platform_portability": "Locked-in to OpenClaw ecosystem. Identity (credentials, memory, skills) is tied to ~/.openclaw/ directory structure. Can run on any OS ('Any OS. Any Platform.') but identity is not portable to other agent platforms. No DID or VC-based portability.",
+    "standards_compliance": "OAuth 2.0 (for LLM provider auth); MCP (Model Context Protocol for tool/service integration, 100+ services); WebSocket protocol for gateway communication. No W3C DID, no W3C VC, no SPIFFE, no ERC-721/ERC-8004 compliance natively.",
+    "protocol_composability": "MCP integration enables composition with MCP-compatible services and tools. Claude Code plugin compatibility allows importing MCP configs. Third-party integrations with ACP, ERC-8004 via community plugins. No native A2A protocol, no AP2 support. Cedar policy engine composability for authorization."
+  },
+  "push_pull_communication": {
+    "push_support": "WebSocket (Gateway WebSocket on port 18789 for real-time event broadcasting to operator/webchat clients); push notifications for dangerous operation approval workflows; messaging platform push via native platform mechanisms (WhatsApp, Telegram, Slack, Discord, etc.)",
+    "pull_support": "REST API (Gateway exposes REST endpoints); WebSocket query; messaging platform polling",
+    "subscription_model": "Channel-based (agents subscribe to messaging platform channels; operator clients connect to Gateway WebSocket for real-time tool events; webhook registration for specific messaging platforms; approval workflow with push notifications, timeouts, and decision logging)"
+  },
+  "trust_and_reputation": {
+    "trust_model": "Centralized (platform trust via ClawHub for skills, localhost trust for authentication) with decentralized self-hosting. Trust is essentially 'trust the operator' model -- whoever configures the instance controls all access. ClawHub trust was catastrophically broken with 12% malicious skills. OpenClaw publishes threat model openly, inviting community contribution.",
+    "reputation_system": "None. No on-chain registry, no platform ratings for skills or agents, no VC-based reputation, no staking history. ClawHub had no reputation filtering, enabling malicious skill proliferation. World Economic Forum has called for 'Know Your Agent' standard, but OpenClaw does not implement one."
+  },
+  "payment_and_economics": {
+    "payment_integration": "None natively (OpenClaw is free software). Users pay LLM providers directly via their own API keys/OAuth subscriptions. Third-party: ACP protocol enables on-chain payments between agents; Privy Agentic Wallets enable crypto transactions. No AP2, no x402, no native token.",
+    "economic_model": "Free (MIT license, no subscription, no premium tier, no paywall). Real costs are LLM provider API usage: typically $5-30/month for personal use, $25-50 for small teams, $50-100+ for heavy automation. Server infrastructure costs if cloud-hosted. OpenClaw monetizes via planned managed hosting (OpenClaw Cloud) and enterprise support."
+  },
+  "governance_and_compliance": {
+    "regulatory_alignment": "None explicitly. No EU AI Act compliance, no NIST AI RMF, no ISO 42001. As a self-hosted open-source tool, compliance responsibility falls entirely on the operator. World Economic Forum has identified four agent requirements (establish identity, confirm permissions, maintain accountability, enable continuous monitoring) that OpenClaw does not fully satisfy.",
+    "audit_trail_capability": "Minimal. Persistent memory in Markdown files provides conversation history. Config meta tracks lastTouchedVersion/lastTouchedAt. Community-proposed Git-based auto-backup provides version history. Cedar policy integration can log tool invocation decisions. No hash chain, no signed events, no blockchain anchoring. No immutable audit trail by default.",
+    "lifecycle_management": "Partial. Registration (manual config setup) / Activation (gateway start) / Suspension (stop gateway or revoke via Composio) / Upgrade (version updates, skill updates via ClawHub) / Decommissioning (remove config and credentials). No formal migration support. No automated lifecycle management. Skills can be installed, updated, and backed up via ClawHub."
+  },
+  "uncertain": [
+    "time_to_first_action",
+    "recovery_mechanism",
+    "revocation_speed",
+    "attestation_mechanism",
+    "linking_mechanism",
+    "regulatory_alignment",
+    "audit_trail_capability"
+  ]
+}

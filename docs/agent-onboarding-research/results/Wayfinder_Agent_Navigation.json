@@ -1,0 +1,101 @@
+{
+  "basic_info": {
+    "name": "Wayfinder (Agent Navigation)",
+    "type": "on-chain",
+    "status": "Beta (Open Alpha launched August 2025; mainnet planned for late 2025 / early 2026. The platform is operational with Shells deployable on testnet and select mainnets. Core Wayfinding Paths and PROMPT token staking are live in alpha.) [uncertain]",
+    "ecosystem": "Multi-chain: Ethereum (primary), Solana, Base (Coinbase L2), Cosmos. Wayfinder is designed to be chain-agnostic, with Shells (agents) capable of navigating across supported chains. The PROMPT token originally launched on Ethereum. Base integration provides low-cost EVM operations.",
+    "launch_date": "PROMPT token launched in 2024 as part of the broader AI Arena / Altered State Machine ecosystem. Wayfinder open alpha announced and launched August 2025. The project evolved from the AI Arena gaming ecosystem into a general-purpose agent navigation platform. [uncertain]"
+  },
+  "onboarding_flow": {
+    "registration_steps": "1) Acquire PROMPT tokens (ERC-20 on Ethereum, bridgeable to supported chains) - required for Shell activation and staking. 2) Connect a Web3 wallet (MetaMask, WalletConnect, etc.) to the Wayfinder platform interface. 3) Create or select a 'Shell' - the agent container/identity that will execute tasks on-chain. Shell creation involves staking PROMPT tokens as a deposit/activation fee. 4) Configure the Shell with 'Wayfinding Paths' - predefined or custom navigation routes that define what the agent can do (e.g., swap tokens on Uniswap, bridge assets to Base, stake on Cosmos). Paths are modular instruction sets that Shells follow. 5) Assign the Shell to specific chains and protocols it will operate on. 6) Activate the Shell by confirming the PROMPT stake transaction on-chain. 7) The Shell begins operating autonomously along its configured Wayfinding Paths, executing transactions and navigating DeFi protocols. 8) Users can monitor Shell activity, adjust Paths, and recall/deactivate Shells through the Wayfinder dashboard. [uncertain]",
+    "human_involvement": "full-setup (human must acquire PROMPT tokens, create the Shell, configure Wayfinding Paths, and activate via staking; after initial setup the agent operates autonomously but humans can intervene to modify paths or deactivate. The platform targets a model where human oversight is maintained through path configuration and staking controls.)",
+    "agent_autonomy": "Moderate-to-high autonomy after activation. Shells execute transactions autonomously along their configured Wayfinding Paths without requiring per-transaction human approval. However, Shells are constrained to their predefined Paths - they cannot deviate or discover new protocols without human reconfiguration. The agent cannot self-register without human-provided PROMPT tokens and wallet setup. Path execution is deterministic within the defined parameters. Shells can chain multiple Path steps together for complex multi-step DeFi operations across chains. [uncertain]",
+    "time_to_first_action": "minutes (acquiring PROMPT tokens may take longer depending on exchange availability, but once tokens are held, Shell creation, Path configuration, and activation can be completed in minutes through the Wayfinder UI. On-chain confirmation times vary by chain - seconds on Base/Solana, minutes on Ethereum.) [uncertain]"
+  },
+  "identity_model": {
+    "identity_type": "wallet + Shell NFT/token - each Shell is represented as an on-chain entity tied to the creator's wallet address. The Shell identity is bound to the staked PROMPT tokens. The wallet address serves as the primary identity primitive, with the Shell acting as a delegated execution agent linked to that wallet. [uncertain]",
+    "key_management": "Keys are managed through the user's existing Web3 wallet (MetaMask, hardware wallet, etc.). Wayfinder does not generate or manage private keys directly - it relies on the user's wallet for transaction signing. Shell execution may involve server-side or TEE-based signing for automated path execution after the user delegates authority. The PROMPT staking transaction binds the user's wallet to the Shell. Key rotation would require creating a new Shell with a new wallet. Revocation is handled by unstaking PROMPT tokens and deactivating the Shell. [uncertain]",
+    "multi_instance_support": "Yes - a single wallet can create and operate multiple Shells concurrently, each with different Wayfinding Paths and chain configurations. Multiple Shells can operate on different chains simultaneously. Each Shell maintains its own execution context and Path configuration. [uncertain]",
+    "recovery_mechanism": "Recovery depends on the underlying wallet recovery mechanism (seed phrase, social recovery for smart contract wallets). If wallet access is lost, Shell control is lost. PROMPT tokens staked in Shells may have a recovery/withdrawal mechanism with a timelock. The Shell itself cannot be transferred to a new wallet without unstaking and re-creating. No Wayfinder-specific recovery mechanism beyond standard wallet recovery. [uncertain]",
+    "versioning_support": "Wayfinding Paths may be versioned as the community creates and updates path templates. Shell configurations can be updated by modifying assigned Paths. No explicit on-chain code/model versioning for the agent itself - versioning is at the Path instruction level rather than the agent code level. The platform may track Path version history. [uncertain]"
+  },
+  "security": {
+    "authentication_method": "wallet signature (standard Web3 wallet connection and transaction signing via ECDSA; Shell activation requires on-chain staking transaction signed by the user's wallet; ongoing Shell operations are authenticated through the bound wallet identity and PROMPT stake)",
+    "known_vulnerabilities": "1) PROMPT token dependency: Shell operation requires maintaining a PROMPT stake, creating economic attack vectors if PROMPT token price is volatile or manipulated. 2) Path execution risks: if Wayfinding Paths interact with compromised DeFi protocols, Shells could execute harmful transactions. 3) Smart contract risk: Shell and staking smart contracts could contain vulnerabilities. 4) Centralization risk during alpha: the Wayfinder team likely controls Path validation, Shell execution infrastructure, and protocol upgrades during the alpha phase. 5) Cross-chain bridge risks: multi-chain operations expose Shells to bridge exploits. 6) Front-running: on-chain transactions executed by Shells may be vulnerable to MEV extraction and sandwich attacks. 7) Limited audit history: as an alpha-stage product, smart contracts may not be fully audited. [uncertain]",
+    "revocation_speed": "minutes to hours (Shell deactivation requires unstaking PROMPT tokens, which may involve an on-chain transaction and potentially a timelock/cooldown period. Emergency pause mechanisms may exist at the platform level for the alpha. Individual Path removal can be done through the UI.) [uncertain]",
+    "anti_sybil": "staking / fee (PROMPT token staking requirement creates an economic cost per Shell, preventing free mass registration. Each Shell requires a meaningful PROMPT stake to activate. Gas fees for Shell creation transactions add additional cost. The economic barrier scales with the number of Shells, making Sybil attacks costly.)",
+    "data_exposure_risk": "Wallet addresses of Shell operators are publicly visible on-chain. PROMPT staking amounts and Shell activation transactions are public. Wayfinding Path configurations may be visible on-chain or through the platform. DeFi transaction history of Shells is publicly traceable on all supported chains. No PII is inherently required beyond the wallet address. [uncertain]",
+    "bot_to_bot_attack_surface": "Limited agent-to-agent interaction surface in the current design. Shells primarily interact with DeFi protocols rather than other agents. Wayfinding Paths are predefined execution routes, reducing the risk of prompt injection or social engineering between agents. However, if Shells share liquidity pools or interact in the same DeFi markets, economic manipulation between Shells is possible (e.g., one Shell front-running another). The platform does not appear to have explicit inter-agent communication protocols, limiting the direct attack surface. [uncertain]",
+    "skill_plugin_vetting": "Wayfinding Paths function as the skill/plugin layer. During alpha, Paths are likely curated and vetted by the Wayfinder team. Community-created Paths may go through a review or approval process. The modular Path design allows for sandboxed execution within defined parameters. Path templates may be verified through community governance or platform audit as the ecosystem matures. No formal signing or sandboxing framework has been publicly documented. [uncertain]",
+    "attestation_mechanism": "On-chain staking attestation (PROMPT token stake proves commitment and identity binding); transaction signature verification (all Shell operations are signed on-chain). No TEE remote attestation or formal Verifiable Credential mechanism has been publicly documented. The Shell's on-chain transaction history serves as an implicit attestation of its operational history. [uncertain]"
+  },
+  "offchain_onchain_linking": {
+    "linking_support": "yes (Shells operate on-chain by design; off-chain components include the Wayfinder dashboard UI and potentially off-chain Path computation/routing)",
+    "linking_mechanism": "wallet signature challenge (user connects Web3 wallet to link off-chain Wayfinder account/dashboard to on-chain Shell identity); PROMPT staking transaction binds the wallet to the Shell on-chain; Shell operations produce on-chain transaction records that link back to the operator's wallet and off-chain configuration. [uncertain]",
+    "transfer_behavior": "Shell transfer behavior depends on whether Shells are implemented as transferable tokens (NFTs) or non-transferable staking positions. If non-transferable, the Shell is permanently bound to the creator's wallet and PROMPT stake. Unstaking and re-creating would be required for 'transfer'. If transferable, PROMPT stake and Path configuration would transfer with the Shell. This behavior has not been fully documented for the alpha. [uncertain]"
+  },
+  "delegation_and_authorization": {
+    "delegation_model": "Staking-based delegation: the human delegates execution authority to a Shell by staking PROMPT tokens. The Shell then operates autonomously within the bounds of its configured Wayfinding Paths. Authorization is implicit through the staking relationship and Path configuration. No formal OAuth, OIDC, or smart contract-based delegation framework has been publicly described. The model is closer to 'configure and activate' than traditional delegation chains. Agent-to-agent delegation (Shell-to-Shell) has not been documented. [uncertain]",
+    "authorization_granularity": "intent-aware (mandate-based) - Wayfinding Paths define specific intents (swap, bridge, stake, provide liquidity) with parameters (token pairs, amounts, slippage limits). The Shell can only execute actions defined in its Paths. This is mandate-based: the human defines the mandate (Path), and the agent executes within it. No fine-grained ABAC or role-based controls have been documented beyond Path-level constraints. [uncertain]"
+  },
+  "discovery_and_interoperability": {
+    "discovery_mechanism": "Platform registry (Shells and their configurations may be discoverable through the Wayfinder platform interface; on-chain Shell activations and PROMPT staking events are publicly queryable). No formal agent discovery standard (Agent Cards, .well-known, DNS) has been documented. Community-shared Wayfinding Paths may serve as a discovery layer for capabilities. [uncertain]",
+    "capability_declaration": "Wayfinding Paths effectively declare capabilities (which protocols, chains, and operations a Shell can perform). Path definitions serve as structured capability manifests. However, no formal JSON-LD, Agent Card, or standardized capability declaration format has been documented. Capabilities are implicitly declared through the Path configuration rather than explicitly published. [uncertain]",
+    "cross_platform_portability": "partially portable - the underlying wallet identity is portable across any Web3 platform, but the Shell configuration and PROMPT stake are specific to the Wayfinder platform. Wayfinding Paths are Wayfinder-specific and not portable to other agent platforms. The chain-agnostic design means Shell operations span multiple chains, but the agent identity is locked to the Wayfinder ecosystem.",
+    "standards_compliance": "ERC-20 (PROMPT token), ECDSA (wallet signatures), standard Web3 wallet connection protocols (WalletConnect, EIP-1193). No formal W3C DID, W3C VC, SPIFFE, or agent-specific standard compliance documented. Cross-chain operations may use standard bridge protocols. [uncertain]",
+    "protocol_composability": "Moderate - Wayfinder composes with DeFi protocols across supported chains (Uniswap, Aave, Cosmos DEXes, Solana DeFi). Wayfinding Paths can compose multi-step operations across protocols and chains. However, Wayfinder does not natively integrate with agent communication protocols (A2A, MCP, AP2) or agent identity standards (ERC-8004). The platform is focused on DeFi navigation rather than general agent interoperability. [uncertain]"
+  },
+  "push_pull_communication": {
+    "push_support": "WebSocket / platform dashboard (the Wayfinder UI likely provides real-time Shell status updates; specific push mechanisms not publicly documented) [uncertain]",
+    "pull_support": "on-chain reads (Shell status, PROMPT stake, and transaction history queryable on-chain); platform API/dashboard (Shell monitoring through the Wayfinder interface) [uncertain]",
+    "subscription_model": "smart contract events (Shell activation, deactivation, and transaction events emitted on-chain); platform notifications (the Wayfinder dashboard likely provides event notifications for Shell activity). Specific subscription mechanisms not publicly documented. [uncertain]"
+  },
+  "trust_and_reputation": {
+    "trust_model": "decentralized (staking-based) / centralized (platform-verified during alpha) - PROMPT token staking provides economic trust guarantees (Shells have skin-in-the-game). During alpha, the Wayfinder team likely serves as a centralized trust authority for Path validation and platform operations. As the platform matures, trust may shift to a more decentralized model with community governance of Paths and protocol parameters. [uncertain]",
+    "reputation_system": "staking history (PROMPT stake amount and duration serve as implicit reputation signals; Shells with larger and longer-held stakes may be considered more trustworthy). No formal on-chain reputation registry or rating system has been documented. Transaction history across chains provides an implicit operational track record. Community-rated Wayfinding Paths may emerge as a reputation signal for Path quality. [uncertain]"
+  },
+  "payment_and_economics": {
+    "payment_integration": "native token (PROMPT token for Shell activation and staking); gas fees on supported chains (ETH, SOL, ATOM, etc.) for Shell transaction execution. No formal agent payment protocol (AP2, ACP, x402) integration documented. Shells execute DeFi transactions which inherently involve token transfers. [uncertain]",
+    "economic_model": "token purchase + staking required (PROMPT tokens must be acquired and staked to activate Shells; gas fees on each supported chain for transaction execution; no subscription model. The PROMPT token serves as both an activation requirement and an economic alignment mechanism. Token economics may include staking rewards or fee sharing for successful Path execution. During alpha, some operations may be subsidized.) [uncertain]"
+  },
+  "governance_and_compliance": {
+    "regulatory_alignment": "unknown - no explicit regulatory framework compliance documented. As an on-chain DeFi agent platform, it operates in a largely unregulated space. PROMPT token may be subject to securities regulations in some jurisdictions. No formal EU AI Act, NIST AI RMF, or ISO 42001 alignment. [uncertain]",
+    "audit_trail_capability": "blockchain anchoring (all Shell transactions are recorded on their respective chains with full immutability; PROMPT staking and Shell activation/deactivation events are recorded on-chain; multi-chain transaction history provides a comprehensive audit trail; Path execution results are visible through on-chain transaction records)",
+    "lifecycle_management": "registration (create Shell via PROMPT staking) / activation (configure Wayfinding Paths and activate Shell) / suspension (pause Shell operation, potentially unstake PROMPT) / upgrade (modify Wayfinding Paths, add new chain support) / decommissioning (unstake PROMPT tokens, deactivate Shell). Migration between wallets requires creating a new Shell. No formal agent versioning or migration protocol documented. [uncertain]"
+  },
+  "uncertain": [
+    "status",
+    "launch_date",
+    "registration_steps",
+    "agent_autonomy",
+    "time_to_first_action",
+    "identity_type",
+    "key_management",
+    "multi_instance_support",
+    "recovery_mechanism",
+    "versioning_support",
+    "known_vulnerabilities",
+    "revocation_speed",
+    "data_exposure_risk",
+    "bot_to_bot_attack_surface",
+    "skill_plugin_vetting",
+    "attestation_mechanism",
+    "linking_mechanism",
+    "transfer_behavior",
+    "delegation_model",
+    "authorization_granularity",
+    "discovery_mechanism",
+    "capability_declaration",
+    "standards_compliance",
+    "protocol_composability",
+    "push_support",
+    "pull_support",
+    "subscription_model",
+    "trust_model",
+    "reputation_system",
+    "payment_integration",
+    "economic_model",
+    "regulatory_alignment",
+    "lifecycle_management"
+  ]
+}
