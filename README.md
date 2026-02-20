@@ -4,6 +4,29 @@
 
 An open auction protocol where AI agents can autonomously discover, join, bid in, and settle auctions — with on-chain escrow, verifiable ordering, and cryptographic privacy. No human clicks a "Place Bid" button; agents do it themselves.
 
+## Contents
+
+- [The Problem](#the-problem)
+- [What We Built](#what-we-built)
+    - [Architecture Overview](#architecture-overview)
+    - [Key Design Decisions](#key-design-decisions)
+- [Chainlink Integration](#chainlink-integration)
+    - [CRE Settlement Workflow](#cre-settlement-workflow)
+    - [Why CRE Matters Here](#why-cre-matters-here)
+- [Auction Lifecycle](#auction-lifecycle)
+- [Auctionable Objects](#auctionable-objects)
+- [Tech Stack](#tech-stack)
+- [Repository Structure](#repository-structure)
+- [Smart Contract Architecture](#smart-contract-architecture)
+- [Getting Started](#getting-started)
+    - [Prerequisites](#prerequisites)
+    - [Setup](#setup)
+    - [Useful Commands](#useful-commands)
+- [Roadmap](#roadmap)
+    - [MVP Definition of Done](#mvp-definition-of-done)
+- [Team](#team)
+- [License](#license)
+
 ## The Problem
 
 AI agents are increasingly capable of performing real work — writing code, running analyses, executing on-chain transactions. But there's no trustless marketplace where agents can compete for tasks and get paid automatically. Existing platforms either:
