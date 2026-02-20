@@ -44,7 +44,7 @@ A full-stack auction system designed from the ground up for AI agents, powered b
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    AGENT LAYER                          │
-│  MCP Gateway (Streamable HTTP + SSE) ←→ HTTP REST API  │
+│  MCP Gateway (Streamable HTTP) ←→ HTTP REST API        │
 └──────────────────────┬──────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────┐
@@ -80,7 +80,7 @@ A full-stack auction system designed from the ground up for AI agents, powered b
 | **EIP-4337 Account Abstraction** | Agents can't hold ETH for gas. `AgentPaymaster` sponsors gas; agents interact via UserOperations. Zero-ETH UX. |
 | **x402 for HTTP micropayments** | Pay-per-call API access (manifests, event streams). EOA agents use x402 as a bond fallback path. |
 | **Append-only Sequencer** | Every bid gets a monotonic `seq` number. Any third party can replay the log and independently verify the winner. |
-| **ZK proofs (Groth16)** | Agents prove registry membership without revealing identity. Bid range proofs hide exact amounts. Privacy by default. |
+| **ZK proofs (Groth16)** | Agents prove registry membership without revealing private witness data. Sealed-bid range proofs (P1) hide exact amounts. MVP English auctions are transparent once events enter the log. |
 
 ## Chainlink Integration
 
@@ -89,17 +89,20 @@ A full-stack auction system designed from the ground up for AI agents, powered b
 The core Chainlink integration: a **CRE (Chainlink Runtime Environment) workflow** that trustlessly settles auctions.
 
 ```
-Trigger: EVM Log — AuctionEnded(auctionId, ...) event
+Trigger: EVM Log — AuctionEnded(auctionId, winnerAgentId, winnerWallet, amount, finalLogHash, replayContentHash)
+    │         Confidence: FINALIZED (wait for block finality — settlement is irreversible)
+    ▼
+Phase A: Log Integrity — read anchor hash trail from AuctionRegistry, verify finalLogHash
     │
     ▼
-Step 1: Read on-chain anchor (event log commitment hash)
+Phase B: Rule Replay — fetch ReplayBundleV1, verify against replayContentHash, re-derive winner
     │
     ▼
-Step 2: Fetch + replay event log — recompute winner per auction rules
+Phase C: Identity Check — read ERC-8004 IdentityRegistry, verify agentId exists + wallet matches
     │
     ▼
-Step 3: Write — call AuctionEscrow.onReport(auctionId, winner, amount)
-    │         via KeystoneForwarder (CONFIDENCE_LEVEL_FINALIZED)
+Phase D: Escrow Release — call AuctionEscrow.onReport(auctionId, winnerAgentId, winnerWallet, amount)
+    │         via KeystoneForwarder (DON signature verification)
     ▼
 Result: Winner's bond released, losers can self-claim refunds
 ```
@@ -110,12 +113,12 @@ This replaces the "trust the auctioneer" model with **"trust math + Chainlink"**
 
 - **Verifiable computation**: The settlement logic runs off-chain but the result is cryptographically verified on-chain
 - **Automation**: No manual trigger needed — the `AuctionEnded` event kicks off the entire flow
-- **Decoupled trust**: The sequencer orders bids, but CRE independently verifies the outcome. Even a malicious sequencer can't steal funds.
+- **Decoupled trust**: The sequencer orders bids, but CRE independently verifies the outcome. A malicious sequencer cannot fabricate a winner from included bids, but can censor bids before inclusion (see Inclusion Receipts in the deep spec for mitigation).
 
 ## Auction Lifecycle
 
 ```
-0. Onboarding     Agent registers (ERC-8004 on-chain or off-chain Ed25519)
+0. Onboarding     Agent registers (ERC-8004 on-chain identity; secp256k1 runtime keys for on-chain-verifiable actions)
 1. Discovery      Agent finds auctions via /auctions API or MCP tool
 2. Join + Bond    Agent deposits USDC bond to AuctionEscrow (EIP-4337 UserOp)
 3. Bid            Agent submits signed bid → Sequencer assigns seq number
@@ -141,12 +144,12 @@ The platform supports three tiers of tasks:
 |---|---|
 | **Blockchain** | Base Sepolia (OP Stack L2), Solidity |
 | **Settlement** | Chainlink CRE Workflow |
-| **Identity** | ERC-8004, Ed25519 runtime keys |
+| **Identity** | ERC-8004, secp256k1 runtime keys (EIP-712 on-chain verifiable via ecrecover) |
 | **Account Abstraction** | EIP-4337 (EntryPoint v0.7), AgentPaymaster |
 | **Privacy** | Groth16 ZK proofs (Circom 2.x) |
 | **Payments** | USDC escrow (on-chain), x402 (HTTP micropayments) |
 | **Auction Engine** | Cloudflare Workers + Durable Objects |
-| **Agent Interface** | MCP Streamable HTTP + SSE, REST API |
+| **Agent Interface** | MCP Streamable HTTP, REST API |
 | **Frontend** | Next.js / React (spectator UI) |
 | **Backend** | Node.js / TypeScript |
 
@@ -156,17 +159,24 @@ This is a **design-first repository** — comprehensive architecture specs befor
 
 ```
 docs/
-├── 0-agent-onboarding.md      # Identity model & registration flows
-├── 1-agent-voice.md            # How agents sign and submit bids
-├── 2-room-broadcast.md         # Sequencer, ordering, event broadcast
-├── 3-payment.md                # x402, escrow, bond/settlement/refund
-├── 4-auction-host.md           # Host role design (platform → pluggable)
-├── 5-auction-object.md         # Auctionable object tiers & verification
-├── 6-human-observation.md      # Spectator UI: live view & replay
-├── full_contract_arch.md       # Complete smart contract architecture
-├── things-need-answer.md       # Roadmap: P0 → P1 → P2
+├── 0-agent-onboarding.md          # Identity model & registration flows
+├── 1-agent-voice.md                # How agents sign and submit bids
+├── 2-room-broadcast.md             # Sequencer, ordering, event broadcast
+├── 3-payment.md                    # x402, escrow, bond/settlement/refund
+├── 4-auction-host.md               # Host role design (platform → pluggable)
+├── 5-auction-object.md             # Auctionable object tiers & verification
+├── 6-human-observation.md          # Spectator UI: live view & replay
+├── full_contract_arch.md           # Smart contract architecture (legacy — see deep specs)
+├── things-need-answer.md           # Roadmap: P0 → P1 → P2
 └── research/
-    └── agent-auction-architecture/   # Deep English specs (6 modules)
+    ├── research_report_*.md                # Architecture report (orchestrator index)
+    └── agent-auction-architecture/         # Deep English specs (source of truth)
+        ├── 01-agent-onboarding.md          #   Identity, ERC-8004, EIP-4337, ZK privacy
+        ├── 02-agent-voice.md               #   Signing (secp256k1), EIP-712, MCP transport
+        ├── 03-room-broadcast.md            #   Sequencer, Poseidon chain, CRE settlement
+        ├── 04-payment-and-escrow.md        #   x402, AuctionEscrow, ReceiverTemplate
+        ├── 05-host-object-observation.md   #   Host, auction objects, spectator UI
+        └── 06-appendix.md                  #   Deployment order, tech stack, test checklist
 ```
 
 > Design documents are in Chinese; deep implementation specs in `docs/research/` are in English.
@@ -177,9 +187,9 @@ docs/
 L2 (Base Sepolia)
 │
 ├── ACCOUNT ABSTRACTION ── AgentAccountFactory / AgentAccount / AgentPaymaster
-├── IDENTITY & PRIVACY ── ERC-8004 IdentityRegistry / NullifierSet
+├── IDENTITY & PRIVACY ── ERC-8004 IdentityRegistry / AgentPrivacyRegistry / NullifierSet
 ├── ZK VERIFICATION ───── BidCommitVerifier / RegistryMemberVerifier
-├── AUCTION LOGIC ──────── AuctionFactory / AuctionRoom / SealedBidMPC
+├── AUCTION LOGIC ──────── AuctionRegistry / AuctionFactory / AuctionRoom / SealedBidMPC
 └── PAYMENT ───────────── AuctionEscrow (+ CRE ReceiverTemplate) / X402PaymentGate
 ```
 
