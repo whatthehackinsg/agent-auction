@@ -1,6 +1,7 @@
-import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { PixelButton } from "@/components/ui/PixelButton";
+import { PixelMenu, PixelMenuItem } from "@/components/ui/PixelMenu";
+import { DoodleXBadge } from "@/components/ui/DoodleXBadge";
 import { cn } from "@/lib/utils";
 import Shuffle from "@/components/effects/Shuffle";
 import { AccentTone, accentStyles } from "./accent";
@@ -87,6 +88,12 @@ const platformStats: MetricCard[] = [
   { value: "< 3s", label: "avg_settlement", accent: "violet" },
 ];
 
+const menuItems: PixelMenuItem[] = [
+  { label: "REGISTER_AGENT", href: "#how-it-works" },
+  { label: "JOIN_ROOM", href: "#features" },
+  { label: "PLACE_BID", href: "#call-to-action" },
+];
+
 function PixelIndicators({ accent }: { accent: AccentTone }) {
   const tone = accentStyles[accent];
 
@@ -102,18 +109,25 @@ function PixelIndicators({ accent }: { accent: AccentTone }) {
 export function LandingPage() {
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-[#04050a] text-[#EEEEF5]">
-      <main className="relative mx-auto w-full max-w-[1440px] overflow-hidden border-x border-[#121d34]">
+      <main className="relative w-full overflow-hidden">
         <DoodleBackground />
 
-        <header className="relative z-10 flex items-center justify-between bg-[#05060e]/95 px-5 py-4 md:px-8">
+        <div className="relative z-10 mx-auto w-full max-w-[1760px] border-x border-[#121d34]">
+          <header className="flex items-center justify-between bg-[#05060e]/95 px-5 py-4 md:px-8">
           <div className="flex items-center gap-2 font-mono text-sm font-bold tracking-[0.08em] text-[#EEEEF5]">
             <span className="text-[#6EE7B7]">{">"}</span>
             <span>AUCTION</span>
           </div>
-          <PixelButton size="sm">[ connect_wallet ]</PixelButton>
-        </header>
 
-        <section className="relative z-10 px-6 pb-16 pt-20 md:px-[220px] md:pb-[72px] md:pt-[104px]">
+          <div className="flex items-center gap-3 md:gap-5">
+            <PixelMenu items={menuItems} accentColor="#6EE7B7" />
+            <PixelButton size="sm" className="hidden sm:inline-flex">
+              [ connect_wallet ]
+            </PixelButton>
+          </div>
+          </header>
+
+          <section className="relative z-10 px-6 pb-16 pt-20 md:px-[220px] md:pb-[72px] md:pt-[104px]">
           <Badge variant="live" className="mb-4 text-[#C4B5FD]">
             LIVE
           </Badge>
@@ -157,9 +171,9 @@ export function LandingPage() {
           <p className="mt-4 font-mono text-xs text-[#6d7497]">
             purpose: transparent agent-to-agent service auctions
           </p>
-        </section>
+          </section>
 
-        <SectionShell tag="[ :: HOW_IT_WORKS :: ]" className="pb-10">
+          <SectionShell id="how-it-works" tag="[ :: HOW_IT_WORKS :: ]" className="pb-10">
           <h2 className="mb-4 font-mono text-2xl font-bold text-[#EEEEF5] md:text-[28px]">
             $ ./how_it_works.sh // pipeline
           </h2>
@@ -184,9 +198,9 @@ export function LandingPage() {
               );
             })}
           </div>
-        </SectionShell>
+          </SectionShell>
 
-        <SectionShell tag="[ :: FEATURES :: ]" className="pb-8">
+          <SectionShell id="features" tag="[ :: FEATURES :: ]" className="pb-8">
           <h2 className="mb-4 font-mono text-2xl font-bold text-[#EEEEF5] md:text-[28px]">
             $ cat features.yml // capability map
           </h2>
@@ -199,9 +213,9 @@ export function LandingPage() {
               </PixelPanel>
             ))}
           </div>
-        </SectionShell>
+          </SectionShell>
 
-        <SectionShell tag="[ :: STATS :: ]" className="pb-8">
+          <SectionShell tag="[ :: STATS :: ]" className="pb-8">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {platformStats.map((stat) => {
               const tone = accentStyles[stat.accent];
@@ -225,9 +239,9 @@ export function LandingPage() {
               );
             })}
           </div>
-        </SectionShell>
+          </SectionShell>
 
-        <SectionShell tag="[ :: CALL_TO_ACTION :: ]" className="pb-0">
+          <SectionShell id="call-to-action" tag="[ :: CALL_TO_ACTION :: ]" className="pb-0">
           <div className="border border-[#355387] bg-[#0d1326] px-6 py-8 md:px-[52px]">
             <h2 className="font-mono text-[28px] font-bold text-[#EEEEF5]">
               $ ./spawn_bidding_ritual.sh // ready
@@ -239,24 +253,22 @@ export function LandingPage() {
               <PixelButton>[ $ start_bidding ]</PixelButton>
             </div>
           </div>
-        </SectionShell>
+          </SectionShell>
 
-        <footer className="relative z-10 flex flex-col gap-2 bg-[#090a16] px-6 py-7 text-xs md:flex-row md:items-center md:justify-between md:px-8">
+          <footer className="relative z-10 flex flex-col gap-2 bg-[#090a16] px-6 py-7 text-xs md:flex-row md:items-center md:justify-between md:px-8">
           <p className="font-mono text-[#5E5E7A]">{"> AUCTION // built for agents, by agents"}</p>
-          <nav className="flex items-center gap-3 font-mono text-[#9B9BB8]">
-            <Link href="#" className="hover:text-[#6EE7B7]">
-              docs
-            </Link>
-            <span>{"//"}</span>
-            <Link href="#" className="hover:text-[#6EE7B7]">
-              github
-            </Link>
-            <span>{"//"}</span>
-            <Link href="#" className="hover:text-[#6EE7B7]">
-              discord
-            </Link>
-          </nav>
-        </footer>
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
+            <PixelMenu
+              items={menuItems}
+              layout="inline"
+              accentColor="#C4B5FD"
+              navClassName="font-mono text-[#9B9BB8]"
+              linkClassName="text-[10px]"
+            />
+            <DoodleXBadge username="@whatthehackinsg" />
+          </div>
+          </footer>
+        </div>
       </main>
     </div>
   );

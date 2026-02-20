@@ -1,0 +1,174 @@
+.badge {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.badge::before {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border: 1px dashed rgba(121, 164, 214, 0.36);
+  opacity: 0.85;
+  pointer-events: none;
+  animation: doodle-border-wobble 2.6s steps(2, end) infinite;
+}
+
+.badge::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 4px;
+  height: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(110, 231, 183, 0.85) 0 7px,
+    rgba(110, 231, 183, 0) 7px 11px
+  );
+  opacity: 0.32;
+  transform: scaleX(0.7);
+  transform-origin: left center;
+  transition: opacity 180ms ease, transform 180ms ease;
+  pointer-events: none;
+}
+
+.badge:hover::after,
+.badge:focus-visible::after {
+  opacity: 0.9;
+  transform: scaleX(1);
+}
+
+.badge:hover::before,
+.badge:focus-visible::before {
+  border-color: rgba(110, 231, 183, 0.72);
+}
+
+.iconBox {
+  position: relative;
+}
+
+.iconBox::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 7px;
+  height: 2px;
+  background: #f5c46e;
+  transform: rotate(-12deg);
+}
+
+.iconBox::after {
+  content: "";
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  width: 8px;
+  height: 2px;
+  background: #90e9c4;
+  transform: rotate(16deg);
+}
+
+.iconCore {
+  animation: doodle-icon-jitter 2.2s steps(2, end) infinite;
+}
+
+.spark {
+  animation: doodle-spark-flicker 1.4s steps(2, end) infinite;
+}
+
+.followText {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.followText::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  bottom: -1px;
+  height: 1px;
+  background: rgba(126, 140, 181, 0.9);
+  transform: scaleX(0.65);
+  transform-origin: left center;
+  transition: transform 180ms ease, background-color 180ms ease;
+}
+
+.badge:hover .followText::after,
+.badge:focus-visible .followText::after {
+  background: rgba(168, 240, 209, 0.95);
+  transform: scaleX(1);
+}
+
+.username {
+  position: relative;
+  text-shadow: 0 0 0 transparent;
+  transition: text-shadow 180ms ease;
+}
+
+.badge:hover .username,
+.badge:focus-visible .username {
+  text-shadow:
+    1px 0 0 rgba(78, 166, 151, 0.6),
+    -1px 0 0 rgba(196, 181, 253, 0.5);
+  animation: doodle-username-shift 0.28s steps(2, end) infinite;
+}
+
+@keyframes doodle-border-wobble {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.78;
+  }
+  33% {
+    transform: translate(1px, 0);
+    opacity: 0.95;
+  }
+  66% {
+    transform: translate(0, 1px);
+    opacity: 0.82;
+  }
+}
+
+@keyframes doodle-icon-jitter {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(0.6px, -0.6px);
+  }
+}
+
+@keyframes doodle-spark-flicker {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes doodle-username-shift {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(0.6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .badge::before,
+  .iconCore,
+  .spark,
+  .badge:hover .username,
+  .badge:focus-visible .username {
+    animation: none !important;
+  }
+}
