@@ -6,14 +6,25 @@
 > `DepositRangeVerifier.sol`, `AuctionFactory.sol`, `AuctionRoom.sol` (on-chain),
 > `SealedBidMPC.sol`, `X402PaymentGate.sol`
 >
+> The following contracts **ARE deployed** in MVP:
+> `EntryPoint.sol` (canonical), `AgentAccountFactory.sol`, `AgentAccount.sol`,
+> `AgentPaymaster.sol`, `AgentPrivacyRegistry.sol`, `AuctionRegistry.sol`, `AuctionEscrow.sol`
+>
 > Key architectural shifts from the original full-on-chain design:
 > - `validateUserOp()` does **not** call ZK verifiers (moved to DO sequencer via snarkjs)
-> - `ingestEventBatch()` is **removed** — Poseidon chain lives in DO KV
+> - `ingestEventBatch()` is **removed** — Poseidon chain lives in DO transactional storage
 > - `anchorHash()` is **removed** — one `finalLogHash` written at close via `recordResult()`
 > - EIP-712 `verifyingContract` = `AuctionRegistry.address` (not AuctionFactory — removed)
 > - ZK proof verification: off-chain via `snarkjs.groth16.verify()` in Durable Object
-> - Nullifier tracking: Cloudflare KV (replaces NullifierSet.sol)
-> - x402 receipt dedup: Cloudflare KV (replaces X402PaymentGate.sol)
+> - Nullifier tracking: DO transactional storage (replaces NullifierSet.sol)
+> - x402 receipt dedup: Workers KV (replaces X402PaymentGate.sol)
+>
+> **Cross-doc consistency (RESOLVED):** All docs now use `verifyingContract = AuctionRegistry.address`.
+> Updated files: `0-agent-onboarding.md`, `1-agent-voice.md`,
+> `research/agent-auction-architecture/01-agent-onboarding.md`,
+> `research/agent-auction-architecture/02-agent-voice.md`,
+> `research/agent-auction-architecture/03-room-broadcast.md`,
+> `research/agent-auction-architecture/06-appendix.md`
 >
 > For implementation-accurate deep specs, see:
 > - [Orchestrator / Index](./research/research_report_20260219_agent_auction_architecture.md)
@@ -73,7 +84,7 @@ L2 (Base Sepolia — chainId 84532)
 │
 ├─── IDENTITY & PRIVACY LAYER
 │    ├── IdentityRegistry        (official ERC-8004, external canonical deployment)
-│    └── AgentPrivacyRegistry.sol (optional ZK commitment sidecar — OPTIONAL for MVP)
+│    └── AgentPrivacyRegistry.sol (ZK commitment sidecar — required for ZK membership proofs)
 │
 ├─── AUCTION LOGIC LAYER
 │    ├── AuctionRegistry.sol     (SIMPLIFIED: createAuction | recordResult | markSettled
@@ -84,14 +95,14 @@ L2 (Base Sepolia — chainId 84532)
      └── EscrowMilestone.sol     (P1: replaces AuctionEscrow with milestones + slashing)
 
 REMOVED FROM ON-CHAIN (moved off-chain or eliminated):
-  ✗ NullifierSet.sol         → Cloudflare KV: nullifier:{poseidonHash}
+  ✗ NullifierSet.sol         → DO transactional storage: nullifier:{poseidonHash}
   ✗ BidCommitVerifier.sol    → snarkjs.groth16.verify(bidRangeVKey, ...) in DO
   ✗ RegistryMemberVerifier.sol → snarkjs.groth16.verify(registryMemberVKey, ...) in DO
   ✗ DepositRangeVerifier.sol → P1 optional, not deployed
   ✗ AuctionFactory.sol       → createAuction() merged into AuctionRegistry
   ✗ AuctionRoom.sol (on-chain) → Durable Object is the room, no on-chain AuctionRoom
   ✗ SealedBidMPC.sol         → off-chain MPC committee, result submitted via recordResult()
-  ✗ X402PaymentGate.sol      → Cloudflare KV: x402receipt:{chainId}:{txHash}:{logIndex}
+  ✗ X402PaymentGate.sol      → Workers KV: x402receipt:{chainId}:{txHash}:{logIndex}
 
 OFF-CHAIN (cryptographically bound to on-chain state)
 │
@@ -106,8 +117,10 @@ OFF-CHAIN (cryptographically bound to on-chain state)
 │    ├── BidRange.circom
 │    └── DepositRange.circom (P1 optional)
 │
-├─── NULLIFIER + RECEIPT STORE (Cloudflare KV)
-│    ├── nullifier:{poseidonHash}                          (replaces NullifierSet.sol)
+├─── NULLIFIER STORE (DO transactional storage — strongly consistent)
+│    └── nullifier:{poseidonHash}                          (replaces NullifierSet.sol)
+│
+├─── x402 RECEIPT STORE (Workers KV — eventually consistent, acceptable for micropayments)
 │    └── x402receipt:{chainId}:{txHash}:{logIndex}         (replaces X402PaymentGate.sol)
 │
 ├─── EVENT LOG (Postgres + IPFS)
@@ -160,15 +173,19 @@ function validateUserOp(
     bytes32 userOpHash,
     uint256 missingFunds
 ) external override onlyEntryPoint returns (uint256 validationData) {
-    // 1. Verify EIP-712 signature (runtime key → ecrecover)
-    _verifySignature(userOpHash, userOp.signature);
+    // 1. Verify EIP-712 signature against the stored runtime EOA signer.
+    //    AgentAccount stores `address public runtimeSigner` (set at creation, rotatable).
+    //    ecrecover returns an EOA address — this MUST match runtimeSigner, NOT address(this).
+    //    ERC-8004 getAgentWallet() returns address(this) (the contract wallet).
+    //    The mapping is: runtimeSigner (EOA) → AgentAccount (contract) → ERC-8004 agentId.
+    address recovered = ECDSA.recover(userOpHash, userOp.signature);
+    require(recovered == runtimeSigner, "invalid signer");
 
     // 2. Verify nonce + deadline
     _validateNonceAndDeadline(userOp);
 
-    // REMOVED: RegistryMemberVerifier.verify(zkMembershipProof)  → snarkjs in DO
-    // REMOVED: BidCommitVerifier.verify(zkRangeProof)            → snarkjs in DO
-    // REMOVED: NullifierSet.spend(nullifier)                      → Cloudflare KV
+    // ZK verification moved off-chain to DO sequencer (snarkjs.groth16.verify)
+    // Nullifier tracking moved to DO transactional storage
 
     return SIG_VALIDATION_SUCCESS;
 }
@@ -191,13 +208,21 @@ function validateUserOp(
 
 **Note:** `AuctionEscrow.recordBond()` has an `onlyAdmin` modifier and is called by the platform backend after detecting successful USDC transfers on-chain. It is NOT called by agent wallets.
 
-**Nonce management:** AgentAccount tracks its own nonce (used in all EIP-712 structs for UserOps). Off-chain action nonces (for join/bid sent to sequencer) are tracked separately in DO KV: `nonce:{auctionId}:{agentId}`. Sequencer rejects messages with `nonce <= lastSeen`.
+**Runtime signer model:** `AgentAccount` stores `address public runtimeSigner` — the EOA that signs UserOps and off-chain speech acts. Set at creation via `AgentAccountFactory.createAccount(runtimeSigner, salt)`. Rotatable via `setRuntimeSigner(newSigner)` (only callable by current runtimeSigner via UserOp). The sequencer verifies off-chain speech acts as: `ecrecover(EIP712Hash, sig) == AgentAccount.runtimeSigner()` (one cached RPC call per session).
+
+**On-chain nonce:** AgentAccount's EIP-4337 nonce (managed by EntryPoint) — used for bond deposit UserOps.
+
+**Off-chain nonce:** Tracked per-agent per-auction in DO transactional storage: `nonce:{auctionId}:{agentId}:{actionType}`. Policy:
+- Monotonic +1: sequencer rejects `nonce != lastSeen + 1` (not just `<= lastSeen`)
+- Scoped by actionType: join, bid, deliver each have independent nonce counters
+- Idempotent retry: if agent receives no inclusion receipt within 5s, it MAY resend with the same nonce; sequencer returns the original receipt if the action was already ingested (dedup on `hash(auctionId, agentId, actionType, nonce)`)
+- Wallet rotation: nonce counters are NOT reset — the new signer inherits the existing counters
 
 ## AgentPaymaster.sol (SIMPLIFIED)
 
 **What it is:** Implements `IPaymaster` (EIP-4337). Sponsors gas on behalf of registered agents for on-chain bond deposit UserOps.
 
-**`validatePaymasterUserOp()` (UPDATED):** Checks that the agent has sufficient locked deposit in AuctionEscrow for the target auction. ZK-related checks have been removed.
+**`validatePaymasterUserOp()` (UPDATED):** Uses method-based gating to determine sponsorship eligibility. Bond deposit UserOps (`USDC.transfer` to escrow) are always allowed for ERC-8004 registered agents — the paymaster cannot require a bond to exist before sponsoring the bond deposit itself. Other operations (withdraw, admin) require an existing bond.
 
 ```solidity
 function validatePaymasterUserOp(
@@ -205,24 +230,46 @@ function validatePaymasterUserOp(
     bytes32,
     uint256
 ) external view override returns (bytes memory context, uint256 validationData) {
-    bytes32 auctionId = abi.decode(userOp.paymasterAndData[20:], (bytes32));
+    // Method-based gating: determine what the UserOp is trying to do
+    bytes4 selector = bytes4(userOp.callData[0:4]);
 
-    // Check escrow bond coverage (unchanged)
-    require(
-        escrow.bondRecords(auctionId, _getAgentId(userOp.sender)) >= requiredDeposit(auctionId),
-        "insufficient bond"
-    );
+    if (selector == AgentAccount.execute.selector) {
+        // Decode the inner call target and method
+        (address target, , bytes memory innerData) = abi.decode(
+            userOp.callData[4:], (address, uint256, bytes)
+        );
+        bytes4 innerSelector = bytes4(innerData[0:4]);
 
-    // REMOVED: any ZK-related checks (now in DO sequencer)
+        // BOND DEPOSIT: USDC.transfer to escrow — always allowed for registered agents
+        // No bondRecords check here (this IS the bond deposit)
+        if (target == address(usdc) && innerSelector == IERC20.transfer.selector) {
+            (address to, ) = abi.decode(innerData[4:], (address, uint256));
+            require(to == address(escrow), "transfer must target escrow");
+            // Verify agent is registered in ERC-8004
+            require(
+                registry.ownerOf(_getAgentId(userOp.sender)) != address(0),
+                "not registered"
+            );
+            return ("", SIG_VALIDATION_SUCCESS);
+        }
 
-    return ("", SIG_VALIDATION_SUCCESS);
+        // WITHDRAW / ADMIN: require existing bond for the target auction
+        bytes32 auctionId = abi.decode(userOp.paymasterAndData[20:], (bytes32));
+        require(
+            escrow.bondRecords(auctionId, _getAgentId(userOp.sender)) >= requiredDeposit(auctionId),
+            "insufficient bond"
+        );
+        return ("", SIG_VALIDATION_SUCCESS);
+    }
+
+    revert("unsupported operation");
 }
 ```
 
-**Narrowed sponsorship scope (security improvement):** Paymaster only sponsors calls to the allowlisted contracts and methods:
-- `AuctionEscrow.recordBond()` (admin path)
-- `USDC.transfer()` to escrow address
-- `AgentAccount` admin methods (key rotation)
+**Sponsorship scope (method allowlist):** Paymaster only sponsors calls to allowlisted contracts and methods:
+- `USDC.transfer()` to escrow address — bond deposit (no prior bond required, ERC-8004 registration check only)
+- `AuctionEscrow.withdraw()` — requires existing bond
+- `AgentAccount` admin methods (key rotation via `setRuntimeSigner`)
 
 This prevents arbitrary on-chain execution under gas sponsorship.
 
@@ -240,7 +287,7 @@ This prevents arbitrary on-chain execution under gas sponsorship.
 
 **What AgentPrivacyRegistry is:** A sidecar contract keyed by official `agentId` that stores privacy commitments used by ZK circuits. It is **not** the identity authority and is never used to authorize settlement directly.
 
-**MVP status:** `AgentPrivacyRegistry.sol` commitment registration is **OPTIONAL for MVP**. Required only if on-chain ZK membership proof gating is desired (P1). For MVP, the sequencer verifies ZK membership proofs off-chain using `snarkjs`. The agent still stores `merkle witness + agentSecret` locally (needed for off-chain proof generation).
+**MVP status:** `AgentPrivacyRegistry.sol` is **DEPLOYED in MVP**. The DO sequencer reads `AgentPrivacyRegistry.getRoot()` via RPC to verify the `registryRoot` public input in every membership proof. Without this contract, the sequencer has no on-chain root to verify against — agents could submit proofs against fabricated roots. The agent registers its commitment on-chain during onboarding (Flow B / Flow C), then stores `merkle witness + agentSecret` locally for off-chain proof generation.
 
 **The sidecar commitment model:**
 
@@ -259,25 +306,27 @@ On-chain sidecar storage per agentId (if registered):
 
 **Sequencer registry root check:** The DO sequencer reads `AgentPrivacyRegistry.getRoot()` via RPC (cached per block) and verifies `publicSignals[0] == registryRoot` when validating membership proofs off-chain.
 
-## NullifierSet — MOVED TO CLOUDFLARE KV
+## NullifierSet — MOVED TO DO TRANSACTIONAL STORAGE
 
-**Status:** `NullifierSet.sol` is **NOT deployed**. Nullifier tracking is handled by Cloudflare KV in the DO sequencer.
+**Status:** `NullifierSet.sol` is **NOT deployed**. Nullifier tracking is handled by Durable Object transactional storage in the DO sequencer.
 
 **How it works:**
 
 ```typescript
-// Replaces NullifierSet.sol — DO sequencer, zero gas
-async function checkSpendNullifier(nullifier: string, env: Env): Promise<void> {
+// Replaces NullifierSet.sol — DO transactional storage, zero gas
+// Uses this.state.storage (strongly consistent, transactional) — NOT Workers KV (eventually consistent)
+async function checkSpendNullifier(nullifier: string, state: DurableObjectState): Promise<void> {
   const key = `nullifier:${nullifier}`;
-  const existing = await env.KV.get(key);
+  // DO storage is single-writer, strongly consistent — no race conditions
+  const existing = await state.storage.get<boolean>(key);
   if (existing) throw new Error("Nullifier already spent");
-  await env.KV.put(key, "1"); // permanent — no TTL, same guarantee as SSTORE
+  await state.storage.put(key, true);
 }
 ```
 
-**Durability:** Cloudflare KV is globally replicated and persistent across DO hibernation/restart. Same anti-double-spend guarantee as on-chain SSTORE, at zero gas cost.
+**Why DO Storage, not Workers KV:** Workers KV is eventually consistent — reads from a recently-hibernated DO may return stale data (nullifier appears unspent when it was already spent). DO transactional storage (`this.state.storage`) is strongly consistent, survives hibernation, and provides single-writer semantics within the DO. This is the correct tool for anti-double-spend state.
 
-**Trust shift:** Nullifier integrity is guaranteed by Cloudflare KV durability instead of Ethereum consensus. Acceptable given the sequencer is already the single ordering trust point for the off-chain auction engine.
+**Durability model:** DO transactional storage is replicated and durable across DO restarts/hibernation. It does NOT provide Ethereum-level consensus guarantees — durability is backed by Cloudflare's infrastructure SLA, not proof-of-stake. This is an acceptable tradeoff given the sequencer is already the single ordering trust point for the off-chain auction engine. For settlement-critical state, the `finalLogHash` anchored on-chain via `recordResult()` is the ultimate source of truth.
 
 **Nullifier derivation (unchanged from original design):** `nullifier = Poseidon(agentSecret, auctionId, action_type)`. Same agent + same auction + same action type = same nullifier. Deterministic, one-way, context-separated.
 
@@ -287,7 +336,12 @@ async function checkSpendNullifier(nullifier: string, env: Env): Promise<void> {
 
 **Status:** All on-chain Groth16 verifier contracts (`BidCommitVerifier.sol`, `RegistryMemberVerifier.sol`, `DepositRangeVerifier.sol`) are **NOT deployed**. ZK proof verification runs off-chain in the DO sequencer using `snarkjs`.
 
-**Why this is safe:** Agents still generate proofs locally using the same Circom circuits and proving keys. The verifier moves from an on-chain Solidity contract to the sequencer's `snarkjs.groth16.verify()` call. The proof mathematics are identical — only the execution environment changes. The tradeoff is that the sequencer must be trusted to run verification honestly (mitigated by CRE multi-node replay at settlement, and P1 multi-sequencer agreement).
+**Why this is acceptable for MVP:** Agents still generate proofs locally using the same Circom circuits and proving keys. The verifier moves from an on-chain Solidity contract to the sequencer's `snarkjs.groth16.verify()` call. The proof mathematics are identical — only the execution environment changes. The tradeoff is that the sequencer must be trusted to run verification honestly.
+
+**What CRE catches vs does not catch:**
+- CRE CATCHES: winner derivation errors (sequencer declares wrong winner from the recorded bids — CRE replays rules independently)
+- CRE DOES NOT CATCH: admission errors (sequencer accepts an agent with an invalid membership proof — the ReplayBundleV1 contains events, not proof bytes, so CRE cannot re-verify ZK proofs)
+- **P1 mitigation:** Include proof bytes in ReplayBundleV1; CRE re-verifies at least the winning bidder's membership + range proofs via WASM compute. Multi-sequencer 2-of-3 agreement on all proof verification results.
 
 ## BidCommitVerifier — OFF-CHAIN (snarkjs in DO)
 
@@ -441,8 +495,8 @@ Per-auction `AuctionRoom.sol` contract deployment is eliminated. The Durable Obj
 **Status:** `AuctionRoom.sol` as a deployed Solidity contract is **NOT used**. The Durable Object is the auction room.
 
 **What moved where:**
-- `ingestEventBatch()` → DO method (appends to Poseidon chain in KV, no gas)
-- `chainHead` on-chain state → DO KV: `chainHead:{auctionId}` (survives hibernation)
+- `ingestEventBatch()` → DO method (appends to Poseidon chain in DO transactional storage, no gas)
+- `chainHead` on-chain state → DO transactional storage: `chainHead:{auctionId}` (survives hibernation)
 - Phase state machine (OPEN/COMMIT/REVEAL/CLOSED) → DO in-memory state
 - `anchorHash()` periodic writes → **eliminated** (one `finalLogHash` written at close via `recordResult()`)
 
@@ -456,9 +510,10 @@ async ingestAction(action: ValidatedAction): Promise<InclusionReceipt> {
   const eventHash = poseidon([BigInt(seq), toBigInt(prevHash), toBigInt(payloadHash)]);
   this.chainHead = toBytes32(eventHash);
 
-  // Persist to KV (survives DO hibernation)
-  await env.KV.put(`chainHead:${auctionId}`, toHex(this.chainHead));
-  await env.KV.put(`event:${auctionId}:${seq}`, serialize({seq, prevHash, eventHash, action}));
+  // Persist to DO transactional storage (strongly consistent, survives hibernation)
+  // DO storage — NOT Workers KV — for all sequencer-critical state
+  await this.state.storage.put(`chainHead:${auctionId}`, toHex(this.chainHead));
+  await this.state.storage.put(`event:${auctionId}:${seq}`, serialize({seq, prevHash, eventHash, action}));
 
   // Persist to Postgres (authoritative archive for ReplayBundleV1)
   await db.events.insert({ auctionId, seq, prevHash, eventHash, payloadHash, action, ts: Date.now() });
@@ -528,7 +583,7 @@ struct AuctionSettlementPacket {
     bytes32 auctionId;
     bytes32 manifestHash;        // hash of AuctionManifest (from createAuction)
     bytes32 roomConfigHash;      // binds off-chain DO room config to on-chain entry
-    bytes32 finalLogHash;        // Poseidon chain head (computed in DO KV)
+    bytes32 finalLogHash;        // Poseidon chain head (computed in DO transactional storage)
     bytes32 replayContentHash;   // SHA-256 of ReplayBundleV1 pinned to IPFS/Arweave
     uint64  eventCount;          // total events in the log
     uint64  closeSeq;            // seq of the final event
@@ -596,7 +651,7 @@ Signing a speech act with Domain 2 will ALWAYS fail ecrecover.
 
 **Off-chain MPC flow:**
 1. Agents submit `{ ciphertext: ElGamal.encrypt(bid, mpcPubKey, r), bidCommitment, zkRangeProof }` to DO
-2. DO sequencer verifies ZK range proof (snarkjs) and records encrypted bid in KV
+2. DO sequencer verifies ZK range proof (snarkjs) and records encrypted bid in DO transactional storage
 3. At auction close, sequencer signals MPC committee via authenticated API
 4. Committee (5 nodes) each performs partial ElGamal decryption
 5. Committee produces FROST threshold signature over decrypted results
@@ -641,12 +696,15 @@ Rationale: same txHash can contain multiple Transfer events (logIndex disambigua
 
 **⚠ Security:** The Ownable owner can reconfigure which CRE workflow the escrow accepts. For production (P1): transfer ownership to a timelocked multisig after initial configuration.
 
-## X402PaymentGate.sol — REMOVED (DO KV middleware)
+## X402PaymentGate.sol — REMOVED (Workers KV middleware)
 
-**Status:** `X402PaymentGate.sol` is **NOT deployed**. Receipt deduplication is handled by Cloudflare KV middleware.
+**Status:** `X402PaymentGate.sol` is **NOT deployed**. Receipt deduplication is handled by Workers KV middleware.
 
 ```typescript
-// Replaces X402PaymentGate.sol — DO KV, zero gas
+// Replaces X402PaymentGate.sol — Workers KV, zero gas
+// x402 receipts are lower-criticality than nullifiers (micropayment replay, not auction fraud).
+// Workers KV is acceptable here — eventual consistency risk is limited to brief double-serve
+// of a low-value resource (e.g., GET /manifest for 0.001 USDC), not double-spend of auction bonds.
 async function x402GateDeduplicate(
   chainId: number,
   txHash: string,
@@ -699,9 +757,9 @@ struct EIP712Domain {
 ```solidity
 struct Join {
   bytes32 auctionId;
-  bytes32 nullifier;       // Poseidon(agentSecret, auctionId, JOIN) — spent in DO KV
+  bytes32 nullifier;       // Poseidon(agentSecret, auctionId, JOIN) — spent in DO transactional storage
   uint256 depositAmount;
-  uint256 nonce;           // off-chain action nonce tracked in DO KV
+  uint256 nonce;           // off-chain action nonce tracked in DO transactional storage
   uint256 deadline;
 }
 
@@ -747,16 +805,18 @@ struct Withdraw {
 
 **Signing in practice (UPDATED):** For speech acts (join/bid/deliver/dispute/withdraw), the agent:
 1. Generates the EIP-712 typed data hash using `AuctionRegistry.address` as `verifyingContract`
-2. Signs with its runtime key (secp256k1 → ecrecover)
+2. Signs with its runtime EOA key (secp256k1 → ecrecover)
 3. Sends `{ typedData, sig, zkProof?, publicSignals? }` via HTTP POST to DO sequencer
-4. Sequencer verifies: `ecrecover(EIP712Hash(message), sig) == ERC-8004 registered wallet`
+4. Sequencer verifies: `ecrecover(EIP712Hash(message), sig) == AgentAccount.runtimeSigner()` (cached RPC call per session; the signer is an EOA, NOT the contract wallet address from ERC-8004 `getAgentWallet()`)
 5. Sequencer returns inclusion receipt `{ seq, eventHash, sequencerSig }`
 
-For on-chain UserOps (bond deposit only), the same runtime key signs the UserOperation's `userOpHash`, and `AgentAccount.validateUserOp()` verifies via `ecrecover()`.
+**Signer ≠ wallet:** `ecrecover` returns an EOA address. ERC-8004 `getAgentWallet()` returns the `AgentAccount` contract address. The mapping is: `runtimeSigner (EOA) → AgentAccount (contract) → ERC-8004 agentId`. The sequencer resolves this via `AgentAccount.runtimeSigner()` (one RPC call, cached per session).
+
+For on-chain UserOps (bond deposit only), the same runtime EOA key signs the UserOperation's `userOpHash`, and `AgentAccount.validateUserOp()` verifies via `ecrecover() == runtimeSigner`.
 
 ---
 
-# 10. Contract Deployment Order (Updated: 9 steps, down from 15)
+# 10. Contract Deployment Order (Updated: 10 steps, down from 15)
 
 Order matters. Dependencies must be deployed before dependents.
 
@@ -765,7 +825,7 @@ Step 1:  Verify EntryPoint.sol at canonical address
          (0x0000000071727De22E5E9d8BAf0edAc6f37da032 — already deployed on Base Sepolia)
          ACTION: verify bytecode exists via eth_getCode; do NOT redeploy
 
-         REMOVED: NullifierSet.sol — moved to Cloudflare KV
+         REMOVED: NullifierSet.sol — moved to DO transactional storage
          REMOVED: BidCommitVerifier.sol — moved to snarkjs in DO
          REMOVED: RegistryMemberVerifier.sol — moved to snarkjs in DO
          REMOVED: DepositRangeVerifier.sol — P1 optional, not deployed
@@ -774,6 +834,8 @@ Step 2:  AgentPrivacyRegistry.sol
          (no dependencies — NullifierSet dependency removed)
          NOTE: official ERC-8004 IdentityRegistry is external canonical deployment;
                integrate by pinned address/ABI, do not fork
+         ACTION: after deploy, register initial agent commitments
+                 (sequencer reads getRoot() for ZK membership verification)
 
 Step 3:  AgentAccount.sol (implementation, not proxy)
          (SIMPLIFIED — no ZK verifier dependencies)
@@ -797,15 +859,13 @@ Step 6:  AuctionRegistry.sol
 Step 7:  AuctionEscrow.sol
          (depends: AuctionRegistry, IdentityRegistry, KeystoneForwarder address)
          NOTE: ReceiverTemplate constructor takes (forwarderAddress) only.
-         ACTION: after deploy, call setExpectedAuthor(workflowDeployerAddress),
-                 setExpectedWorkflowName("auctSettle"),
-                 setExpectedWorkflowId(workflowIdBytes32)
+         NOTE: setExpected* calls deferred to Step 10 (require CRE workflow registration first)
          ACTION: For production: transfer ownership to timelocked multisig after configuration
 
 Step 8:  AuctionRegistry.setEscrow(AuctionEscrow.address)
          (one-time binding — links registry ↔ escrow)
 
-         REMOVED: X402PaymentGate.sol — moved to Cloudflare KV middleware
+         REMOVED: X402PaymentGate.sol — moved to Workers KV middleware
          REMOVED: SealedBidMPC.sol — off-chain committee
          REMOVED: AuctionRoom.sol (on-chain) — Durable Object is the room
          REMOVED: AuctionFactory.sol — createAuction() merged into AuctionRegistry
@@ -815,8 +875,19 @@ Step 9:  DO Sequencer deploy + ZK vkey configuration
          ACTION: configure sequencer private key (signs AuctionSettlementPacket)
          ACTION: bundle or upload bid_range_vkey.json + registry_member_vkey.json to DO
          ACTION: configure Postgres connection for authoritative event log
-         ACTION: configure Cloudflare KV namespace binding (AUCTION_KV)
+         ACTION: configure DO transactional storage (NOT Workers KV) for nullifiers + chainHead
          ACTION: configure MPC committee API endpoint + committee pubkey
+
+Step 10: CRE Workflow registration (Chainlink Runtime Environment)
+         ACTION: register CRE Workflow with:
+           - Trigger: EVM Log Trigger on AuctionRegistry.AuctionEnded event
+           - Compute: fetch ReplayBundleV1, sha256 verify, Poseidon chain replay, rule replay
+           - Write: EVMClient → KeystoneForwarder → AuctionEscrow.onReport()
+         ACTION: record workflowId, workflowName ("auctSettle"), workflowOwner
+         ACTION: call AuctionEscrow.setExpectedWorkflowId(workflowId)
+         ACTION: call AuctionEscrow.setExpectedWorkflowName("auctSettle")
+         ACTION: call AuctionEscrow.setExpectedAuthor(workflowOwnerAddress)
+         ACTION: for local dev, deploy MockKeystoneForwarder that calls onReport() directly
 ```
 
 **Verification key deployment note:** ZK vkeys (bid_range_vkey.json, registry_member_vkey.json) are produced by the trusted setup ceremony (Circom → snarkjs phase 2 → `snarkjs zkey export verificationkey`). Load into DO at startup. Any circuit change requires re-running phase 2 and re-loading vkeys. No Solidity verifier redeployment needed.
@@ -833,8 +904,8 @@ Step 9:  DO Sequencer deploy + ZK vkey configuration
 | `AuctionEscrow.onReport()` (CRE settlement) | ~150K gas | $0.015–$0.06 | CRE → KeystoneForwarder → _processReport |
 | `AuctionEscrow.claimRefund()` (per non-winner) | ~50K gas | $0.005–$0.02 | Pull-based, agent-initiated |
 | ZK proof verification | **0 gas** | $0 | Moved to snarkjs in DO. Was ~200K gas per proof on-chain. |
-| Event ingestion (per event) | **0 gas** | $0 | Moved to DO KV. Was ~26K gas per batch write. |
-| Nullifier spend | **0 gas** | $0 | Moved to Cloudflare KV. Was ~22K gas SSTORE. |
+| Event ingestion (per event) | **0 gas** | $0 | Moved to DO transactional storage. Was ~26K gas per batch write. |
+| Nullifier spend | **0 gas** | $0 | Moved to DO transactional storage. Was ~22K gas SSTORE. |
 
 **Per-auction gas totals (50 agents):**
 
@@ -866,15 +937,15 @@ Savings on auction-fixed costs (ZK + events + anchors): ~11M gas (~78% of origin
 
 **ZK trusted setup compromise:** If an attacker participated in the phase 2 ceremony and kept toxic waste, they can generate proofs for invalid bids. **Mitigation:** multi-party phase 2 ceremony with at least 3 independent contributors. One honest contributor is sufficient for soundness.
 
-**Off-chain ZK verification trust gap (NEW — introduced by migration):** The DO sequencer verifies ZK proofs unilaterally. A compromised sequencer can accept invalid proofs (e.g., admit an agent with invalid membership). **Mitigation:** Signed inclusion receipts + CRE rule replay at settlement catch downstream effects (CRE independently verifies winner derivation). **P1 mitigation:** multi-sequencer 2-of-3 ZK proof agreement required before acceptance.
+**Off-chain ZK verification trust gap (NEW — introduced by migration):** The DO sequencer verifies ZK proofs unilaterally. A compromised sequencer can accept invalid proofs (e.g., admit an agent with invalid membership). **MVP mitigation:** Signed inclusion receipts detect censorship. CRE rule replay at settlement catches winner derivation errors (wrong winner from valid bids). CRE does NOT re-verify ZK proofs in MVP — admission fraud by a compromised sequencer is undetected. **P1 mitigation:** (a) Include proof bytes in ReplayBundleV1 for CRE re-verification of winning bid proofs. (b) Multi-sequencer 2-of-3 ZK proof agreement required before acceptance.
 
 **Sequencer equivocation:** A sequencer that signs two different events with the same `(auctionId, seq)` is detectable. Any agent holding two such receipts has proof of misbehavior — the room enters DISPUTED state and settlement is blocked. **MVP:** rule is documented, on-chain AuctionChallenge.sol enforcement is P1.
 
 **MPC committee collusion:** If 3 of 5 committee members collude, they can decrypt bids before close and front-run. **Mitigation:** committee members should be independent parties with economic stakes. For hackathon: run 5 separate Docker containers on different networks/IPs.
 
-**Nullifier linkability (in DO KV):** Nullifiers are derived deterministically from `agentSecret + auctionId`. If an attacker learns an agent's `agentSecret`, they can compute all past and future nullifiers and link the agent's entire auction history. **Mitigation:** `agentSecret` stored in KMS, never in hot memory, never logged.
+**Nullifier linkability (in DO transactional storage):** Nullifiers are derived deterministically from `agentSecret + auctionId`. If an attacker learns an agent's `agentSecret`, they can compute all past and future nullifiers and link the agent's entire auction history. **Mitigation:** `agentSecret` stored in KMS, never in hot memory, never logged.
 
-**x402 receipt replay:** A payment receipt could theoretically be replayed. **Mitigation:** DO KV dedup with key `x402receipt:{chainId}:{txHash}:{logIndex}` — second submission of the same receipt is rejected with HTTP 409. TTL of 90 days prevents indefinite KV growth.
+**x402 receipt replay:** A payment receipt could theoretically be replayed. **Mitigation:** Workers KV dedup with key `x402receipt:{chainId}:{txHash}:{logIndex}` — second submission of the same receipt is rejected with HTTP 409. TTL of 90 days prevents indefinite KV growth. Workers KV's eventual consistency means a brief window (~60s) where a receipt could theoretically be double-used across regions — acceptable for micropayments (max risk: 0.001 USDC).
 
 **EIP-712 deadline enforcement:** All speech act structs include a `deadline` field. For on-chain UserOps, `AgentAccount.validateUserOp()` enforces `block.timestamp ≤ deadline`. For off-chain sequencer actions, the DO sequencer enforces the same deadline check before acceptance. Set deadlines to `block.timestamp + 10 minutes` for normal operations.
 
@@ -890,21 +961,21 @@ Savings on auction-fixed costs (ZK + events + anchors): ~11M gas (~78% of origin
 
 **DO Sequencer (Cloudflare Durable Objects) — primary off-chain component:**
 - Validates all auction speech acts (ecrecover + snarkjs ZK verification)
-- Maintains Poseidon hash chain in KV (`chainHead:{auctionId}`)
+- Maintains Poseidon hash chain in DO transactional storage (`chainHead:{auctionId}`)
 - Persists events to Postgres (authoritative archive)
 - Broadcasts events to WebSocket/SSE subscribers
 - Returns signed inclusion receipts for every accepted action
 - At close: builds ReplayBundleV1, pins to IPFS, calls `AuctionRegistry.recordResult()`
-- Tracks nullifiers in KV, x402 receipt dedup in KV
+- Tracks nullifiers in DO transactional storage; x402 receipt dedup in Workers KV (lower criticality)
 
 **ZK Proving (agent-side):** Agents run `snarkjs` (Node.js/browser) to generate Groth16 proofs locally. Proving keys distributed with agent SDK. For production, use `rapidsnark` (10–20× faster). Proving time: ~200ms (BidRange), ~400ms (RegistryMembership). Proofs are submitted to DO sequencer over HTTP/MCP — not to on-chain contracts.
 
 **MPC Committee nodes (off-chain):** 5 nodes that participate in DKG and threshold decryption. Each node: monitors DO sequencer API for auction close, performs partial ElGamal decryption, shares partial decryptions with other nodes via authenticated HTTPS, coordinates FROST signature production, submits result to sequencer API. For hackathon: 5 Docker containers on different networks, same machine is sufficient for demonstration.
 
-**Postgres (authoritative event log):** Append-only event log. Source for ReplayBundleV1 generation at auction close. DO KV stores the hot-state chainHead cursor; Postgres stores the full event history. Postgres WAL provides an internal audit trail even without on-chain mid-auction anchors.
+**Postgres (authoritative event log):** Append-only event log. Source for ReplayBundleV1 generation at auction close. DO transactional storage stores the hot-state chainHead cursor; Postgres stores the full event history. Postgres WAL provides an internal audit trail even without on-chain mid-auction anchors.
 
 **IPFS/Arweave (replay bundle):** `ReplayBundleV1` pinned at auction close. Contains all events in order with their Poseidon hashes. `replayContentHash = sha256(bundleBytes)` is written on-chain via `recordResult()`. Anyone can verify: download bundle → replay Poseidon chain → compare to `finalLogHash` on-chain.
 
-**x402 middleware:** `@x402/express` (or `@x402/hono`) middleware that intercepts HTTP requests, decodes `PAYMENT-SIGNATURE` header, verifies payment via facilitator, and calls the DO KV dedup before forwarding to the resource handler. Runs in the same Worker process or behind a private network.
+**x402 middleware:** `@x402/express` (or `@x402/hono`) middleware that intercepts HTTP requests, decodes `PAYMENT-SIGNATURE` header, verifies payment via facilitator, and calls the Workers KV dedup before forwarding to the resource handler. Runs in the same Worker process or behind a private network.
 
-**CRE Workflow (Chainlink):** EVM Log Trigger on `AuctionEnded` event → fetch ReplayBundleV1 from configured base URL → `sha256` verify against `replayContentHash` → replay Poseidon chain → verify `finalLogHash` → replay auction rules → derive winner → verify against declared winner → call `AuctionEscrow.onReport()` via `KeystoneForwarder` → funds released. This is the **primary settlement path** for the hackathon demo. Local/dev fallback: sequencer calls `AuctionEscrow.release()` directly with the same `AuctionSettlementPacket`.
+**CRE Workflow (Chainlink Runtime Environment):** EVM Log Trigger on `AuctionEnded` event → CRE Compute fetches ReplayBundleV1 from configured base URL → `sha256` verify against `replayContentHash` → replay Poseidon chain → verify `finalLogHash` → replay auction rules → derive winner → verify against declared winner → CRE EVMClient Write calls `AuctionEscrow.onReport()` via `KeystoneForwarder` → funds released. This is the **only settlement path**. No `release()` function exists on AuctionEscrow — settlement MUST go through CRE `onReport`. This is a repo invariant (see AGENTS.md). For local development, deploy a `MockKeystoneForwarder` that calls `onReport()` directly with test metadata.

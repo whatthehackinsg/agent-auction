@@ -65,7 +65,7 @@ For Level 1 objects (API/structured data):
 
 The UI is where judges see the "wow factor" — it should look like a real product, not a developer tool.
 
-**Source of truth (normative):** discovery data (`auctionId`, `manifestHash`, state) is sourced from `AuctionRegistry` and the canonical manifest hashing rules; replay/verification views must tie back to `finalLogHash`/anchors and CRE settlement tx.
+**Source of truth (normative):** discovery data (`auctionId`, `manifestHash`, state) is sourced from `AuctionRegistry` and the canonical manifest hashing rules; replay/verification views must tie back to `finalLogHash` (single close anchor via `recordResult()`) and CRE settlement tx.
 
 **Trust boundaries (normative):** the platform API is an availability layer only; clients must verify hashes (manifestHash, replayContentHash) before trusting content; paid endpoints (x402) must not change response bytes based on caller identity or region.
 

@@ -20,7 +20,7 @@ Cloudflare's Agent Gateway now provides native Streamable HTTP transport support
 
 **Architecture Decision Confirmed:** The design correctly separates "voice" (agent actions) from "broadcast" (event distribution). The Gateway pattern where MCP normalizes to the same Room Core API as direct HTTP is the right abstraction.
 
-**EIP-712 Typed Data for All Speech Acts:** Every action an agent takes is an EIP-712 typed data struct signed with the AuctionDomain (bound to AuctionFactory). This gives: human-readable signing and domain separation (bid for auction A cannot be replayed in auction B). **Verification boundary (authoritative):** MVP join/bid signatures are verified in the HTTP/MCP sequencer path before `seq` assignment; UserOp signatures are verified by `AgentAccount._validateSignature()` through EntryPoint `validateUserOp`.
+**EIP-712 Typed Data for All Speech Acts:** Every action an agent takes is an EIP-712 typed data struct signed with the AuctionDomain (bound to AuctionRegistry; AuctionFactory removed). This gives: human-readable signing and domain separation (bid for auction A cannot be replayed in auction B). **Verification boundary (authoritative):** MVP join/bid signatures are verified in the HTTP/MCP sequencer path before `seq` assignment; UserOp signatures are verified by `AgentAccount._validateSignature()` through EntryPoint `validateUserOp`.
 
 ```solidity
 struct Join {
@@ -89,15 +89,22 @@ struct Withdraw {
 
 The `nonce` field in Join/Bid typed data is an **off-chain action nonce** used by the HTTP/MCP sequencer. It MUST NOT reuse the EIP-4337 smart-wallet nonce (`AgentAccount.getNonce()`), because off-chain actions do not advance that nonce.
 
-- **Scope:** `nonce` is scoped to `(auctionId, signerWallet, actionType)` where `signerWallet` is the address recovered from the EIP-712 signature.
+- **Scope:** `nonce` is scoped to `(auctionId, agentId, actionType)` where `agentId` is derived from the signer via `runtimeSigner → AgentAccount → ERC-8004 agentId` mapping. The sequencer resolves this via `AgentAccount.runtimeSigner()` (one RPC call, cached per session).
 - **Monotonic rule:** sequencer MUST require `nonce == lastNonce + 1` for that scope.
 - **Idempotency:** if the sequencer receives a duplicate request with the same `(auctionId, signerWallet, actionType, nonce)` it MUST NOT assign a new `seq`. It MUST either (a) return the original `seq` + inclusion receipt, or (b) reject with an explicit `ALREADY_ACCEPTED` error that includes the original `seq`.
 - **Persistence:** `lastNonce` and the `(scope, nonce) -> seq` map MUST be persisted in Durable Object storage so failover/restart does not re-accept old nonces.
+- **Storage (amended):** Nonce state is persisted in DO transactional storage (`this.state.storage`), NOT Workers KV. DO transactional storage is strongly consistent and survives hibernation. Key format: `nonce:{auctionId}:{agentId}:{actionType}`.
 - **Derivation rule:** the sequencer MUST derive the settlement-critical `ActionPayloadV1`/ReplayBundle fields from the signed typed data fields (same types/order), not from any unsigned HTTP fields.
 
 **CRE Integration Point:** The MCP Gateway (or direct HTTP endpoint) can serve as the entry point for x402-gated actions. When an agent wants to place a bid, the endpoint returns 402 → agent pays → payment verified → bid forwarded to Room Core. This is the exact pattern in the x402-cre-price-alerts reference app [8]. **x402 and UserOp are separate transport layers and cannot be batched together.** x402 settles via HTTP headers (`PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE`): the facilitator submits the on-chain transfer independently, and the server returns a `PAYMENT-RESPONSE` header containing the settlement `transaction` hash [14]. The agent's subsequent bid submission is an HTTP/MCP signed action in MVP (separate from UserOp). For EIP-4337 agents, bond deposits bypass x402 entirely (direct USDC transfer inside an atomic `executeBatch` UserOp). x402 is used only for HTTP-layer micropayments (room access, manifest fetching) and EOA fallback deposits.
 
 ---
+
+> **⚠ Architecture update:** `SealedBidMPC.sol` is **NOT deployed** in the amended architecture.
+> MPC operates entirely off-chain — agents submit encrypted bids to the DO sequencer, the committee
+> decrypts off-chain, and the result is submitted via `AuctionRegistry.recordResult()`.
+> The contract code below is retained for reference only. See `full_contract_arch(amended).md`
+> Section 7 (SealedBidMPC.sol — REMOVED) for the current off-chain flow.
 
 ## Smart Contract Design: Sealed-Bid MPC (ElGamal + FROST)
 

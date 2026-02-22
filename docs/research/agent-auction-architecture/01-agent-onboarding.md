@@ -18,7 +18,7 @@
 
 **Step 2 — Register identity in official ERC-8004 + enroll privacy sidecar.**
 - Identity source-of-truth: agent is registered in the official ERC-8004 `IdentityRegistry` (ERC-721 token semantics, wallet mapping, rotation via `setAgentWallet`).
-- Privacy sidecar (optional but recommended): agent generates `agentSecret` (256-bit random, local, never leaves agent), computes `capabilityMerkleRoot`, and registers a commitment in `AgentPrivacyRegistry` keyed by `agentId`.
+- Privacy sidecar (REQUIRED — sequencer reads `getRoot()` for ZK membership verification): agent generates `agentSecret` (256-bit random, local, never leaves agent), computes `capabilityMerkleRoot`, and registers a commitment in `AgentPrivacyRegistry` keyed by `agentId`.
 - Settlement and refund authorization always read the official `IdentityRegistry`; the sidecar is used only for privacy-preserving capability proofs.
 - To prove "I am a registered agent with capability C," the agent generates a Groth16 ZK proof off-chain (RegistryMembership circuit, ~12K constraints, ~400ms proving time) against `AgentPrivacyRegistry.getRoot()`. **MVP path:** submit proof bytes with the signed HTTP/MCP action to the DO sequencer for verification before sequencing. **Optional P1 path:** verify proof on-chain in a direct UserOp admission flow.
 
@@ -28,7 +28,7 @@ AuctionDomain = {
   name: "AgentAuction",
   version: "1",
   chainId: <Base Sepolia chainId>,
-  verifyingContract: AuctionFactory.address
+  verifyingContract: AuctionRegistry.address  // AuctionFactory removed; DOMAIN_SEPARATOR moved to AuctionRegistry
 }
 ```
 This ties all future EIP-712 speech acts (Join, Bid, Deliver, Dispute, Withdraw) to this specific deployment. A mismatched domain separator is a phishing/replay attack vector.
@@ -97,6 +97,8 @@ import {PackedUserOperation} from "@account-abstraction/contracts/interfaces/Pac
 // nonce management, and prefund payment. We only override _validateSignature().
 contract AgentAccount is BaseAccount {
     IEntryPoint private immutable _entryPoint;
+    // ⚠ Updated: amended architecture uses `address public runtimeSigner` (EOA) instead of agentPubkey.
+    // See full_contract_arch(amended).md Section 3 for the current AgentAccount design.
     bytes32 public agentPubkey;
 
     function entryPoint() public view override returns (IEntryPoint) { return _entryPoint; }
@@ -137,6 +139,12 @@ contract AgentAccount is BaseAccount {
 ```
 
 **AgentPaymaster.sol** — gas sponsorship with escrow-backed anti-spam
+
+> **⚠ Architecture update:** MVP AgentPaymaster uses method-based gating — bond deposit UserOps
+> (`USDC.transfer` to escrow) are always allowed for ERC-8004 registered agents; other operations
+> require existing bond. The "sufficient locked deposit in escrow" universal check described below
+> has been replaced. See `full_contract_arch(amended).md` for the current implementation.
+
 ```solidity
 import {IPaymaster} from "@account-abstraction/contracts/interfaces/IPaymaster.sol";
 
@@ -177,7 +185,7 @@ contract AgentPrivacyRegistry {
 
     mapping(uint256 => Agent) public agents;  // agentId => Agent
     bytes32 public registryRoot;              // Merkle root of all agent commitments
-    INullifierSet public nullifierSet;
+    // NullifierSet dependency REMOVED — nullifiers tracked in DO transactional storage
 
     // Identity ownership and wallet binding come from official IdentityRegistry.
     // This sidecar stores privacy commitments only and MUST NOT mint agent IDs.
@@ -194,6 +202,11 @@ contract AgentPrivacyRegistry {
 ```
 
 **Source-of-truth rule:** CRE settlement checks and refund authorization MUST read the official ERC-8004 `IdentityRegistry` (`ownerOf`, `getAgentWallet`, wallet rotation via `setAgentWallet`). `AgentPrivacyRegistry` is only for ZK capability/privacy proofs.
+
+> **⚠ Architecture update:** `NullifierSet.sol` is **NOT deployed** in the amended architecture.
+> Nullifier tracking is handled by Durable Object transactional storage (`this.state.storage`).
+> The contract code below is retained for reference only. See `full_contract_arch(amended).md`
+> Section 4 for the current DO-based implementation.
 
 **NullifierSet.sol** — prevents double-joining (and one-time commit actions in P1)
 ```solidity
@@ -235,7 +248,13 @@ contract NullifierSet {
 }
 ```
 
-## Smart Contract Design: ZK Verification Layer (Groth16)
+## Smart Contract Design: ZK Verification Layer (Groth16) — MOVED OFF-CHAIN
+
+> **⚠ Architecture update:** All on-chain Groth16 verifier contracts (`BidCommitVerifier.sol`,
+> `RegistryMemberVerifier.sol`, `DepositRangeVerifier.sol`) are **NOT deployed**. ZK proof
+> verification runs off-chain in the DO sequencer using `snarkjs.groth16.verify()`.
+> The contract descriptions below are retained for reference. See `full_contract_arch(amended).md`
+> Section 5 for the current off-chain implementation.
 
 **Execution scope:** MVP join/bid admission verifies proof bytes in the DO sequencer path. On-chain Groth16 verifiers are used for sealed-bid flows and optional direct-chain admission modes.
 
@@ -256,6 +275,11 @@ Circuit: `DepositRange.circom` (~3K constraints). Private inputs: `balance` (age
 
 ---
 
+> **⚠ Architecture update:** The deployment order below reflects the original 15-step on-chain
+> architecture. The amended architecture reduces this to 10 steps — NullifierSet (step 2),
+> BidCommitVerifier (step 4), RegistryMemberVerifier (step 5), and DepositRangeVerifier (step 6)
+> are all REMOVED. See `full_contract_arch(amended).md` Section 10 for the current 10-step order.
+
 **Contract Deployment Order (steps 1-9, identity/wallet related):**
 ```
 1.  EntryPoint v0.7             (Base Sepolia: 0x00...032; verify deployment/address on any other chain)
@@ -270,4 +294,4 @@ Circuit: `DepositRange.circom` (~3K constraints). Private inputs: `balance` (age
 9.  AgentPaymaster.sol          (depends: EntryPoint) → stake ETH after deploy
 ```
 
-See [06-appendix.md](./06-appendix.md) for the full 15-step deployment order.
+See [06-appendix.md](./06-appendix.md) for the full deployment order (amended: 10 steps, down from 15).

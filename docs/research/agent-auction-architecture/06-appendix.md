@@ -6,6 +6,18 @@
 
 ## System Architecture Overview
 
+> **⚠ Architecture update:** The system diagram below reflects the ORIGINAL full on-chain architecture.
+> In the amended architecture (see `full_contract_arch(amended).md`):
+> - `NullifierSet` → DO transactional storage
+> - `RegistryMemberVerifier`, `BidCommitVerifier` → snarkjs in DO (NOT on-chain)
+> - `SealedBidMPC` → off-chain MPC committee
+> - `X402PaymentGate` → Workers KV middleware
+> - `AuctionRoom.sol` (on-chain) → Durable Object IS the room
+> - `anchorHash()`, `ingestEventBatch()` → REMOVED (single `finalLogHash` at close)
+> - `AuctionFactory` → REMOVED (merged into AuctionRegistry)
+> - Deployment reduced from 15 steps to 10
+> - ZK circuits still compile with Circom + snarkjs but do NOT export Solidity verifiers
+
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                         AGENT LAYER                                       │
@@ -52,8 +64,8 @@
 │                                              │  decryption)   │     │
 │                                              └────────────────┘     │
 └─────────────────────┬──────────────────────────────────────────────┘
-                      │ (sequencer ingests events on-chain
-                      │  via ingestEventBatch + AuctionEnded)
+                      │ (sequencer writes single finalLogHash on-chain
+                      │  via recordResult + AuctionEnded)
 ┌─────────────────────┼────────────────────────────────────────────┐
 │                     │     ON-CHAIN LAYER (Base Sepolia)           │
 │                     │                                             │
@@ -62,14 +74,14 @@
 │                                                                   │
 │  ── IDENTITY & PRIVACY ───────────────────────────────────────   │
 │  │ IdentityRegistry (official ERC-8004)                        │   │
-│  │ AgentPrivacyRegistry (ZK sidecar)   NullifierSet            │   │
+│  │ AgentPrivacyRegistry (ZK sidecar)   [NullifierSet REMOVED]  │   │
 │                                                                   │
-│  ── ZK VERIFICATION ────────────────────────────────────────────   │
-│  │ RegistryMemberVerifier (Groth16)  BidCommitVerifier       │   │
+│  ── ZK VERIFICATION [MOVED OFF-CHAIN — snarkjs in DO] ──────────   │
+│  │ [RegistryMemberVerifier REMOVED]  [BidCommitVerifier REMOVED] │   │
 │                                                                   │
 │  ── AUCTION LOGIC ────────────────────────────────────────────   │
-│  │ AuctionFactory      AuctionRoom (Poseidon chain)          │   │
-│  │ SealedBidMPC (ElGamal + FROST)                            │   │
+│  │ AuctionRegistry (+ createAuction, DOMAIN_SEPARATOR)      │   │
+│  │ [SealedBidMPC REMOVED — off-chain MPC committee]          │   │
 │                                                                   │
 │  ── PAYMENT & ESCROW ─────────────────────────────────────────   │
 │  │ AuctionEscrow (USDC, ReceiverTemplate)                    │   │
@@ -78,11 +90,11 @@
 │  │ - onReport(metadata,report) [CRE Settlement]              │   │
 │  │ - claimRefund(auctionId,agentId)                          │   │
 │  │ EscrowMilestone (P1: delivery milestones + slashing)      │   │
-│  │ X402PaymentGate (receipt verification)                    │   │
+│  │ [X402PaymentGate REMOVED — Workers KV middleware]         │   │
 │                                                                   │
 │  ── REGISTRY ─────────────────────────────────────────────────   │
-│  │ AuctionRegistry (state machine + hash anchoring)          │   │
-│  │ - anchorHash, recordResult, AuctionEnded event            │   │
+│  │ AuctionRegistry (state machine + single close anchor)     │   │
+│  │ - recordResult, AuctionEnded event [anchorHash REMOVED]   │   │
 │  │ - updateWinnerWallet (EIP-712), recordDeliveryProof       │   │
 │                                                                   │
 └─────────────────────┬────────────────────────────────────────────┘
@@ -118,6 +130,12 @@
 
 ## Contract Deployment Order (Full 15 Steps)
 
+> **⚠ Architecture update:** The deployment order below reflects the ORIGINAL 15-step on-chain
+> architecture. The amended architecture reduces this to 10 steps. Steps 2 (NullifierSet),
+> 4 (BidCommitVerifier), 5 (RegistryMemberVerifier), 6 (DepositRangeVerifier), 12 (X402PaymentGate),
+> 13 (SealedBidMPC), and 14 (AuctionRoom) are all REMOVED. New steps added: DO sequencer deploy
+> (step 9) and CRE Workflow registration (step 10). See `full_contract_arch(amended).md` Section 10.
+
 ```
 1.  EntryPoint v0.7             (Base Sepolia: 0x00...032; verify deployment/address on any other chain)
 2.  NullifierSet.sol            (no dependencies)
@@ -134,7 +152,7 @@
 12. X402PaymentGate.sol         (standalone receipt verifier)
 13. SealedBidMPC.sol            (depends: BidCommitVerifier)
 14. AuctionRoom.sol             (depends: verifiers, SealedBidMPC, AuctionEscrow)
-15. AuctionFactory.sol          (depends: all above) → single entry point for agents
+    [AuctionFactory.sol REMOVED — createAuction() merged into AuctionRegistry (step 10)]
 ```
 **Post-deploy wiring:** Call `AuctionRegistry.setEscrow(AuctionEscrow.address)` — one-time binding.
 
@@ -158,7 +176,7 @@
 | CRE Workflows | TypeScript SDK (`@chainlink/cre-sdk`) | Official SDK, matches your stack |
 | Smart Contracts | Solidity + Foundry | Deploy to Base Sepolia via Tenderly |
 | Account Abstraction | EIP-4337 EntryPoint v0.7 (`0x00...032`), `@account-abstraction/contracts@0.7.0` | Canonical on Base Sepolia, Pimlico/CDP bundlers. **MVP pins v0.7; v0.9 exists.** Migration trigger: if Base Sepolia deprecates v0.7 bundler support or a critical vulnerability is disclosed. Compatibility test plan: deploy AgentAccount against v0.9 EntryPoint on a Tenderly fork, run full bond+join+settle flow, verify Paymaster staking API compatibility. Do NOT migrate without passing this test suite |
-| ZK Circuits | Circom 2.x (`v2.2.3`) + snarkjs (`v0.7.5`) | Groth16 proof generation + Solidity verifier export |
+| ZK Circuits | Circom 2.x (`v2.2.3`) + snarkjs (`v0.7.5`) | Groth16 proof generation + vkey JSON export (Solidity verifier export NOT needed — verification is off-chain via snarkjs) |
 | ZK Trusted Setup | Hermez Powers of Tau (BN254) | `powersOfTau28_hez_final_16.ptau` (65K constraints) |
 | Poseidon Hash | `poseidon-solidity` (npm) | ZK-friendly on-chain hash chain. Event hash: PoseidonT4 (3-input, ~38K gas). Bid commitment: PoseidonT3 (2-input, ~21K gas) |
 | BabyJubJub | `@iden3/contracts` (verify latest version on npm; v3.1.0 may not include BabyJubJub directly — check `@iden3/bjj-js` or `circomlibjs` for off-chain ops) | ERC-2494 curve for ElGamal bid encryption |
@@ -179,10 +197,10 @@
 
 | Day | Task | CRE Impact |
 |-----|------|------------|
-| 1-2 | **On-chain foundation:** AgentAccountFactory + AgentAccount (EIP-4337), official ERC-8004 IdentityRegistry integration, AgentPrivacyRegistry sidecar, NullifierSet, AuctionRegistry w/ hash anchoring, AuctionEscrow w/ USDC — all on Base Sepolia via Tenderly | Foundation |
-| 2-3 | **ZK circuits:** RegistryMembership.circom + BidCommitVerifier.sol (Groth16 verifier export). AgentPaymaster + EntryPoint staking. Run trusted setup (phase 2) | Privacy layer |
+| 1-2 | **On-chain foundation:** AgentAccountFactory + AgentAccount (EIP-4337), official ERC-8004 IdentityRegistry integration, AgentPrivacyRegistry sidecar, AuctionRegistry (simplified — no hash anchoring), AuctionEscrow w/ USDC — all on Base Sepolia via Tenderly (NullifierSet REMOVED — DO storage) | Foundation |
+| 2-3 | **ZK circuits:** RegistryMembership.circom + BidRange.circom + vkey JSON export (NO Solidity verifier — snarkjs in DO). AgentPaymaster + EntryPoint staking. Run trusted setup (phase 2) | Privacy layer |
 | 3-4 | **CRE Workflow 1:** Settlement (EVM Log Trigger → read Poseidon anchor hashes → fetch event log → replay rules → derive winner → release escrow via onReport) | Core differentiator |
-| 4-6 | **Auction Engine:** Cloudflare DO with seq ordering + Poseidon hash chain + periodic on-chain anchoring (batch ingest) + event broadcast. AuctionFactory + AuctionRoom contracts | Off-chain + on-chain engine |
+| 4-6 | **Auction Engine:** Cloudflare DO with seq ordering + Poseidon hash chain + single `recordResult()` anchor at close + event broadcast. AuctionRegistry holds `createAuction()` + `DOMAIN_SEPARATOR` (AuctionFactory/AuctionRoom on-chain contracts removed) | Off-chain + on-chain engine |
 | 6-7 | **API layer** with x402 middleware (Express.js). EIP-4337 UserOp for bond deposit; join/bid via HTTP/MCP to DO sequencer; `recordBond` async/idempotent bookkeeping | Agent entry point |
 | 7-8 | **Agent demo client** (deploy smart wallet, register ERC-8004 identity + privacy sidecar commitment, place bids with ZK range proofs, pay bonds, submit delivery) | Demo flow |
 | 8-9 | **Spectator UI** (Next.js: live view + settlement verification + anchor trail display + ZK proof status) | Wow factor |
@@ -190,12 +208,12 @@
 
 ### What to Cut if Behind (in order)
 
-1. **Cut sealed-bid MPC** (SealedBidMPC, ElGamal, FROST) — English auction with ZK membership proofs is sufficient for demo
+1. **Cut sealed-bid MPC** (off-chain MPC committee, ElGamal, FROST — SealedBidMPC.sol already removed from on-chain) — English auction with ZK membership proofs is sufficient for demo
 2. **Simplify ZK** — hardcode RegistryMembership verification, skip BidRange circuit. Membership proof alone demonstrates the privacy story
 3. **Cut Delivery Verification workflow** — Settlement workflow alone is enough
 4. **Simplify EIP-4337** — use Coinbase Base Paymaster instead of custom AgentPaymaster (loses gas-debt tracking but gains speed)
 5. **Simplify UI** — Remix demo is acceptable per hackathon rules
-6. **Reduce anchor frequency** — Anchor only at first event (seq=1) + end (minimum viable anchoring). **Warning: this significantly degrades the trust model.** First+end-only anchoring means the operator can rewrite the entire event history between those two points — CRE only verifies the final hash against the first-event hash, which is effectively just final-hash attestation. The "operator cannot rewrite history" claim in [Module 2: Room Broadcast](./03-room-broadcast.md) requires periodic mid-auction anchoring. If cutting to first+end, update trust claims accordingly and note in the demo that periodic anchoring is the production design.
+6. ~~**Reduce anchor frequency**~~ — **Already implemented:** amended architecture uses single `finalLogHash` at close (no periodic anchoring). This is effectively final-hash attestation — the operator can rewrite history before close. This tradeoff is documented and accepted for MVP. P1 adds periodic anchoring for stronger integrity guarantees.
 7. **Keep** the Settlement workflow + hash anchoring + rule replay + ZK membership proof — this IS the project
 
 ---

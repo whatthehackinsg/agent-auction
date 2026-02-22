@@ -25,9 +25,14 @@ For auction-specific concerns, the single-threaded nature of DOs eliminates race
 
 **Hybrid Event Log: Off-chain DO + On-chain Poseidon Chain.** The system uses a hybrid model for event handling:
 - **Real-time path (off-chain):** DO sequencer processes events in ~ms, broadcasts via WebSocket/SSE. This handles the high-frequency bid flow.
-- **Settlement-critical path (on-chain):** `AuctionRoom.sol` maintains a **Poseidon hash chain** on-chain. Settlement-critical events (MVP: join + bid commitment; reserve close/cancel for future) are batched and ingested on-chain via `ingestEventBatch()`. The function validates the chain in memory and persists only the final `chainHead` (single SSTORE).
+- **Settlement-critical path (amended):** The Poseidon hash chain is maintained in DO transactional storage (NOT on-chain). `AuctionRoom.sol` and `ingestEventBatch()` are NOT deployed. A single `finalLogHash` is written on-chain at auction close via `AuctionRegistry.recordResult()`. CRE verifies the replay bundle against this on-chain hash.
 
 **Why Poseidon (not keccak256) for the on-chain hash chain:** Poseidon is ZK-friendly — inside a Groth16 circuit, it costs ~240 constraints vs ~90,000 for keccak256. When CRE replays auction rules in the settlement workflow, it may need to verify hash chain segments inside ZK proofs (for sealed-bid verification). On-chain Poseidon costs more (~38K gas for PoseidonT4 / 3-input event hash via `poseidon-solidity` [30]) vs keccak256 (~42 gas), but the ZK circuit savings are 375x. Bid commitments use PoseidonT3 (2-input, ~21K gas). See "Poseidon field encoding (normative)" below for variant mapping and encoding rules. **Design rule: use Poseidon in the on-chain hash chain; use keccak256 everywhere else (event hashing, content addressing, etc.).**
+
+> **⚠ Architecture update:** `ingestEventBatch()` is **REMOVED** in the amended architecture.
+> The Poseidon hash chain is maintained entirely in DO transactional storage. The code below
+> is retained for reference only. See `full_contract_arch(amended).md` Section 7 for the
+> current DO-based event ingestion implementation.
 
 **Event Batch Ingestion (Base Sepolia supports EIP-1153 since Ecotone, Feb 2024):**
 ```solidity
@@ -55,6 +60,12 @@ function ingestEventBatch(Event[] calldata events) external onlySequencer {
 // against current release notes.
 ```
 
+> **⚠ Architecture update:** Periodic on-chain anchoring via `anchorHash()` is **REMOVED** in
+> the amended architecture. A single `finalLogHash` is written on-chain at auction close via
+> `AuctionRegistry.recordResult()`. Without intermediate anchors, the trust model degrades to
+> final-hash attestation (see Security Considerations in `full_contract_arch(amended).md`
+> Section 12). This is an accepted MVP tradeoff.
+
 **Periodic On-Chain Anchoring (Critical for Trust):** The hash chain is only useful if anchored independently of the operator. The DO must publish hash checkpoints to the AuctionRegistry contract at regular intervals during the auction (e.g., every N events or every M seconds). This creates an on-chain trail that:
 1. Prevents the operator from rewriting history before auction close
 2. Gives CRE an independent data source to verify the final result against
@@ -62,7 +73,7 @@ function ingestEventBatch(Event[] calldata events) external onlySequencer {
 
 Without periodic anchoring, the operator could rewrite the entire event log before publishing the final hash — making the hash chain a self-attestation rather than a verifiable commitment.
 
-**CRE Integration Point:** When an auction ends, the DO writes an `AuctionEnded` event to the chain (via a simple contract call) including the winner identity (`winnerAgentId`, `winnerWallet`), settlement amount, and content hashes (`finalLogHash`, `replayContentHash`). A CRE EVM Log Trigger listens for this event and kicks off the Settlement Workflow. CRE (1) verifies the final hash against the on-chain anchor trail (EVMClient reads from AuctionRegistry), then (2) fetches the event log and replays auction rules to independently derive the winner. If both checks pass, escrow is released. This creates a clean boundary: off-chain auction engine (DO) → on-chain anchored log → CRE-verified settlement with rule replay.
+**CRE Integration Point:** When an auction ends, the DO writes an `AuctionEnded` event to the chain (via a simple contract call) including the winner identity (`winnerAgentId`, `winnerWallet`), settlement amount, and content hashes (`finalLogHash`, `replayContentHash`). A CRE EVM Log Trigger listens for this event and kicks off the Settlement Workflow. CRE (1) fetches the replay bundle and verifies `sha256(bundle) == replayContentHash` (on-chain), then (2) replays the Poseidon chain to verify `computed root == finalLogHash` (on-chain), then (3) replays auction rules to independently derive the winner. (Amended: no intermediate anchor trail — CRE verifies against the single `finalLogHash` from `recordResult()`.) If both checks pass, escrow is released. This creates a clean boundary: off-chain auction engine (DO) → on-chain anchored log → CRE-verified settlement with rule replay.
 
 ---
 
@@ -74,7 +85,7 @@ This is the highest-value CRE integration. When the auction engine writes an `Au
 
    **Reorg policy for anchor writes (mid-auction `anchorHash` calls):** Anchor writes use `SAFE` confidence (not `FINALIZED`) because anchors are non-financial operations — a reorged anchor simply means the next anchor overwrites it, and CRE settlement re-reads the entire anchor trail at finality. **If an anchor tx is reorged:** (a) the Durable Object detects the missing anchor via tx receipt polling (3 retries, 15s interval), (b) re-submits the `anchorHash` call with the same hash (idempotent — the hash chain is deterministic from the event log), (c) if re-submission also fails after 3 attempts, the DO logs a `ANCHOR_REORG_FAILED` alert and continues the auction — CRE settlement will still work because it verifies the `finalLogHash` against whatever anchors ARE on-chain at settlement time. Worst case: fewer intermediate anchors = larger window of unverified history (weaker integrity, not broken integrity). **The `AuctionEnded` event (which triggers settlement) always waits for FINALIZED confidence — this is the hard safety boundary.**
 2. **Callback (two-phase verification):**
-   - **Phase A — Log Integrity:** Read the auction's anchor hash trail from AuctionRegistry (EVMClient read — on-chain data, NOT platform API). Verify the `finalLogHash` is consistent with previously anchored checkpoints. This proves the event log was not rewritten after anchoring.
+   - **Phase A — Log Integrity (amended):** Read the auction's `finalLogHash` and `replayContentHash` from AuctionRegistry (EVMClient read — on-chain data, NOT platform API). Fetch the replay bundle, verify `sha256(bundle) == replayContentHash`, then replay the Poseidon hash chain and verify `computed root == finalLogHash`. (Intermediate anchor trail checking is removed — only the final close hash is verified.)
    - **Phase B — Winner Derivation (Rule Replay):** Fetch the replay bundle from a **configured base URL** (e.g., `https://api.platform.com/replay/{auctionId}` — hardcoded in CRE workflow config, NOT from the event). Serialize using `ReplayBundleV1` (deterministic text format, defined below), hash with SHA-256, and verify it matches `replayContentHash` from the on-chain event. This ensures: (a) no SSRF risk (URL allowlisted in workflow config), (b) all DON nodes hash identical bytes, (c) operator cannot serve different data after posting the hash. Then replay the auction rules: for English auctions, iterate events to find the highest valid bid. Compare the CRE-derived `winnerAgentId` against the `winnerAgentId` field in the `AuctionEnded` event. If they don't match, **reject settlement**.
    - **Phase C — Identity Check:** Read agent identity from ERC-8004 IdentityRegistry using `winnerAgentId` from the event (EVMClient read). Verify: (1) `ownerOf(winnerAgentId)` succeeds without reverting — per EIP-721 specification, `ownerOf` **reverts** (does NOT return `address(0)`) for non-existent or burned tokens ("NFTs assigned to zero address are considered invalid, and queries about them do throw"). The CRE TypeScript handler wraps this EVMClient read in a try-catch: if the call reverts, the agent NFT is invalid and settlement is rejected. (2) `getAgentWallet(winnerAgentId)` returns an address matching the `winnerWallet` from the event. This two-field check ensures the `agentId ↔ wallet` binding is consistent — the operator cannot claim a valid agentId but redirect funds to an unrelated wallet. See "Identity Key Mapping" below for how the platform maintains this binding.
    - **Phase D — Escrow Release:** Call `AuctionEscrow.onReport(metadata, report)` via EVMClient write. The `KeystoneForwarder` contract verifies DON signatures and calls `onReport`. The escrow contract (inheriting `ReceiverTemplate`) validates: (1) `msg.sender == KeystoneForwarder`, (2) `workflowId` matches expected Settlement workflow, (3) `workflowOwner` matches expected deployer address. **Report encoding (normative):** `report = abi.encode(bytes32 auctionId, uint256 winnerAgentId, address winnerWallet, uint256 amount)` (NOT JSON, NOT `abi.encodePacked`). Only after all checks pass does `_processReport` execute the one-time fund release.
@@ -255,11 +266,18 @@ assertEq(wfOwner, address(0x3333...));
 
 ## Smart Contract Design: Auction Logic Layer
 
-**AuctionFactory.sol** — deploys AuctionRoom instances, holds EIP-712 domain separator
+> **⚠ Architecture update:** `AuctionFactory.sol` has been **REMOVED**. Its responsibilities have been
+> redistributed: `createAuction()` merged into `AuctionRegistry.sol`; `DOMAIN_SEPARATOR` moved to
+> `AuctionRegistry`. Per-auction `AuctionRoom.sol` on-chain deployment is eliminated — the Durable
+> Object IS the auction room. The contract snippets below are retained for reference but marked as
+> legacy where applicable. See `full_contract_arch(amended).md` for the current architecture.
+
+**AuctionRegistry.sol** — holds EIP-712 domain separator + `createAuction()` (formerly in AuctionFactory)
 ```solidity
-contract AuctionFactory {
+contract AuctionRegistry {
     // EIP-712 domain for all speech acts (fetched by agents at onboarding)
-    bytes32 public DOMAIN_SEPARATOR;  // EIP712Domain("AgentAuction", "1", chainId, this)
+    // ⚠ verifyingContract = AuctionRegistry.address (NOT AuctionFactory — removed)
+    bytes32 public immutable DOMAIN_SEPARATOR;  // EIP712Domain("AgentAuction", "1", chainId, this)
 
     struct AuctionManifest {
         // Derived field: MUST equal manifestHash (see AuctionManifest hashing below).
@@ -277,9 +295,10 @@ contract AuctionFactory {
     // manifestHash = keccak256(abi.encode(manifest_without_auctionId)) stored on-chain.
     // auctionId MUST equal manifestHash.
     // Agents verify fetched manifest matches hash before participating.
-    function createAuction(AuctionManifest calldata manifest) external returns (address room);
+    // Simple storage write (~50K gas). No CREATE2 room deployment (DO is the room).
+    function createAuction(AuctionManifest calldata manifest) external;
 
-    mapping(bytes32 => address) public auctionRooms;  // auctionId => AuctionRoom address
+    mapping(bytes32 => AuctionState) public auctions;  // auctionId => state
 }
 ```
 
@@ -292,14 +311,14 @@ This section defines the exact hash preimage and JSON-to-ABI rules to avoid cros
   - `manifestHash = keccak256(manifest_preimage)`
   - `auctionId = manifestHash`
 - **Exclusion rule:** `auctionId` MUST NOT be included in `manifest_preimage`.
-- **Contract rule:** `AuctionFactory.createAuction()` MUST enforce `manifest.auctionId == manifestHash` (reject otherwise).
+- **Contract rule:** `AuctionRegistry.createAuction()` MUST enforce `manifest.auctionId == manifestHash` (reject otherwise).
 - **API JSON canonicalization (MUST):**
   - `uint256` values MUST be base-10 ASCII strings in JSON (parse using BigInt; do not rely on IEEE-754 numbers)
   - `bytes32` MUST be lowercase `0x` + 64 hex chars
   - `address` MUST be lowercase `0x` + 40 hex chars
   - No optional fields: missing fields MUST be rejected before hashing
 
-**AuctionRoom.sol** — per-auction state machine with on-chain Poseidon hash chain
+**AuctionRoom.sol** — per-auction state machine with on-chain Poseidon hash chain (⚠ NOT DEPLOYED — DO is the room)
 ```solidity
 contract AuctionRoom {
     // Off-chain phases (DO state) — NOT the same as AuctionRegistry's on-chain states.
@@ -346,18 +365,20 @@ import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 contract AuctionRegistry is EIP712 {
-    // ⚠ AUCTIONID TYPE: bytes32 everywhere. AuctionFactory derives auctionId from
-    // manifestHash (keccak256 of the manifest ABI preimage) and uses it as CREATE2 salt.
-    // All contracts (AuctionFactory, AuctionRegistry, AuctionEscrow, AuctionRoom) MUST
-    // use bytes32 for auctionId. Using uint256 would require casting and risks truncation.
+    // ⚠ AUCTIONID TYPE: bytes32 everywhere. AuctionRegistry derives auctionId from
+    // manifestHash (keccak256 of the manifest ABI preimage).
+    // All contracts (AuctionRegistry, AuctionEscrow) MUST use bytes32 for auctionId.
+    // Using uint256 would require casting and risks truncation.
     //
     // EIP-712 typed data hash for wallet rotation recovery (updateWinnerWallet).
     // Struct fields: auctionId (bytes32), agentId, newWallet, nonce, deadline.
-    // ⚠ TWO-DOMAIN DESIGN: AuctionRegistry uses EIP712("AuctionRegistry", "1", chainId, this)
-    // which is DIFFERENT from AuctionFactory's EIP712("AgentAuction", "1", chainId, factory).
-    // Agents MUST sign WalletUpdate structs with AuctionRegistry's domain, NOT AuctionFactory's.
+    // ⚠ TWO-DOMAIN DESIGN (updated — AuctionFactory removed):
+    //   Domain 1: "AgentAuction" — for all speech acts (verifyingContract: AuctionRegistry.address)
+    //   Domain 2: "AuctionRegistry" — for wallet rotation only (verifyingContract: AuctionRegistry.address)
+    // Both domains point to AuctionRegistry.address; only the `name` field differs.
+    // Agents MUST sign WalletUpdate structs with Domain 2, NOT Domain 1.
     // Using the wrong domain will cause ecrecover to return wrong address → signature verification fails.
-    // Agent SDK must select domain automatically based on target contract.
+    // Agent SDK must select domain automatically based on operation type.
     bytes32 private constant WALLET_UPDATE_TYPEHASH = keccak256(
         "WalletUpdate(bytes32 auctionId,uint256 agentId,address newWallet,uint256 nonce,uint256 deadline)"
     );
@@ -387,7 +408,8 @@ contract AuctionRegistry is EIP712 {
     }
 
     event AuctionCreated(bytes32 indexed auctionId, address creator, bytes32 objectHash);
-    event HashAnchored(bytes32 indexed auctionId, uint256 seq, bytes32 logHash);
+    // ⚠ REMOVED in amended architecture: HashAnchored event eliminated with anchorHash()
+    // event HashAnchored(bytes32 indexed auctionId, uint256 seq, bytes32 logHash);
     // Both agentId and wallet are emitted so CRE can cross-check the binding via IdentityRegistry
     event AuctionEnded(bytes32 indexed auctionId, uint256 winnerAgentId, address winnerWallet, uint256 amount, bytes32 finalLogHash, bytes32 replayContentHash);
     // State transition events for off-chain indexers and Spectator UI
@@ -412,10 +434,8 @@ contract AuctionRegistry is EIP712 {
     function createAuction(bytes32 auctionId, bytes32 objectHash) external onlySequencer;
     // State: NONE -> OPEN
 
-    // Called periodically during auction to anchor hash chain.
-    // Enforces: seq > lastAnchoredSeq[auctionId] (strict monotonicity).
-    // Appends to anchorTrails[auctionId]. Cannot be modified after creation.
-    function anchorHash(bytes32 auctionId, uint256 seq, bytes32 logHash) external onlySequencer inState(auctionId, AuctionState.OPEN);
+    // ⚠ REMOVED in amended architecture: anchorHash() eliminated — single finalLogHash at close
+    // function anchorHash(bytes32 auctionId, uint256 seq, bytes32 logHash) external onlySequencer inState(auctionId, AuctionState.OPEN);
 
     // Called once at auction close — emits the event that triggers CRE
     // replayContentHash: SHA-256 of ReplayBundleV1 canonical bytes.
@@ -487,6 +507,11 @@ contract AuctionRegistry is EIP712 {
     function cancelExpiredAuction(bytes32 auctionId) external inState(auctionId, AuctionState.CLOSED);
     // Requires: block.timestamp > auctions[auctionId].closedAt + SETTLEMENT_DEADLINE
     // State: CLOSED -> CANCELLED
+
+> **⚠ Architecture update:** The entire Anchor Storage & Verification section below is **REMOVED**
+> in the amended architecture. `anchorHash()`, `getAnchors()`, `anchorTrails`, and
+> `lastAnchoredSeq` are all eliminated. A single `finalLogHash` is written at close via
+> `recordResult()`. The code below is retained for reference only.
 
     // --- Anchor Storage & Verification ---
     //

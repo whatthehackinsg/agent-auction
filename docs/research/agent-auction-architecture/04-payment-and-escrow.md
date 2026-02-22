@@ -24,7 +24,7 @@ Available TypeScript packages: `@x402/core`, `@x402/evm`, `@x402/express`, `@x40
 
 **Critical limitation confirmed:** x402 exact payments are irreversible push payments. Refunds require a separate transaction from the merchant. This validates the design's decision to handle refunds via business logic rather than protocol.
 
-**Atomicity — Bond deposit only (EIP-4337 agents):** For agents using `AgentAccount` (EIP-4337), the bond deposit is a direct USDC transfer via UserOp. The join action is separate: it goes through the Durable Object sequencer (HTTP/MCP path), which batches it on-chain via `ingestEventBatch()`.
+**Atomicity — Bond deposit only (EIP-4337 agents):** For agents using `AgentAccount` (EIP-4337), the bond deposit is a direct USDC transfer via UserOp. The join action is separate: it goes through the Durable Object sequencer (HTTP/MCP path), and the sequencer appends it to the Poseidon chain in DO transactional storage (no on-chain `ingestEventBatch()` — removed in amended architecture).
 
 ```solidity
 // UserOp: bond deposit only (on-chain, atomic)
@@ -37,18 +37,18 @@ UserOp.callData = AgentAccount.execute(
 // then calls AuctionEscrow.recordBond() — idempotent on tx hash, retryable.
 //
 // Join action: agent sends signed EIP-712 Join struct to DO via HTTP/MCP.
-// DO validates, assigns seq, appends to log, broadcasts via WebSocket.
-// Sequencer batches the join event on-chain via ingestEventBatch().
+// DO validates, assigns seq, appends to Poseidon chain in DO transactional storage, broadcasts via WebSocket.
+// (ingestEventBatch() removed — no on-chain batching needed)
 ```
 
-The bond deposit and join action are intentionally decoupled. Bond deposit is on-chain (USDC transfer via UserOp). Join is off-chain first (DO sequencer for real-time ordering), then batched on-chain (sequencer calls `ingestEventBatch()`). This matches the hybrid model: real-time path through DO, settlement-critical path anchored on-chain by the sequencer. Bond bookkeeping (`recordBond`) is admin-mediated (`onlyAdmin` modifier), called after detecting the successful USDC transfer on-chain. Retryable and idempotent on the tx hash. **Note:** EIP-4337 agents do NOT use x402 for bond deposits. x402 is used for HTTP-layer micropayments (room access, manifest fetching) and for non-4337 EOA agents (see Fallback Strategy below). Gas is sponsored by `AgentPaymaster`. **MVP simplification:** gas debt tracking and deduction from escrow is a P1 feature. For the hackathon, the paymaster sponsors gas from its own ETH stake without per-agent accounting. The gas cost on Base Sepolia is negligible (~fractions of a cent per UserOp). P1 adds `gasDebtLedger` in AuctionEscrow to track and deduct accumulated gas costs at settlement.
+The bond deposit and join action are intentionally decoupled. Bond deposit is on-chain (USDC transfer via UserOp). Join is off-chain first (DO sequencer for real-time ordering), then maintained in DO transactional storage (`ingestEventBatch()` removed in amended architecture). This matches the hybrid model: real-time path through DO, settlement-critical path anchored on-chain by the sequencer. Bond bookkeeping (`recordBond`) is admin-mediated (`onlyAdmin` modifier), called after detecting the successful USDC transfer on-chain. Retryable and idempotent on the tx hash. **Note:** EIP-4337 agents do NOT use x402 for bond deposits. x402 is used for HTTP-layer micropayments (room access, manifest fetching) and for non-4337 EOA agents (see Fallback Strategy below). Gas is sponsored by `AgentPaymaster`. **MVP simplification:** gas debt tracking and deduction from escrow is a P1 feature. For the hackathon, the paymaster sponsors gas from its own ETH stake without per-agent accounting. The gas cost on Base Sepolia is negligible (~fractions of a cent per UserOp). P1 adds `gasDebtLedger` in AuctionEscrow to track and deduct accumulated gas costs at settlement.
 
 **Fallback Strategy (non-4337 agents):** For agents using EOA wallets (Flow C hybrid), the original two strategies remain:
 - **Strategy A (preferred):** Set x402 `payTo` to the escrow contract address directly. The platform backend then calls `recordBond(auctionId, agentId, depositor, amount, x402TxId)` — retryable and idempotent on `x402TxId`.
 - **Strategy B (reconciliation):** If x402 pays to the platform wallet, track x402 `txID` as a receipt for retry.
 
 **AgentPaymaster — Gas Sponsorship Economics:**
-- `AgentPaymaster` implements `IPaymaster` (EIP-4337). It validates that the agent has sufficient locked deposit in escrow for the target auction. If yes, sponsors gas. If no, rejects — anti-spam gate without requiring ETH.
+- `AgentPaymaster` implements `IPaymaster` (EIP-4337). It uses method-based gating: bond deposit UserOps (`USDC.transfer` to escrow) are allowed for ERC-8004 registered agents (no prior bond required); other operations require existing bond. If yes, sponsors gas. If no, rejects — anti-spam gate without requiring ETH.
 - `postOp()`: records gas cost against the agent's escrow balance. Gas debt accumulates during the auction.
 - **MVP:** paymaster sponsors gas from its own ETH stake; no per-agent gas accounting. Base Sepolia gas costs are negligible. **P1 production:** `netPayout = deposit - gasDebt - platformFee`. Gas debt deducted from winnings (winner) or returned deposit (loser) via `gasDebtLedger` in AuctionEscrow.
 - Paymaster deposits ETH stake into EntryPoint (`0x0000000071727De22E5E9d8BAf0edAc6f37da032`). For Base Sepolia: use Coinbase's native paymaster at `0xf5d253B62543C6Ef526309D497f619CeF95aD430` or deploy custom.
@@ -74,7 +74,7 @@ Bonds do not go through CRE. This avoids putting CRE in a latency-sensitive admi
 **Authoritative admission gate (MVP):** DO must reject `JOIN`/`BID` unless escrow shows bond coverage (`bondRecords[auctionId][agentId] >= requiredDeposit`) via read/cache. If transfer is observed but `recordBond` is still pending, return deterministic `BOND_PENDING` (do not assign `seq`, do not append to log).
 
 **Path 1 — EIP-4337 agents (direct USDC transfer via UserOp):**
-EIP-4337 agents bypass x402 for bond deposits. Their smart wallet executes a UserOp: `USDC.transfer(escrowAddress, bondAmount)`. The USDC goes directly to the escrow contract, no x402 HTTP layer involved. The join action is separate: the agent sends a signed EIP-712 Join struct to the DO via HTTP/MCP, and the sequencer batches it on-chain via `ingestEventBatch()`. See "Atomicity" section above.
+EIP-4337 agents bypass x402 for bond deposits. Their smart wallet executes a UserOp: `USDC.transfer(escrowAddress, bondAmount)`. The USDC goes directly to the escrow contract, no x402 HTTP layer involved. The join action is separate: the agent sends a signed EIP-712 Join struct to the DO via HTTP/MCP, and the sequencer appends it to the Poseidon chain in DO transactional storage. See "Atomicity" section above.
 
 **Path 2 — Non-4337 / EOA agents (x402 HTTP flow):**
 1. Agent hits bond endpoint → **server checks ERC-8004 identity first** (read IdentityRegistry on-chain or from cached state). If agent has no valid on-chain identity → return **HTTP 403 Forbidden** (not 402). This prevents ineligible agents from paying before rejection.
@@ -491,6 +491,11 @@ contract AuctionEscrow is ReceiverTemplate, ReentrancyGuard {
 - All fund-moving functions use `ReentrancyGuard`, pull-over-push withdrawal, and `SafeERC20.safeTransfer` (handles non-standard ERC20 return values)
 - **P1: Add `Pausable` (OpenZeppelin) with explicit function policy.** See Limitation #5 in [06-appendix.md](./06-appendix.md) for the full function-level pause policy.
 - **Trust gap (bond attribution):** `recordBond` is operator bookkeeping — not verified by CRE. See Limitation #3 in [06-appendix.md](./06-appendix.md) and the Bond Deposits section above for production mitigations.
+
+> **⚠ Architecture update:** `X402PaymentGate.sol` is **NOT deployed** in the amended architecture.
+> Receipt deduplication is handled by Workers KV middleware (`x402receipt:{chainId}:{txHash}:{logIndex}`).
+> The contract code below is retained for reference only. See `full_contract_arch(amended).md`
+> Section 8 (X402PaymentGate.sol — REMOVED) for the current Workers KV implementation.
 
 ## Smart Contract Design: X402PaymentGate
 

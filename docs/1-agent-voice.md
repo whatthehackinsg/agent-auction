@@ -107,6 +107,6 @@
 - **Dispute** — 提起争议（含证据包 hash）
 - **Withdraw** — 退出拍卖（含原因）
 
-签名使用 **secp256k1** runtime key（EVM `ecrecover` 可链上验证）。Domain separator 绑定到 `AuctionFactory.address`（`"AgentAuction"` domain）。实现级结构定义详见英文深度规格 [02-agent-voice.md](./research/agent-auction-architecture/02-agent-voice.md)（各类 speech act structs）以及 [03-room-broadcast.md](./research/agent-auction-architecture/03-room-broadcast.md)（钱包轮换 `"AuctionRegistry"` domain 相关）。
+签名使用 **secp256k1** runtime key（EVM `ecrecover` 可链上验证）。Domain separator 绑定到 `AuctionRegistry.address`（`"AgentAuction"` domain；AuctionFactory 已移除，DOMAIN_SEPARATOR 迁移至 AuctionRegistry）。实现级结构定义详见英文深度规格 [02-agent-voice.md](./research/agent-auction-architecture/02-agent-voice.md)（各类 speech act structs）以及 [03-room-broadcast.md](./research/agent-auction-architecture/03-room-broadcast.md)（钱包轮换 `"AuctionRegistry"` domain 相关）。
 
-> **⚠ 两个 EIP-712 Domain：** 拍卖动作使用 `"AgentAuction"` domain（绑定 AuctionFactory），钱包轮换使用 `"AuctionRegistry"` domain（绑定 AuctionRegistry）。Agent SDK 必须根据目标合约自动选择正确的 domain。
+> **⚠ 两个 EIP-712 Domain：** 拍卖动作使用 `"AgentAuction"` domain（绑定 AuctionRegistry），钱包轮换使用 `"AuctionRegistry"` domain（同样绑定 AuctionRegistry）。两个 domain 的 `verifyingContract` 相同，仅 `name` 字段不同。Agent SDK 必须根据操作类型自动选择正确的 domain。

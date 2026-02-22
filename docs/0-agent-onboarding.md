@@ -256,7 +256,7 @@ AuctionDomain = {
 name: "AgentAuction",
 version: "1",
 chainId: <L2 chainId>,
-verifyingContract: AuctionFactory.address
+verifyingContract: AuctionRegistry.address
 }
 Agent signs this domain separator with its runtime key during onboarding.
 This ties all future EIP-712 speech acts to this specific deployment.
