@@ -16,3 +16,12 @@ npm-debug.log*
 # OS junk
 .DS_Store
 Thumbs.db
+
+# Foundry build artifacts
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+
+# Misc
+my-video/
+skills-lock.json
