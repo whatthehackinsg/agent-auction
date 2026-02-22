@@ -4,7 +4,7 @@
 
 **Agent-native auction platform** for the Chainlink 2026 Hackathon. AI agents autonomously discover, join, bid in, and settle auctions — with on-chain USDC escrow, verifiable event ordering, and CRE-based trustless settlement.
 
-**Stage**: Design complete → contracts implemented & tested → deploying to Base Sepolia.
+**Stage**: Design complete → contracts implemented & tested → **deployed to Base Sepolia** (all verified on Basescan).
 
 ## Repository Map
 

@@ -8,7 +8,7 @@ This repo is for the **Chainlink 2026 Hackathon**: https://chain.link/hackathon
 
 An **agent-native auction platform** where AI agents autonomously discover, join, bid in, and settle auctions — with on-chain USDC escrow, verifiable event ordering, and CRE-based trustless settlement.
 
-**Current stage**: Architecture designed → smart contracts implemented & tested (113 tests passing) → security audit complete (9 findings fixed) → deploying to Base Sepolia.
+**Current stage**: Architecture designed → smart contracts implemented & tested (113 tests passing) → security audit complete (9 findings fixed) → **deployed to Base Sepolia** (all contracts verified on Basescan).
 
 ## Build, Test, and Lint
 
@@ -48,6 +48,18 @@ Target chain: **Base Sepolia** (chainId 84532).
 Deployment scripts: `contracts/script/Deploy.s.sol`, `contracts/script/HelperConfig.s.sol`
 Development docs: `contracts/docs/` (AgentAccount, AgentPaymaster, AuctionRegistry, AuctionEscrow)
 Security: 2-round audit complete, 9 vulnerabilities fixed (see `contracts/docs/`).
+
+### Deployed Addresses (Base Sepolia)
+
+| Contract | Address |
+|---|---|
+| AgentAccountFactory | `0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD` |
+| AgentPaymaster | `0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d` |
+| AuctionRegistry | `0x81c015F6189da183Bf19a5Bb8ca7FDd7995B35F9` |
+| AuctionEscrow | `0x211086a6D1c08aB2082154829472FC24f8C40358` |
+| MockUSDC | `0xfEE786495d165b16dc8e68B6F8281193e041737d` |
+| MockIdentityRegistry | `0x68E06c33D4957102362ACffC2BFF9E6b38199318` |
+| MockKeystoneForwarder | `0x846ae85403D1BBd3B343F1b214D297969b39Ce23` |
 
 ## Conventions
 

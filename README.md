@@ -213,7 +213,22 @@ L2 (Base Sepolia) — 6 contracts (all compiled & tested, 113 tests passing)
     └── MockKeystoneForwarder → Simulates Chainlink KeystoneForwarder for local CRE testing
 ```
 **Security**: 2-round audit complete, 9 vulnerabilities fixed (see `contracts/docs/`).
-**Deployment**: Scripts in `contracts/script/Deploy.s.sol` + `contracts/script/HelperConfig.s.sol`.
+### Deployed Addresses (Base Sepolia — chainId 84532)
+
+All contracts verified on [Basescan](https://sepolia.basescan.org).
+
+| Contract | Address |
+|---|---|
+| EntryPoint (canonical) | [`0x0000000071727De22E5E9d8BAf0edAc6f37da032`](https://sepolia.basescan.org/address/0x0000000071727De22E5E9d8BAf0edAc6f37da032) |
+| MockUSDC | [`0xfEE786495d165b16dc8e68B6F8281193e041737d`](https://sepolia.basescan.org/address/0xfEE786495d165b16dc8e68B6F8281193e041737d) |
+| MockIdentityRegistry | [`0x68E06c33D4957102362ACffC2BFF9E6b38199318`](https://sepolia.basescan.org/address/0x68E06c33D4957102362ACffC2BFF9E6b38199318) |
+| MockKeystoneForwarder | [`0x846ae85403D1BBd3B343F1b214D297969b39Ce23`](https://sepolia.basescan.org/address/0x846ae85403D1BBd3B343F1b214D297969b39Ce23) |
+| AgentAccountFactory | [`0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD`](https://sepolia.basescan.org/address/0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD) |
+| AgentPaymaster | [`0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d`](https://sepolia.basescan.org/address/0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d) |
+| AuctionRegistry | [`0x81c015F6189da183Bf19a5Bb8ca7FDd7995B35F9`](https://sepolia.basescan.org/address/0x81c015F6189da183Bf19a5Bb8ca7FDd7995B35F9) |
+| AuctionEscrow | [`0x211086a6D1c08aB2082154829472FC24f8C40358`](https://sepolia.basescan.org/address/0x211086a6D1c08aB2082154829472FC24f8C40358) |
+
+Deployer / Sequencer: `0x633ec0e633AA4d8BbCCEa280331A935747416737`
 
 ## Getting Started
 
@@ -277,7 +292,7 @@ npm run lint                   # ESLint
 - [x] EIP-4337 smart wallets implemented (AgentAccount + AgentPaymaster) — 113 tests passing
 - [x] AuctionEscrow implemented with bonds + CRE `onReport` settlement
 - [ ] ZK registry membership proof functional
-- [ ] Contracts deployed to Base Sepolia
+- [x] Contracts deployed to Base Sepolia
 - [ ] Any third party can replay the event log and arrive at the same winner
 
 ## Team
