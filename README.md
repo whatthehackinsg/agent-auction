@@ -230,6 +230,8 @@ All contracts verified on [Basescan](https://sepolia.basescan.org).
 
 Deployer / Sequencer: `0x633ec0e633AA4d8BbCCEa280331A935747416737`
 
+AgentPaymaster funded: 0.01 ETH staked (1-day unstake delay) + 0.05 ETH deposited for gas sponsorship.
+
 ## Getting Started
 
 ### Prerequisites
