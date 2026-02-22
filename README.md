@@ -92,7 +92,7 @@ The core Chainlink integration: a **CRE (Chainlink Runtime Environment) workflow
 Trigger: EVM Log — AuctionEnded(auctionId, winnerAgentId, winnerWallet, amount, finalLogHash, replayContentHash)
     │         Confidence: FINALIZED (wait for block finality — settlement is irreversible)
     ▼
-Phase A: Log Integrity — read anchor hash trail from AuctionRegistry, verify finalLogHash
+Phase A: Log Integrity — verify finalLogHash from AuctionRegistry
     │
     ▼
 Phase B: Rule Replay — fetch ReplayBundleV1, verify against replayContentHash, re-derive winner
@@ -159,38 +159,54 @@ This is a **design-first repository** — comprehensive architecture specs befor
 
 ```
 docs/
-├── 0-agent-onboarding.md          # Identity model & registration flows
-├── 1-agent-voice.md                # How agents sign and submit bids
-├── 2-room-broadcast.md             # Sequencer, ordering, event broadcast
-├── 3-payment.md                    # x402, escrow, bond/settlement/refund
-├── 4-auction-host.md               # Host role design (platform → pluggable)
-├── 5-auction-object.md             # Auctionable object tiers & verification
-├── 6-human-observation.md          # Spectator UI: live view & replay
-├── full_contract_arch.md           # Smart contract architecture (legacy — see deep specs)
-├── things-need-answer.md           # Roadmap: P0 → P1 → P2
-└── research/
-    ├── research_report_*.md                # Architecture report (orchestrator index)
-    └── agent-auction-architecture/         # Deep English specs (source of truth)
-        ├── 01-agent-onboarding.md          #   Identity, ERC-8004, EIP-4337, ZK privacy
-        ├── 02-agent-voice.md               #   Signing (secp256k1), EIP-712, MCP transport
-        ├── 03-room-broadcast.md            #   Sequencer, Poseidon chain, CRE settlement
-        ├── 04-payment-and-escrow.md        #   x402, AuctionEscrow, ReceiverTemplate
-        ├── 05-host-object-observation.md   #   Host, auction objects, spectator UI
-        └── 06-appendix.md                  #   Deployment order, tech stack, test checklist
+├── 00-visual-overview.md            # Visual architecture diagrams (team onboarding)
+├── full_contract_arch(amended).md   # Source of truth — complete contract + off-chain architecture
+├── research/
+│   ├── research_report_*.md                # Architecture report (orchestrator index)
+│   └── agent-auction-architecture/         # Deep English specs (source of truth)
+│       ├── 01-agent-onboarding.md          #   Identity, ERC-8004, EIP-4337, ZK privacy
+│       ├── 02-agent-voice.md               #   Signing (secp256k1), EIP-712, MCP transport
+│       ├── 03-room-broadcast.md            #   Sequencer, Poseidon chain, CRE settlement
+│       ├── 04-payment-and-escrow.md        #   x402, AuctionEscrow, ReceiverTemplate
+│       ├── 05-host-object-observation.md   #   Host, auction objects, spectator UI
+│       └── 06-appendix.md                  #   Deployment order, tech stack, test checklist
+├── plans/
+│   ├── 2026-02-22-parallel-workstream-split.md  # Team split + day-by-day schedule
+│   ├── ws1-zk-crypto.md                        # WS-1 detailed tasks
+│   ├── ws2-contracts-cre.md                     # WS-2 detailed tasks
+│   └── ws3-engine-frontend.md                   # WS-3 detailed tasks
+└── legacy/                              # Old on-chain architecture + Chinese lifecycle docs
+    ├── full_contract_arch.md            #   Original full on-chain design
+    ├── 0-agent-onboarding.md            #   Identity model (Chinese)
+    ├── 1-agent-voice.md                 #   Agent signing (Chinese)
+    ├── 2-room-broadcast.md              #   Sequencer design (Chinese)
+    ├── 3-payment.md                     #   Payment design (Chinese)
+    ├── 4-auction-host.md                #   Host role (Chinese)
+    ├── 5-auction-object.md              #   Auction objects (Chinese)
+    ├── 6-human-observation.md           #   Spectator UI (Chinese)
+    └── things-need-answer.md            #   Roadmap P0/P1/P2 (Chinese)
 ```
 
-> Design documents are in Chinese; deep implementation specs in `docs/research/` are in English.
+> **Source of truth:** `full_contract_arch(amended).md` + deep specs in `research/`. Legacy docs in `legacy/` are historical reference only.
 
 ## Smart Contract Architecture
 
 ```
-L2 (Base Sepolia)
+L2 (Base Sepolia)  — 7 contracts deployed in MVP
 │
-├── ACCOUNT ABSTRACTION ── AgentAccountFactory / AgentAccount / AgentPaymaster
-├── IDENTITY & PRIVACY ── ERC-8004 IdentityRegistry / AgentPrivacyRegistry / NullifierSet
-├── ZK VERIFICATION ───── BidCommitVerifier / RegistryMemberVerifier
-├── AUCTION LOGIC ──────── AuctionRegistry / AuctionFactory / AuctionRoom / SealedBidMPC
-└── PAYMENT ───────────── AuctionEscrow (+ CRE ReceiverTemplate) / X402PaymentGate
+├── ACCOUNT ABSTRACTION ── AgentAccountFactory / AgentAccount (simplified) / AgentPaymaster
+├── IDENTITY & PRIVACY ── ERC-8004 IdentityRegistry (external) / AgentPrivacyRegistry (ZK sidecar)
+├── AUCTION LOGIC ──────── AuctionRegistry (createAuction / recordResult / markSettled)
+└── PAYMENT ───────────── AuctionEscrow (USDC bonds + CRE ReceiverTemplate)
+
+NOT DEPLOYED (moved off-chain or eliminated):
+  ✗ NullifierSet.sol         → DO transactional storage
+  ✗ BidCommitVerifier.sol    → snarkjs in Durable Object
+  ✗ RegistryMemberVerifier.sol → snarkjs in Durable Object
+  ✗ AuctionFactory.sol       → merged into AuctionRegistry
+  ✗ AuctionRoom.sol          → Durable Object is the room
+  ✗ SealedBidMPC.sol         → off-chain MPC committee
+  ✗ X402PaymentGate.sol      → Workers KV middleware
 ```
 
 ## Getting Started
