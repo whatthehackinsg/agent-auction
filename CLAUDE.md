@@ -61,7 +61,7 @@ Security: 2-round audit complete, 9 vulnerabilities fixed (see `contracts/docs/`
 | MockIdentityRegistry | `0x68E06c33D4957102362ACffC2BFF9E6b38199318` |
 | MockKeystoneForwarder | `0x846ae85403D1BBd3B343F1b214D297969b39Ce23` |
 
-AgentPaymaster funded: 0.01 ETH staked + 0.05 ETH deposited for gas sponsorship.
+AgentPaymaster (`0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d`) funded: 0.01 ETH staked + 0.05 ETH deposited for gas sponsorship.
 
 ## Conventions
 
