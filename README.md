@@ -142,7 +142,7 @@ The platform supports three tiers of tasks:
 
 | Layer | Technology |
 |---|---|
-| **Blockchain** | Base Sepolia (OP Stack L2), Solidity |
+| **Blockchain** | Base Sepolia (OP Stack L2), Solidity 0.8.24 |
 | **Settlement** | Chainlink CRE Workflow |
 | **Identity** | ERC-8004, secp256k1 runtime keys (EIP-712 on-chain verifiable via ecrecover) |
 | **Account Abstraction** | EIP-4337 (EntryPoint v0.7), AgentPaymaster |
@@ -151,62 +151,64 @@ The platform supports three tiers of tasks:
 | **Auction Engine** | Cloudflare Workers + Durable Objects |
 | **Agent Interface** | MCP Streamable HTTP, REST API |
 | **Frontend** | Next.js / React (spectator UI) |
-| **Backend** | Node.js / TypeScript |
+| **Testing** | Foundry (forge test), 81 tests passing |
 
 ## Repository Structure
 
-This is a **design-first repository** — comprehensive architecture specs before code.
-
 ```
-docs/
-├── 00-visual-overview.md            # Visual architecture diagrams (team onboarding)
-├── full_contract_arch(amended).md   # Source of truth — complete contract + off-chain architecture
-├── research/
-│   ├── research_report_*.md                # Architecture report (orchestrator index)
-│   └── agent-auction-architecture/         # Deep English specs (source of truth)
-│       ├── 01-agent-onboarding.md          #   Identity, ERC-8004, EIP-4337, ZK privacy
-│       ├── 02-agent-voice.md               #   Signing (secp256k1), EIP-712, MCP transport
-│       ├── 03-room-broadcast.md            #   Sequencer, Poseidon chain, CRE settlement
-│       ├── 04-payment-and-escrow.md        #   x402, AuctionEscrow, ReceiverTemplate
-│       ├── 05-host-object-observation.md   #   Host, auction objects, spectator UI
-│       └── 06-appendix.md                  #   Deployment order, tech stack, test checklist
-├── plans/
-│   ├── 2026-02-22-parallel-workstream-split.md  # Team split + day-by-day schedule
-│   ├── ws1-zk-crypto.md                        # WS-1 detailed tasks
-│   ├── ws2-contracts-cre.md                     # WS-2 detailed tasks
-│   └── ws3-engine-frontend.md                   # WS-3 detailed tasks
-└── legacy/                              # Old on-chain architecture + Chinese lifecycle docs
-    ├── full_contract_arch.md            #   Original full on-chain design
-    ├── 0-agent-onboarding.md            #   Identity model (Chinese)
-    ├── 1-agent-voice.md                 #   Agent signing (Chinese)
-    ├── 2-room-broadcast.md              #   Sequencer design (Chinese)
-    ├── 3-payment.md                     #   Payment design (Chinese)
-    ├── 4-auction-host.md                #   Host role (Chinese)
-    ├── 5-auction-object.md              #   Auction objects (Chinese)
-    ├── 6-human-observation.md           #   Spectator UI (Chinese)
-    └── things-need-answer.md            #   Roadmap P0/P1/P2 (Chinese)
+agent-auction/
+├── contracts/                           # Foundry project — 6 Solidity contracts + tests
+│   ├── src/
+│   │   ├── interfaces/IAuctionTypes.sol  #   Shared types (AuctionState, structs)
+│   │   ├── AgentAccount.sol              #   EIP-4337 smart wallet (secp256k1 signer)
+│   │   ├── AgentAccountFactory.sol       #   CREATE2 factory for AgentAccount proxies
+│   │   ├── AgentPaymaster.sol            #   Gas sponsorship paymaster
+│   │   ├── AuctionRegistry.sol           #   Auction lifecycle + EIP-712 sequencer sigs
+│   │   ├── AuctionEscrow.sol             #   USDC bonds + CRE settlement
+│   │   └── MockKeystoneForwarder.sol     #   Test helper for CRE simulation
+│   ├── test/                             #   81 Foundry tests (all passing)
+│   ├── lib/                              #   Dependencies (forge-std, openzeppelin, account-abstraction, chainlink)
+│   └── foundry.toml                      #   Solc 0.8.24, Cancun EVM, optimizer on
+├── frontend/                             # Next.js spectator UI (WS-3 scope)
+├── designs/                              # Pencil design files + references
+├── docs/
+│   ├── full_contract_arch(amended).md    # ★ SOURCE OF TRUTH — full architecture spec
+│   ├── research/
+│   │   ├── research_report_*.md                # Architecture research report
+│   │   └── agent-auction-architecture/         # English deep specs (01–06)
+│   │       ├── 01-agent-onboarding.md          #   Identity, ERC-8004, EIP-4337, ZK privacy
+│   │       ├── 02-agent-voice.md               #   Signing (secp256k1), EIP-712, MCP transport
+│   │       ├── 03-room-broadcast.md            #   Sequencer, Poseidon chain, CRE settlement
+│   │       ├── 04-payment-and-escrow.md        #   x402, AuctionEscrow, ReceiverTemplate
+│   │       ├── 05-host-object-observation.md   #   Host, auction objects, spectator UI
+│   │       └── 06-appendix.md                  #   Deployment order, tech stack, test checklist
+│   ├── plans/                                  # Hackathon workstream plans (WS-1/2/3)
+│   ├── solutions/                              # Documented problem solutions
+│   └── legacy/                                 # Archived Chinese lifecycle docs + old architecture
+└── .beads/                                     # Issue tracking data (bd CLI)
 ```
 
-> **Source of truth:** `full_contract_arch(amended).md` + deep specs in `research/`. Legacy docs in `legacy/` are historical reference only.
+> **Source of truth:** `docs/full_contract_arch(amended).md` + deep specs in `docs/research/`. Legacy docs in `docs/legacy/` are historical reference only.
 
 ## Smart Contract Architecture
 
 ```
-L2 (Base Sepolia)  — 7 contracts deployed in MVP
+L2 (Base Sepolia) — 6 contracts (all compiled & tested, 81 tests passing)
 │
-├── ACCOUNT ABSTRACTION ── AgentAccountFactory / AgentAccount (simplified) / AgentPaymaster
-├── IDENTITY & PRIVACY ── ERC-8004 IdentityRegistry (external) / AgentPrivacyRegistry (ZK sidecar)
-├── AUCTION LOGIC ──────── AuctionRegistry (createAuction / recordResult / markSettled)
-└── PAYMENT ───────────── AuctionEscrow (USDC bonds + CRE ReceiverTemplate)
-
-NOT DEPLOYED (moved off-chain or eliminated):
-  ✗ NullifierSet.sol         → DO transactional storage
-  ✗ BidCommitVerifier.sol    → snarkjs in Durable Object
-  ✗ RegistryMemberVerifier.sol → snarkjs in Durable Object
-  ✗ AuctionFactory.sol       → merged into AuctionRegistry
-  ✗ AuctionRoom.sol          → Durable Object is the room
-  ✗ SealedBidMPC.sol         → off-chain MPC committee
-  ✗ X402PaymentGate.sol      → Workers KV middleware
+├── ACCOUNT ABSTRACTION
+│   ├── AgentAccountFactory  → deploys AgentAccount proxies (CREATE2, deterministic)
+│   ├── AgentAccount         → EIP-4337 smart wallet (secp256k1 runtime signer)
+│   └── AgentPaymaster       → Gas sponsorship (bond-deposit + non-bond with bond check)
+│
+├── AUCTION LOGIC
+│   └── AuctionRegistry      → Lifecycle: OPEN → CLOSED → SETTLED/CANCELLED (EIP-712 sequencer sigs)
+│
+├── PAYMENT
+│   └── AuctionEscrow        → USDC bonds + CRE settlement via IReceiver.onReport()
+│
+└── SHARED
+    ├── IAuctionTypes        → AuctionState enum, AuctionSettlementPacket, BondRecord structs
+    └── MockKeystoneForwarder → Simulates Chainlink KeystoneForwarder for local CRE testing
 ```
 
 ## Getting Started
@@ -214,6 +216,7 @@ NOT DEPLOYED (moved off-chain or eliminated):
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) (v18+)
+- [Foundry](https://book.getfoundry.sh/getting-started/installation) (`forge`, `cast`, `anvil`)
 - [Claude Code](https://claude.ai/code) (optional — for AI-assisted development with MCP)
 
 ### Setup
@@ -223,7 +226,14 @@ git clone https://github.com/whatthehackinsg/agent-auction.git
 cd agent-auction
 npm install
 
+# Build and test smart contracts
+cd contracts
+forge install        # Install Solidity dependencies
+forge build          # Compile all contracts
+forge test           # Run all 81 tests
+
 # If using Chainlink MCP server for development
+cd ..
 cp .mcp.json.example .mcp.json
 # Edit .mcp.json and add your OpenAI API key
 ```
@@ -231,11 +241,20 @@ cp .mcp.json.example .mcp.json
 ### Useful Commands
 
 ```bash
-# Browse design documents
-ls docs/
+# ── Smart Contracts ──────────────────────────────
+cd contracts
+forge build                    # Compile (solc 0.8.24, Cancun EVM)
+forge test                     # Run all 81 tests
+forge test -vvv                # Verbose with traces
+forge test --match-contract X  # Run specific test suite
+forge fmt                      # Format Solidity code
+forge snapshot                 # Gas snapshots
 
-# Check for unresolved items
-grep -r "TODO\|待确认" docs/
+# ── Frontend ─────────────────────────────────────
+cd frontend
+npm run dev                    # Dev server
+npm run build                  # Production build
+npm run lint                   # ESLint
 ```
 
 ## Roadmap
@@ -251,9 +270,10 @@ grep -r "TODO\|待确认" docs/
 - [x] Architecture design complete
 - [ ] ERC-8004 agents can join rooms, bid, post bonds, and settle
 - [ ] CRE Settlement Workflow verifies and settles auctions on-chain
-- [ ] EIP-4337 smart wallets deployed (AgentAccount + AgentPaymaster)
-- [ ] AuctionEscrow live with bonds-only + CRE `onReport` settlement
+- [x] EIP-4337 smart wallets implemented (AgentAccount + AgentPaymaster) — 81 tests passing
+- [x] AuctionEscrow implemented with bonds + CRE `onReport` settlement
 - [ ] ZK registry membership proof functional
+- [ ] Contracts deployed to Base Sepolia
 - [ ] Any third party can replay the event log and arrive at the same winner
 
 ## Team
