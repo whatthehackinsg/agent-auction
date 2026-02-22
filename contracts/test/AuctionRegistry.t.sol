@@ -50,7 +50,19 @@ contract AuctionRegistryTest is Test {
     }
 
     function _signPacket(IAuctionTypes.AuctionSettlementPacket memory packet) internal view returns (bytes memory) {
-        bytes32 digest = keccak256(abi.encode(packet));
+        bytes32 structHash = keccak256(
+            abi.encode(
+                registry.SETTLEMENT_TYPEHASH(),
+                packet.auctionId,
+                packet.manifestHash,
+                packet.finalLogHash,
+                packet.winnerAgentId,
+                packet.winnerWallet,
+                packet.winningBidAmount,
+                packet.closeTimestamp
+            )
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", registry.DOMAIN_SEPARATOR(), structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(sequencerPk, digest);
         return abi.encodePacked(r, s, v);
     }
@@ -60,6 +72,11 @@ contract AuctionRegistryTest is Test {
     function test_constructor_setsDomainSeparator() public view {
         bytes32 ds = registry.DOMAIN_SEPARATOR();
         assertTrue(ds != bytes32(0), "Domain separator should be set");
+    }
+
+    function test_constructor_setsSettlementTypehash() public view {
+        bytes32 th = registry.SETTLEMENT_TYPEHASH();
+        assertTrue(th != bytes32(0), "Settlement typehash should be set");
     }
 
     function test_constructor_revertsZeroSequencer() public {
@@ -122,7 +139,7 @@ contract AuctionRegistryTest is Test {
         registry.createAuction(auctionId, manifestHash, roomConfigHash, reservePrice, depositAmount, deadline);
     }
 
-    /* ── recordResult ─────────────────────────────────────────────── */
+    /* ── recordResult (EIP-712 signatures) ────────────────────────── */
 
     function test_recordResult_closesAuction() public {
         _createAuction();
@@ -156,7 +173,12 @@ contract AuctionRegistryTest is Test {
 
         vm.expectEmit(true, true, false, true);
         emit AuctionRegistry.AuctionEnded(
-            auctionId, 42, address(0x1111111111111111111111111111111111111111), 200e6, keccak256("finalLog"), manifestHash
+            auctionId,
+            42,
+            address(0x1111111111111111111111111111111111111111),
+            200e6,
+            keccak256("finalLog"),
+            manifestHash
         );
         registry.recordResult(packet, sig);
     }
@@ -174,13 +196,38 @@ contract AuctionRegistryTest is Test {
         _createAuction();
 
         IAuctionTypes.AuctionSettlementPacket memory packet = _buildPacket();
-        // Sign with wrong key
-        bytes32 digest = keccak256(abi.encode(packet));
+        // Sign with wrong key using correct EIP-712 format
+        bytes32 structHash = keccak256(
+            abi.encode(
+                registry.SETTLEMENT_TYPEHASH(),
+                packet.auctionId,
+                packet.manifestHash,
+                packet.finalLogHash,
+                packet.winnerAgentId,
+                packet.winnerWallet,
+                packet.winningBidAmount,
+                packet.closeTimestamp
+            )
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", registry.DOMAIN_SEPARATOR(), structHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(0xBEEF, digest);
         bytes memory badSig = abi.encodePacked(r, s, v);
 
         vm.expectRevert(AuctionRegistry.InvalidSequencerSig.selector);
         registry.recordResult(packet, badSig);
+    }
+
+    function test_recordResult_rejectsRawKeccakSig() public {
+        _createAuction();
+
+        IAuctionTypes.AuctionSettlementPacket memory packet = _buildPacket();
+        // Old-style raw keccak256 signing (should now fail)
+        bytes32 rawDigest = keccak256(abi.encode(packet));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(sequencerPk, rawDigest);
+        bytes memory oldSig = abi.encodePacked(r, s, v);
+
+        vm.expectRevert(AuctionRegistry.InvalidSequencerSig.selector);
+        registry.recordResult(packet, oldSig);
     }
 
     /* ── markSettled ──────────────────────────────────────────────── */
@@ -311,5 +358,55 @@ contract AuctionRegistryTest is Test {
 
         vm.expectRevert(AuctionRegistry.InvalidEIP712Sig.selector);
         registry.updateWinnerWallet(auctionId, newWallet, sig);
+    }
+
+    /* ── isCancelled view ─────────────────────────────────────────── */
+
+    function test_isCancelled_returnsTrueForCancelled() public {
+        _createAuction();
+        vm.warp(deadline + 72 hours + 1);
+        registry.cancelExpiredAuction(auctionId);
+
+        assertTrue(registry.isCancelled(auctionId), "Should be cancelled");
+    }
+
+    function test_isCancelled_returnsFalseForNonCancelled() public {
+        _createAuction();
+        assertFalse(registry.isCancelled(auctionId), "OPEN auction should not be cancelled");
+    }
+
+    function test_isCancelled_returnsFalseForNonExistent() public {
+        assertFalse(registry.isCancelled(keccak256("nonexistent")), "Non-existent auction should not be cancelled");
+    }
+
+    /* ── recordResult manifestHash enforcement ────────────────────── */
+
+    function test_recordResult_revertsManifestHashMismatch() public {
+        _createAuction();
+
+        IAuctionTypes.AuctionSettlementPacket memory packet = IAuctionTypes.AuctionSettlementPacket({
+            auctionId: auctionId,
+            manifestHash: keccak256("wrong-manifest"),
+            finalLogHash: keccak256("finalLog"),
+            winnerAgentId: 42,
+            winnerWallet: address(0x1111111111111111111111111111111111111111),
+            winningBidAmount: 200e6,
+            closeTimestamp: uint64(block.timestamp)
+        });
+
+        bytes memory sig = _signPacket(packet);
+
+        vm.expectRevert(AuctionRegistry.ManifestHashMismatch.selector);
+        registry.recordResult(packet, sig);
+    }
+
+    function test_recordResult_succeedsWithCorrectManifestHash() public {
+        _createAuction();
+
+        IAuctionTypes.AuctionSettlementPacket memory packet = _buildPacket();
+        bytes memory sig = _signPacket(packet);
+
+        registry.recordResult(packet, sig);
+        assertEq(uint256(registry.getAuctionState(auctionId)), uint256(IAuctionTypes.AuctionState.CLOSED));
     }
 }

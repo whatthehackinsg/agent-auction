@@ -26,11 +26,7 @@ contract MockKeystoneForwarder {
 
     /* ── Constructor ────────────────────────────────────────────── */
 
-    constructor(
-        bytes32 workflowId_,
-        bytes10 workflowName_,
-        address workflowOwner_
-    ) {
+    constructor(bytes32 workflowId_, bytes10 workflowName_, address workflowOwner_) {
         workflowId = workflowId_;
         workflowName = workflowName_;
         workflowOwner = workflowOwner_;
@@ -49,11 +45,7 @@ contract MockKeystoneForwarder {
     }
 
     /// @notice Forward with custom metadata (for testing edge cases)
-    function forwardReportWithMetadata(
-        address target,
-        bytes calldata metadata,
-        bytes calldata report
-    ) external {
+    function forwardReportWithMetadata(address target, bytes calldata metadata, bytes calldata report) external {
         IReceiver(target).onReport(metadata, report);
         emit ReportForwarded(target, workflowId, true);
     }

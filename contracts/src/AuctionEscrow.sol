@@ -11,6 +11,12 @@ import {IAuctionTypes} from "./interfaces/IAuctionTypes.sol";
 /// @notice Minimal interface for AuctionRegistry callback
 interface IAuctionRegistry {
     function markSettled(bytes32 auctionId) external;
+    function isCancelled(bytes32 auctionId) external view returns (bool);
+}
+
+/// @notice Minimal interface for ERC-8004 identity registry ownership check
+interface IERC8004RegistryEscrow {
+    function ownerOf(uint256 agentId) external view returns (address);
 }
 
 /// @title AuctionEscrow — USDC bond escrow with CRE settlement
@@ -30,12 +36,13 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
     /* ── CRE configuration (set post-deploy by owner) ───────────── */
 
     bytes32 public expectedWorkflowId;
-    string public expectedWorkflowName;
+    bytes10 public expectedWorkflowName; // FIX: changed from string to bytes10 (CRE metadata native type)
     address public expectedAuthor;
 
     /* ── External contracts ─────────────────────────────────────── */
 
     IAuctionRegistry public registry;
+    IERC8004RegistryEscrow public identityRegistry;
     address public admin; // Platform admin that can call recordBond
 
     /* ── Bond storage ───────────────────────────────────────────── */
@@ -49,6 +56,9 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
     /// @dev agentId → withdrawable balance (after settlement/refund)
     mapping(uint256 => uint256) public withdrawable;
 
+    /// @dev agentId → designated withdrawal address (set by CRE report for winners, or bond depositor for losers)
+    mapping(uint256 => address) public designatedWallet;
+
     /// @dev Solvency tracking
     uint256 public totalBonded;
     uint256 public totalWithdrawable;
@@ -58,19 +68,17 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
 
     /* ── Events ─────────────────────────────────────────────────── */
 
-    event BondRecorded(
-        bytes32 indexed auctionId,
-        uint256 indexed agentId,
-        address depositor,
-        uint256 amount
+    event BondRecorded(bytes32 indexed auctionId, uint256 indexed agentId, address depositor, uint256 amount);
+    event SettlementProcessed(
+        bytes32 indexed auctionId, uint256 indexed winnerAgentId, address winnerWallet, uint256 amount
     );
-    event SettlementProcessed(bytes32 indexed auctionId, uint256 indexed winnerAgentId, uint256 amount);
     event RefundClaimed(bytes32 indexed auctionId, uint256 indexed agentId, uint256 amount);
     event Withdrawn(uint256 indexed agentId, address to, uint256 amount);
     event AdminRefund(bytes32 indexed auctionId, uint256 indexed agentId, uint256 amount);
     event RegistryUpdated(address indexed registry);
+    event IdentityRegistryUpdated(address indexed identityRegistry);
     event AdminUpdated(address indexed admin);
-    event CREConfigured(bytes32 workflowId, string workflowName, address author);
+    event CREConfigured(bytes32 workflowId, bytes10 workflowName, address author);
 
     /* ── Errors ─────────────────────────────────────────────────── */
 
@@ -87,6 +95,8 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
     error ZeroAmount();
     error InvalidReport();
     error SolvencyViolation();
+    error UnauthorizedWithdraw();
+    error DesignatedWalletConflict(); // FIX: new error for cross-auction wallet misrouting
 
     /* ── Modifiers ──────────────────────────────────────────────── */
 
@@ -94,6 +104,7 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
         _checkAdmin();
         _;
     }
+
     modifier onlyForwarder() {
         _checkForwarder();
         _;
@@ -109,10 +120,7 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
 
     /* ── Constructor ────────────────────────────────────────────── */
 
-    constructor(
-        IERC20 usdc_,
-        address forwarder_
-    ) Ownable(msg.sender) {
+    constructor(IERC20 usdc_, address forwarder_) Ownable(msg.sender) {
         USDC = usdc_;
         FORWARDER = forwarder_;
         admin = msg.sender;
@@ -126,6 +134,12 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
         emit RegistryUpdated(registry_);
     }
 
+    function setIdentityRegistry(address identityRegistry_) external onlyOwner {
+        if (identityRegistry_ == address(0)) revert ZeroAddress();
+        identityRegistry = IERC8004RegistryEscrow(identityRegistry_);
+        emit IdentityRegistryUpdated(identityRegistry_);
+    }
+
     function setAdmin(address admin_) external onlyOwner {
         if (admin_ == address(0)) revert ZeroAddress();
         admin = admin_;
@@ -137,7 +151,7 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
         expectedWorkflowId = workflowId_;
     }
 
-    function setExpectedWorkflowName(string calldata name_) external onlyOwner {
+    function setExpectedWorkflowName(bytes10 name_) external onlyOwner {
         expectedWorkflowName = name_;
     }
 
@@ -145,7 +159,7 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
         expectedAuthor = author_;
     }
 
-    function configureCRE(bytes32 workflowId_, string calldata name_, address author_) external onlyOwner {
+    function configureCRE(bytes32 workflowId_, bytes10 name_, address author_) external onlyOwner {
         expectedWorkflowId = workflowId_;
         expectedWorkflowName = name_;
         expectedAuthor = author_;
@@ -170,6 +184,7 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
         uint256 logIndex
     ) external onlyAdmin {
         if (amount == 0) revert ZeroAmount();
+        if (depositor == address(0)) revert ZeroAddress(); // FIX: validate depositor
 
         // Idempotency check: keccak256(txHash, logIndex)
         bytes32 idempotencyKey = keccak256(abi.encodePacked(txHash, logIndex));
@@ -179,12 +194,11 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
         // One bond per agent per auction
         if (bonds[auctionId][agentId].amount > 0) revert BondAlreadyExists();
 
-        bonds[auctionId][agentId] = BondRecord({
-            depositor: depositor,
-            amount: amount,
-            refunded: false
-        });
+        bonds[auctionId][agentId] = BondRecord({depositor: depositor, amount: amount, refunded: false});
         totalBonded += amount;
+
+        // FIX: Enforce solvency invariant after recording
+        if (USDC.balanceOf(address(this)) < totalBonded + totalWithdrawable) revert SolvencyViolation();
 
         emit BondRecorded(auctionId, agentId, depositor, amount);
     }
@@ -200,12 +214,14 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
         if (metadata.length < 64) revert InvalidReport();
 
         bytes32 workflowId = bytes32(metadata[0:32]);
-        // workflowName is bytes10 at offset 32
+        // FIX: Parse and validate workflowName from metadata (bytes10 at offset 32)
+        bytes10 workflowName = bytes10(metadata[32:42]);
         // workflowOwner is address at offset 42 (32+10)
         address workflowOwner = address(bytes20(metadata[42:62]));
 
-        // Verify expected values (skip workflowId check if not configured)
+        // Verify expected values (skip check if not configured)
         if (expectedWorkflowId != bytes32(0) && workflowId != expectedWorkflowId) revert InvalidReport();
+        if (expectedWorkflowName != bytes10(0) && workflowName != expectedWorkflowName) revert InvalidReport();
         if (expectedAuthor != address(0) && workflowOwner != expectedAuthor) revert InvalidReport();
 
         _processReport(report);
@@ -213,13 +229,10 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
 
     /// @dev Decode and execute settlement: release winner bond, mark settled
     ///      Report encoding: abi.encode(auctionId, winnerAgentId, winnerWallet, amount)
+    ///      FIX: designatedWallet conflict detection (revert if different address already set)
     function _processReport(bytes calldata report) internal {
-        (
-            bytes32 auctionId,
-            uint256 winnerAgentId,
-            address winnerWallet,
-            uint256 amount
-        ) = abi.decode(report, (bytes32, uint256, address, uint256));
+        (bytes32 auctionId, uint256 winnerAgentId, address winnerWallet, uint256 amount) =
+            abi.decode(report, (bytes32, uint256, address, uint256));
 
         if (auctionSettled[auctionId]) revert AlreadySettled();
         auctionSettled[auctionId] = true;
@@ -232,6 +245,12 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
             totalBonded -= releaseAmount;
             withdrawable[winnerAgentId] += releaseAmount;
             totalWithdrawable += releaseAmount;
+
+            // FIX: Conflict detection — revert if designated wallet already set to a DIFFERENT address
+            if (designatedWallet[winnerAgentId] != address(0) && designatedWallet[winnerAgentId] != winnerWallet) {
+                revert DesignatedWalletConflict();
+            }
+            designatedWallet[winnerAgentId] = winnerWallet;
         }
 
         // Tell registry this auction is settled
@@ -239,14 +258,23 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
             registry.markSettled(auctionId);
         }
 
-        emit SettlementProcessed(auctionId, winnerAgentId, amount);
+        emit SettlementProcessed(auctionId, winnerAgentId, winnerWallet, amount);
     }
 
     /* ── Refund (pull-based for non-winners) ────────────────────── */
 
-    /// @notice Non-winners claim their bond refund after settlement
+    /// @notice Non-winners claim their bond refund after settlement or cancellation
+    /// @dev Permissionless: anyone can trigger the refund claim for any agent.
+    ///      This is safe because funds only move to withdrawable[agentId], not out.
+    ///      The withdraw() function enforces authorization on actual USDC transfers.
+    ///      FIX: Also allows refund for cancelled auctions (via registry.isCancelled).
     function claimRefund(bytes32 auctionId, uint256 agentId) external nonReentrant {
-        if (!auctionSettled[auctionId]) revert NotSettled();
+        // FIX: Allow refund if auction is settled OR cancelled
+        if (!auctionSettled[auctionId]) {
+            if (address(registry) == address(0) || !registry.isCancelled(auctionId)) {
+                revert NotSettled();
+            }
+        }
 
         BondRecord storage bond = bonds[auctionId][agentId];
         if (bond.amount == 0) revert NoBondFound();
@@ -258,18 +286,50 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
         withdrawable[agentId] += refundAmount;
         totalWithdrawable += refundAmount;
 
+        // FIX: Conflict detection for designated wallet (same as _processReport)
+        if (designatedWallet[agentId] != address(0) && designatedWallet[agentId] != bond.depositor) {
+            revert DesignatedWalletConflict();
+        }
+        designatedWallet[agentId] = bond.depositor;
+
         emit RefundClaimed(auctionId, agentId, refundAmount);
     }
 
     /* ── Withdraw ───────────────────────────────────────────────── */
 
-    /// @notice Agent withdraws accumulated balance to a specified address
-    function withdraw(uint256 agentId, address to) external nonReentrant {
+    /// @notice Agent withdraws accumulated balance to the designated address
+    /// @dev Authorization: caller must be the agent's ERC-8004 owner OR the admin.
+    ///      Funds always go to the designated wallet (set by CRE report or bond depositor).
+    ///      FIX: try/catch on ownerOf so admin can still withdraw for unregistered agents.
+    function withdraw(uint256 agentId) external nonReentrant {
         uint256 amount = withdrawable[agentId];
         if (amount == 0) revert NothingToWithdraw();
 
+        // FIX: Wrap ownerOf in try/catch — if registry reverts (e.g., agent burned),
+        //      admin can still process the withdrawal.
+        if (address(identityRegistry) != address(0)) {
+            bool isOwner = false;
+            try identityRegistry.ownerOf(agentId) returns (address agentOwner) {
+                isOwner = (msg.sender == agentOwner);
+            } catch {
+                // ownerOf reverted — agent may not exist; only admin can withdraw
+            }
+            if (!isOwner && msg.sender != admin) {
+                revert UnauthorizedWithdraw();
+            }
+        } else {
+            // If no identity registry set, only admin can withdraw (safe fallback)
+            if (msg.sender != admin) revert UnauthorizedWithdraw();
+        }
+
+        address to = designatedWallet[agentId];
+        if (to == address(0)) revert ZeroAddress();
+
         withdrawable[agentId] = 0;
         totalWithdrawable -= amount;
+
+        // Clear designated wallet after withdrawal
+        designatedWallet[agentId] = address(0);
 
         USDC.safeTransfer(to, amount);
         emit Withdrawn(agentId, to, amount);
@@ -294,12 +354,21 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
     /* ── Views ──────────────────────────────────────────────────── */
 
     /// @notice Get bond amount for paymaster lookup
+    /// @dev FIX: Returns 0 if bond has been refunded — prevents paymaster from sponsoring
+    ///      ops for agents whose bonds have already been released.
     function getBondAmount(bytes32 auctionId, uint256 agentId) external view returns (uint256) {
-        return bonds[auctionId][agentId].amount;
+        BondRecord storage bond = bonds[auctionId][agentId];
+        if (bond.refunded) return 0;
+        return bond.amount;
     }
 
     /// @notice Solvency check: USDC balance >= totalBonded + totalWithdrawable
     function checkSolvency() external view returns (bool) {
         return USDC.balanceOf(address(this)) >= totalBonded + totalWithdrawable;
+    }
+
+    /// @notice Get the designated withdrawal wallet for an agent
+    function getDesignatedWallet(uint256 agentId) external view returns (address) {
+        return designatedWallet[agentId];
     }
 }

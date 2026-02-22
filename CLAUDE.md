@@ -8,7 +8,7 @@ This repo is for the **Chainlink 2026 Hackathon**: https://chain.link/hackathon
 
 An **agent-native auction platform** where AI agents autonomously discover, join, bid in, and settle auctions — with on-chain USDC escrow, verifiable event ordering, and CRE-based trustless settlement.
 
-**Current stage**: Architecture designed → smart contracts implemented & tested (81 tests passing) → deploying to Base Sepolia.
+**Current stage**: Architecture designed → smart contracts implemented & tested (113 tests passing) → security audit complete (9 findings fixed) → deploying to Base Sepolia.
 
 ## Build, Test, and Lint
 
@@ -16,7 +16,7 @@ An **agent-native auction platform** where AI agents autonomously discover, join
 # Smart contracts (Foundry)
 cd contracts
 forge build                    # Compile (solc 0.8.24, Cancun EVM)
-forge test                     # Run all 81 tests
+forge test                     # Run all 113 tests
 forge test -vvv                # Verbose with traces
 forge fmt                      # Format Solidity code
 
@@ -44,6 +44,10 @@ npm run mcp:start              # Needs .mcp.json configured
 - `MockKeystoneForwarder.sol` — Test helper simulating Chainlink KeystoneForwarder
 
 Target chain: **Base Sepolia** (chainId 84532).
+
+Deployment scripts: `contracts/script/Deploy.s.sol`, `contracts/script/HelperConfig.s.sol`
+Development docs: `contracts/docs/` (AgentAccount, AgentPaymaster, AuctionRegistry, AuctionEscrow)
+Security: 2-round audit complete, 9 vulnerabilities fixed (see `contracts/docs/`).
 
 ## Conventions
 

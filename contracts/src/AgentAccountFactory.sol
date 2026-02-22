@@ -24,8 +24,7 @@ contract AgentAccountFactory {
         }
 
         ERC1967Proxy proxy = new ERC1967Proxy{salt: bytes32(salt)}(
-            address(ACCOUNT_IMPLEMENTATION),
-            abi.encodeCall(AgentAccount.initialize, (runtimeSigner))
+            address(ACCOUNT_IMPLEMENTATION), abi.encodeCall(AgentAccount.initialize, (runtimeSigner))
         );
 
         emit AccountCreated(address(proxy), runtimeSigner, salt);

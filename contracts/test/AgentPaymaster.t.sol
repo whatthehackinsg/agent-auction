@@ -42,7 +42,6 @@ contract MockUSDCToken {
     }
 }
 
-
 /// @dev Mock EntryPoint that responds to supportsInterface
 contract MockEntryPoint {
     function supportsInterface(bytes4) external pure returns (bool) {
@@ -70,9 +69,7 @@ contract AgentPaymasterTest is Test {
         identityRegistry = new MockIdentityRegistry();
         mockEscrow = new MockEscrowBonds();
         paymaster = new AgentPaymaster(
-            IEntryPoint(address(mockEntryPoint)),
-            IERC20(address(usdc)),
-            IERC8004Registry(address(identityRegistry))
+            IEntryPoint(address(mockEntryPoint)), IERC20(address(usdc)), IERC8004Registry(address(identityRegistry))
         );
 
         // Set escrow
@@ -109,7 +106,7 @@ contract AgentPaymasterTest is Test {
         bytes memory paymasterAndData = abi.encodePacked(
             address(paymaster),
             bytes16(0), // gas limits placeholder
-            bytes16(0)  // gas limits placeholder
+            bytes16(0) // gas limits placeholder
         );
 
         return PackedUserOperation({
@@ -140,12 +137,7 @@ contract AgentPaymasterTest is Test {
 
         // paymasterAndData with auctionId after PAYMASTER_DATA_OFFSET (52 bytes)
         // 20 bytes paymaster + 16 bytes gas + 16 bytes gas = 52 bytes, then auctionId
-        bytes memory paymasterAndData = abi.encodePacked(
-            address(paymaster),
-            bytes16(0),
-            bytes16(0),
-            _auctionId
-        );
+        bytes memory paymasterAndData = abi.encodePacked(address(paymaster), bytes16(0), bytes16(0), _auctionId);
 
         return PackedUserOperation({
             sender: agentAccount,
@@ -221,12 +213,7 @@ contract AgentPaymasterTest is Test {
             100e6
         );
 
-        bytes memory callData = abi.encodeWithSelector(
-            bytes4(0xb61d27f6),
-            address(usdc),
-            0,
-            innerData
-        );
+        bytes memory callData = abi.encodeWithSelector(bytes4(0xb61d27f6), address(usdc), 0, innerData);
 
         bytes memory paymasterAndData = abi.encodePacked(address(paymaster), bytes16(0), bytes16(0));
 
@@ -264,6 +251,7 @@ contract AgentPaymasterTest is Test {
         // Set up a bond for this agent
         mockEscrow.setBond(auctionId, agentId, 100e6);
 
+        paymaster.setAllowedTarget(address(0xCAFE), true);
         PackedUserOperation memory userOp = _buildNonBondUserOp(auctionId);
 
         vm.prank(address(mockEntryPoint));
@@ -276,6 +264,7 @@ contract AgentPaymasterTest is Test {
 
     function test_validatePaymasterUserOp_nonBond_revertsWithoutBond() public {
         // No bond set
+        paymaster.setAllowedTarget(address(0xCAFE), true);
         PackedUserOperation memory userOp = _buildNonBondUserOp(auctionId);
 
         vm.prank(address(mockEntryPoint));
@@ -285,13 +274,9 @@ contract AgentPaymasterTest is Test {
 
     function test_validatePaymasterUserOp_nonBond_revertsShortPaymasterData() public {
         // Build a non-bond op but with paymasterAndData too short (missing auctionId)
+        paymaster.setAllowedTarget(address(0xCAFE), true);
         bytes memory innerData = abi.encodeWithSelector(bytes4(0xdeadbeef), uint256(1));
-        bytes memory callData = abi.encodeWithSelector(
-            bytes4(0xb61d27f6),
-            address(0xCAFE),
-            0,
-            innerData
-        );
+        bytes memory callData = abi.encodeWithSelector(bytes4(0xb61d27f6), address(0xCAFE), 0, innerData);
 
         // Only 52 bytes (no auctionId appended)
         bytes memory paymasterAndData = abi.encodePacked(address(paymaster), bytes16(0), bytes16(0));
@@ -363,7 +348,74 @@ contract AgentPaymasterTest is Test {
 
         vm.prank(address(mockEntryPoint));
         vm.expectEmit(true, false, false, true);
-        emit AgentPaymaster.GasSponsored(agentAccount, 21000);
-        paymaster.postOp(IPaymaster.PostOpMode.opSucceeded, context, 21000, 1);
+        emit AgentPaymaster.GasSponsored(agentAccount, 21_000);
+        paymaster.postOp(IPaymaster.PostOpMode.opSucceeded, context, 21_000, 1);
+    }
+
+    /* ── allowedTargets (FIX: target allowlist for non-bond ops) ──── */
+
+    function test_setAllowedTarget() public {
+        paymaster.setAllowedTarget(address(0xCAFE), true);
+        assertTrue(paymaster.allowedTargets(address(0xCAFE)));
+
+        paymaster.setAllowedTarget(address(0xCAFE), false);
+        assertFalse(paymaster.allowedTargets(address(0xCAFE)));
+    }
+
+    function test_setAllowedTarget_onlyOwner() public {
+        vm.prank(address(0xDEAD));
+        vm.expectRevert();
+        paymaster.setAllowedTarget(address(0xCAFE), true);
+    }
+
+    function test_nonBond_revertsTargetNotAllowed() public {
+        mockEscrow.setBond(auctionId, agentId, 100e6);
+
+        PackedUserOperation memory userOp = _buildNonBondUserOp(auctionId);
+
+        vm.prank(address(mockEntryPoint));
+        vm.expectRevert(AgentPaymaster.TargetNotAllowed.selector);
+        paymaster.validatePaymasterUserOp(userOp, bytes32(0), 0);
+    }
+
+    function test_nonBond_succeedsWithAllowedTarget() public {
+        mockEscrow.setBond(auctionId, agentId, 100e6);
+        paymaster.setAllowedTarget(address(0xCAFE), true);
+
+        PackedUserOperation memory userOp = _buildNonBondUserOp(auctionId);
+
+        vm.prank(address(mockEntryPoint));
+        (bytes memory context, uint256 validationData) = paymaster.validatePaymasterUserOp(userOp, bytes32(0), 0);
+
+        assertEq(validationData, 0, "Allowed target should pass");
+        address decodedSender = abi.decode(context, (address));
+        assertEq(decodedSender, agentAccount);
+    }
+
+    function test_nonBond_revertsIfEscrowNotSet() public {
+        AgentPaymaster freshPaymaster = new AgentPaymaster(
+            IEntryPoint(address(mockEntryPoint)), IERC20(address(usdc)), IERC8004Registry(address(identityRegistry))
+        );
+        freshPaymaster.registerAgent(agentAccount, agentId);
+
+        bytes memory innerData = abi.encodeWithSelector(bytes4(0xdeadbeef), uint256(1));
+        bytes memory callData = abi.encodeWithSelector(bytes4(0xb61d27f6), address(0xCAFE), 0, innerData);
+        bytes memory paymasterAndData = abi.encodePacked(address(freshPaymaster), bytes16(0), bytes16(0), auctionId);
+
+        PackedUserOperation memory userOp = PackedUserOperation({
+            sender: agentAccount,
+            nonce: 0,
+            initCode: "",
+            callData: callData,
+            accountGasLimits: bytes32(0),
+            preVerificationGas: 0,
+            gasFees: bytes32(0),
+            paymasterAndData: paymasterAndData,
+            signature: ""
+        });
+
+        vm.prank(address(mockEntryPoint));
+        vm.expectRevert(AgentPaymaster.EscrowNotSet.selector);
+        freshPaymaster.validatePaymasterUserOp(userOp, bytes32(0), 0);
     }
 }

@@ -13,6 +13,13 @@ import {IAuctionTypes} from "./interfaces/IAuctionTypes.sol";
 contract AuctionRegistry is IAuctionTypes, Ownable {
     using ECDSA for bytes32;
 
+    /* ── Constants ──────────────────────────────────────────────── */
+
+    /// @dev EIP-712 typehash for settlement packet signature verification
+    bytes32 public constant SETTLEMENT_TYPEHASH = keccak256(
+        "AuctionSettlementPacket(bytes32 auctionId,bytes32 manifestHash,bytes32 finalLogHash,uint256 winnerAgentId,address winnerWallet,uint256 winningBidAmount,uint64 closeTimestamp)"
+    );
+
     /* ── Immutables ─────────────────────────────────────────────── */
 
     bytes32 public immutable DOMAIN_SEPARATOR;
@@ -45,11 +52,7 @@ contract AuctionRegistry is IAuctionTypes, Ownable {
     /* ── Events ─────────────────────────────────────────────────── */
 
     event AuctionCreated(
-        bytes32 indexed auctionId,
-        bytes32 manifestHash,
-        uint256 reservePrice,
-        uint256 depositAmount,
-        uint256 deadline
+        bytes32 indexed auctionId, bytes32 manifestHash, uint256 reservePrice, uint256 depositAmount, uint256 deadline
     );
 
     /// @notice CRE EVM Log Trigger fires on this event
@@ -80,6 +83,7 @@ contract AuctionRegistry is IAuctionTypes, Ownable {
     error ZeroAddress();
     error AuctionNotExpired();
     error InvalidEIP712Sig();
+    error ManifestHashMismatch();
 
     /* ── Modifiers ──────────────────────────────────────────────── */
 
@@ -87,6 +91,7 @@ contract AuctionRegistry is IAuctionTypes, Ownable {
         _checkSequencer();
         _;
     }
+
     modifier onlyEscrow() {
         _checkEscrow();
         _;
@@ -168,17 +173,30 @@ contract AuctionRegistry is IAuctionTypes, Ownable {
     }
 
     /// @notice Record auction result — the ONE on-chain write at close
-    /// @dev Verifies sequencer signature over the settlement packet.
+    /// @dev Verifies sequencer EIP-712 signature over the settlement packet.
+    ///      Uses DOMAIN_SEPARATOR to prevent cross-chain replay.
     ///      Emits AuctionEnded which triggers CRE workflow.
-    function recordResult(
-        AuctionSettlementPacket calldata packet,
-        bytes calldata sequencerSig
-    ) external {
+    function recordResult(AuctionSettlementPacket calldata packet, bytes calldata sequencerSig) external {
         AuctionData storage auction = auctions[packet.auctionId];
         if (auction.state != AuctionState.OPEN) revert AuctionNotOpen();
 
-        // Verify sequencer signature
-        bytes32 digest = keccak256(abi.encode(packet));
+        // FIX: Enforce manifestHash integrity — packet must match auction creation
+        if (packet.manifestHash != auction.manifestHash) revert ManifestHashMismatch();
+
+        // Verify sequencer EIP-712 signature (FIX: was raw keccak256, now uses domain separator)
+        bytes32 structHash = keccak256(
+            abi.encode(
+                SETTLEMENT_TYPEHASH,
+                packet.auctionId,
+                packet.manifestHash,
+                packet.finalLogHash,
+                packet.winnerAgentId,
+                packet.winnerWallet,
+                packet.winningBidAmount,
+                packet.closeTimestamp
+            )
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
         address recovered = ECDSA.recover(digest, sequencerSig);
         if (recovered != sequencerAddress) revert InvalidSequencerSig();
 
@@ -220,11 +238,7 @@ contract AuctionRegistry is IAuctionTypes, Ownable {
 
     /// @notice EIP-712 wallet rotation for winner
     /// @dev Domain 2: "AuctionRegistry" — wallet rotation only
-    function updateWinnerWallet(
-        bytes32 auctionId,
-        address newWallet,
-        bytes calldata sig
-    ) external {
+    function updateWinnerWallet(bytes32 auctionId, address newWallet, bytes calldata sig) external {
         AuctionData storage auction = auctions[auctionId];
         if (auction.state != AuctionState.CLOSED && auction.state != AuctionState.SETTLED) {
             revert AuctionNotClosed();
@@ -243,11 +257,7 @@ contract AuctionRegistry is IAuctionTypes, Ownable {
         );
 
         bytes32 structHash = keccak256(
-            abi.encode(
-                keccak256("WalletRotation(bytes32 auctionId,address newWallet)"),
-                auctionId,
-                newWallet
-            )
+            abi.encode(keccak256("WalletRotation(bytes32 auctionId,address newWallet)"), auctionId, newWallet)
         );
 
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", rotationDomainSeparator, structHash));
@@ -268,5 +278,10 @@ contract AuctionRegistry is IAuctionTypes, Ownable {
     function getWinner(bytes32 auctionId) external view returns (uint256 agentId, address wallet, uint256 price) {
         AuctionData storage a = auctions[auctionId];
         return (a.winnerAgentId, a.winnerWallet, a.finalPrice);
+    }
+
+    /// @notice Check if an auction is cancelled (used by AuctionEscrow for refund eligibility)
+    function isCancelled(bytes32 auctionId) external view returns (bool) {
+        return auctions[auctionId].state == AuctionState.CANCELLED;
     }
 }

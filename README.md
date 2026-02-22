@@ -151,7 +151,7 @@ The platform supports three tiers of tasks:
 | **Auction Engine** | Cloudflare Workers + Durable Objects |
 | **Agent Interface** | MCP Streamable HTTP, REST API |
 | **Frontend** | Next.js / React (spectator UI) |
-| **Testing** | Foundry (forge test), 81 tests passing |
+| **Testing** | Foundry (forge test), 113 tests passing |
 
 ## Repository Structure
 
@@ -166,8 +166,10 @@ agent-auction/
 │   │   ├── AuctionRegistry.sol           #   Auction lifecycle + EIP-712 sequencer sigs
 │   │   ├── AuctionEscrow.sol             #   USDC bonds + CRE settlement
 │   │   └── MockKeystoneForwarder.sol     #   Test helper for CRE simulation
-│   ├── test/                             #   81 Foundry tests (all passing)
+│   ├── test/                             #   113 Foundry tests (all passing)
 │   ├── lib/                              #   Dependencies (forge-std, openzeppelin, account-abstraction, chainlink)
+│   ├── docs/                             #   Development documentation for each contract
+│   ├── script/                           #   Deployment scripts (Deploy.s.sol, HelperConfig.s.sol)
 │   └── foundry.toml                      #   Solc 0.8.24, Cancun EVM, optimizer on
 ├── frontend/                             # Next.js spectator UI (WS-3 scope)
 ├── designs/                              # Pencil design files + references
@@ -193,7 +195,7 @@ agent-auction/
 ## Smart Contract Architecture
 
 ```
-L2 (Base Sepolia) — 6 contracts (all compiled & tested, 81 tests passing)
+L2 (Base Sepolia) — 6 contracts (all compiled & tested, 113 tests passing)
 │
 ├── ACCOUNT ABSTRACTION
 │   ├── AgentAccountFactory  → deploys AgentAccount proxies (CREATE2, deterministic)
@@ -210,6 +212,8 @@ L2 (Base Sepolia) — 6 contracts (all compiled & tested, 81 tests passing)
     ├── IAuctionTypes        → AuctionState enum, AuctionSettlementPacket, BondRecord structs
     └── MockKeystoneForwarder → Simulates Chainlink KeystoneForwarder for local CRE testing
 ```
+**Security**: 2-round audit complete, 9 vulnerabilities fixed (see `contracts/docs/`).
+**Deployment**: Scripts in `contracts/script/Deploy.s.sol` + `contracts/script/HelperConfig.s.sol`.
 
 ## Getting Started
 
@@ -230,7 +234,7 @@ npm install
 cd contracts
 forge install        # Install Solidity dependencies
 forge build          # Compile all contracts
-forge test           # Run all 81 tests
+forge test           # Run all 113 tests
 
 # If using Chainlink MCP server for development
 cd ..
@@ -244,7 +248,7 @@ cp .mcp.json.example .mcp.json
 # ── Smart Contracts ──────────────────────────────
 cd contracts
 forge build                    # Compile (solc 0.8.24, Cancun EVM)
-forge test                     # Run all 81 tests
+forge test                     # Run all 113 tests
 forge test -vvv                # Verbose with traces
 forge test --match-contract X  # Run specific test suite
 forge fmt                      # Format Solidity code
@@ -270,7 +274,7 @@ npm run lint                   # ESLint
 - [x] Architecture design complete
 - [ ] ERC-8004 agents can join rooms, bid, post bonds, and settle
 - [ ] CRE Settlement Workflow verifies and settles auctions on-chain
-- [x] EIP-4337 smart wallets implemented (AgentAccount + AgentPaymaster) — 81 tests passing
+- [x] EIP-4337 smart wallets implemented (AgentAccount + AgentPaymaster) — 113 tests passing
 - [x] AuctionEscrow implemented with bonds + CRE `onReport` settlement
 - [ ] ZK registry membership proof functional
 - [ ] Contracts deployed to Base Sepolia

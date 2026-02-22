@@ -46,7 +46,11 @@ contract AgentAccount is BaseAccount, Initializable {
         return _ENTRY_POINT;
     }
 
-    function execute(address target, uint256 value, bytes calldata data) external onlyEntryPointOrSelf returns (bytes memory) {
+    function execute(address target, uint256 value, bytes calldata data)
+        external
+        onlyEntryPointOrSelf
+        returns (bytes memory)
+    {
         (bool success, bytes memory result) = target.call{value: value}(data);
         if (!success) {
             assembly {
@@ -56,11 +60,11 @@ contract AgentAccount is BaseAccount, Initializable {
         return result;
     }
 
-    function executeBatch(
-        address[] calldata targets,
-        uint256[] calldata values,
-        bytes[] calldata datas
-    ) external onlyEntryPointOrSelf returns (bytes[] memory results) {
+    function executeBatch(address[] calldata targets, uint256[] calldata values, bytes[] calldata datas)
+        external
+        onlyEntryPointOrSelf
+        returns (bytes[] memory results)
+    {
         require(targets.length == values.length && values.length == datas.length, "length mismatch");
         results = new bytes[](targets.length);
         for (uint256 i = 0; i < targets.length; i++) {
@@ -81,13 +85,17 @@ contract AgentAccount is BaseAccount, Initializable {
         emit RuntimeSignerRotated(old, newSigner);
     }
 
-    function _validateSignature(
-        PackedUserOperation calldata userOp,
-        bytes32 userOpHash
-    ) internal view override returns (uint256 validationData) {
+    /// @dev FIX: Use tryRecover instead of recover to avoid reverts on malformed signatures.
+    ///      Per EIP-4337, validation should return SIG_VALIDATION_FAILED (1), not revert.
+    function _validateSignature(PackedUserOperation calldata userOp, bytes32 userOpHash)
+        internal
+        view
+        override
+        returns (uint256 validationData)
+    {
         bytes32 ethSignedHash = MessageHashUtils.toEthSignedMessageHash(userOpHash);
-        address recovered = ECDSA.recover(ethSignedHash, userOp.signature);
-        if (recovered != runtimeSigner) return 1;
+        (address recovered, ECDSA.RecoverError err,) = ECDSA.tryRecover(ethSignedHash, userOp.signature);
+        if (err != ECDSA.RecoverError.NoError || recovered != runtimeSigner) return 1;
         return 0;
     }
 

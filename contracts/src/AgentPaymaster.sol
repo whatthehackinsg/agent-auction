@@ -19,9 +19,10 @@ interface IAuctionEscrowBonds {
 /// @title AgentPaymaster — EIP-4337 Paymaster for agent gas sponsorship
 /// @notice Sponsors gas for registered ERC-8004 agents. Method-based gating:
 ///         - USDC.transfer to escrow (bond deposit): only requires ERC-8004 registration
-///         - Other ops: requires existing bond in escrow
+///         - Other ops: requires existing active bond + target must be in allowlist
 /// @dev Extends BasePaymaster (inherits Ownable, stake/deposit helpers).
 ///      MVP postOp: log gas cost only, no escrow deduction.
+///      FIX: Added target allowlist to prevent unbounded gas sponsorship drain.
 contract AgentPaymaster is BasePaymaster {
     /* ── Immutables ─────────────────────────────────────────────── */
 
@@ -35,11 +36,16 @@ contract AgentPaymaster is BasePaymaster {
     /// @notice Mapping from AgentAccount address → ERC-8004 agentId (set by admin)
     mapping(address => uint256) public accountToAgentId;
 
+    /// @notice FIX: Allowlist of target contracts for non-bond sponsored ops
+    /// @dev Prevents agents from sponsoring calls to arbitrary contracts (paymaster drain)
+    mapping(address => bool) public allowedTargets;
+
     /* ── Events ─────────────────────────────────────────────────── */
 
     event EscrowUpdated(address indexed oldEscrow, address indexed newEscrow);
     event AgentRegistered(address indexed account, uint256 indexed agentId);
     event GasSponsored(address indexed account, uint256 actualGasCost);
+    event AllowedTargetUpdated(address indexed target, bool allowed);
 
     /* ── Errors ─────────────────────────────────────────────────── */
 
@@ -49,14 +55,11 @@ contract AgentPaymaster is BasePaymaster {
     error InsufficientBond();
     error UnsupportedOperation();
     error AgentIdNotMapped();
+    error TargetNotAllowed();
 
     /* ── Constructor ────────────────────────────────────────────── */
 
-    constructor(
-        IEntryPoint entryPoint_,
-        IERC20 usdc_,
-        IERC8004Registry identityRegistry_
-    ) BasePaymaster(entryPoint_) {
+    constructor(IEntryPoint entryPoint_, IERC20 usdc_, IERC8004Registry identityRegistry_) BasePaymaster(entryPoint_) {
         USDC = usdc_;
         IDENTITY_REGISTRY = identityRegistry_;
     }
@@ -76,16 +79,27 @@ contract AgentPaymaster is BasePaymaster {
         emit AgentRegistered(account, agentId);
     }
 
+    /// @notice FIX: Set allowed target contracts for sponsored non-bond ops
+    function setAllowedTarget(address target, bool allowed) external onlyOwner {
+        allowedTargets[target] = allowed;
+        emit AllowedTargetUpdated(target, allowed);
+    }
+
     /* ── Core: validatePaymasterUserOp ──────────────────────────── */
 
     /// @dev Method-based gating per spec Section 3:
     ///      - Bond deposit (USDC.transfer → escrow): ERC-8004 registration check only
-    ///      - Other ops: require existing bond
+    ///      - Other ops: require existing active bond + target in allowlist
     function _validatePaymasterUserOp(
         PackedUserOperation calldata userOp,
         bytes32, /* userOpHash */
         uint256 /* maxCost */
-    ) internal view override returns (bytes memory context, uint256 validationData) {
+    )
+        internal
+        view
+        override
+        returns (bytes memory context, uint256 validationData)
+    {
         // userOp.callData is AgentAccount.execute(target, value, data) or similar
         if (userOp.callData.length < 4) revert UnsupportedOperation();
         bytes4 outerSelector = bytes4(userOp.callData[:4]);
@@ -107,7 +121,12 @@ contract AgentPaymaster is BasePaymaster {
             if (IDENTITY_REGISTRY.ownerOf(agentId) == address(0)) revert AgentNotRegistered();
             return (abi.encode(userOp.sender), 0); // SIG_VALIDATION_SUCCESS = 0
         }
-        // ALL OTHER OPS: require existing bond
+        // ALL OTHER OPS: require existing active bond + target in allowlist
+        if (address(escrow) == address(0)) revert EscrowNotSet();
+
+        // FIX: Restrict targets to allowlisted contracts only
+        if (!allowedTargets[target]) revert TargetNotAllowed();
+
         // For non-bond ops, we need the auctionId from paymasterAndData
         // paymasterAndData layout: [20 bytes paymaster addr][16 bytes gas limits][paymaster data...]
         // PAYMASTER_DATA_OFFSET = 52 in v0.7 BasePaymaster
@@ -127,7 +146,10 @@ contract AgentPaymaster is BasePaymaster {
         bytes calldata context,
         uint256 actualGasCost,
         uint256 /* actualUserOpFeePerGas */
-    ) internal override {
+    )
+        internal
+        override
+    {
         address account = abi.decode(context, (address));
         emit GasSponsored(account, actualGasCost);
     }
@@ -140,12 +162,15 @@ contract AgentPaymaster is BasePaymaster {
         }
     }
 
-    function _sliceBytes(bytes memory data, uint256 start) internal pure returns (bytes memory) {
+    /// @dev FIX: Optimized with assembly MCOPY (Cancun EVM) instead of byte-by-byte loop
+    function _sliceBytes(bytes memory data, uint256 start) internal pure returns (bytes memory result) {
         require(data.length >= start, "slice out of bounds");
-        bytes memory result = new bytes(data.length - start);
-        for (uint256 i = 0; i < result.length; i++) {
-            result[i] = data[i + start];
+        uint256 len = data.length - start;
+        result = new bytes(len);
+        if (len > 0) {
+            assembly {
+                mcopy(add(result, 0x20), add(add(data, 0x20), start), len)
+            }
         }
-        return result;
     }
 }

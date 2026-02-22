@@ -12,8 +12,9 @@
 agent-auction/
 ├── contracts/                  # Foundry project — 6 Solidity contracts + tests (see contracts/AGENTS.md)
 │   ├── src/                    #   Source contracts (AgentAccount, AgentPaymaster, AuctionRegistry, AuctionEscrow, etc.)
-│   ├── test/                   #   Foundry tests (81 tests, all passing)
+│   ├── test/                   #   Foundry tests (113 tests, all passing)
 │   ├── lib/                    #   Dependencies (account-abstraction v0.7, openzeppelin v5.1, chainlink v2.19, forge-std)
+│   ├── docs/                   #   Development documentation for each contract
 │   └── foundry.toml            #   Solc 0.8.24, Cancun EVM, optimizer on
 ├── frontend/                   # Next.js spectator UI (scaffolded, WS-3 scope)
 ├── designs/                    # Pencil design files + references
@@ -46,7 +47,7 @@ agent-auction/
 # ── Contracts (Foundry) ──────────────────────────────────────
 cd contracts
 forge build                    # Compile (solc 0.8.24, Cancun EVM)
-forge test                     # Run all 81 tests
+forge test                     # Run all 113 tests
 forge test -vvv                # Verbose with traces
 forge test --match-contract X  # Run specific test suite
 forge fmt                      # Format Solidity code
@@ -142,6 +143,8 @@ TEST ONLY
 
 **Deployment Order**: External deps (USDC, IdentityRegistry, EntryPoint, Forwarder) → AgentAccountFactory → AgentPaymaster → AuctionRegistry → AuctionEscrow → Cross-bind (setEscrow, setRegistry)
 
+**Security**: 2-round audit complete, 9 vulnerabilities fixed (see contracts/docs/)
+
 ## Tech Stack Reference
 
 | Layer | Technology |
@@ -155,7 +158,7 @@ TEST ONLY
 | Auction Engine | Cloudflare Workers + Durable Objects |
 | Agent Interface | MCP Streamable HTTP + SSE, REST API |
 | Frontend | Next.js / React |
-| Testing | Foundry (forge test), 81 tests passing |
+| Testing | Foundry (forge test), 113 tests passing |
 
 ## Chainlink References
 
