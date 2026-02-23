@@ -41,6 +41,12 @@ npm install @chainlink/cre-sdk viem zod
 cre workflow simulate settlement --target base-sepolia
 ```
 
+## Environment Policy (Important)
+
+- **Local simulation with Chainlink MockForwarder**: metadata validation may not be available end-to-end. Use simulation-only settings/instances for rapid iteration.
+- **Local contracts testing with this repo's `MockKeystoneForwarder`**: configure expected values to match mock metadata.
+- **Any real KeystoneForwarder path (testnet or production)**: `configureCRE(...)` is **mandatory** before settlement. `AuctionEscrow.onReport()` is fail-closed and reverts when CRE is not configured.
+
 ## Deploy
 
 ```bash
@@ -50,7 +56,7 @@ cre workflow activate settlement --target base-sepolia
 
 ## Post-Deploy: Configure AuctionEscrow
 
-After deploying the CRE workflow, configure AuctionEscrow with the workflow credentials:
+After deploying and activating the CRE workflow, configure AuctionEscrow with workflow credentials (required for any real-forwarder deployment):
 
 ```bash
 cast send $ESCROW "configureCRE(bytes32,bytes10,address)" \

@@ -369,16 +369,14 @@ contract AuctionEscrowTest is Test {
         escrow.onReport(badMetadata, report);
     }
 
-    /// @dev FIX TEST: onReport skips workflowName check when not configured
-    function test_onReport_skipsWorkflowNameCheckWhenNotConfigured() public {
+    /// @dev FIX TEST: onReport reverts when CRE expectations are not configured
+    function test_onReport_revertsIfCRENotConfigured() public {
         // Deploy fresh registry + escrow pair so markSettled works
         AuctionRegistry freshRegistry = new AuctionRegistry(sequencer);
         AuctionEscrow freshEscrow = new AuctionEscrow(IERC20(address(usdc)), address(forwarder));
         freshRegistry.setEscrow(address(freshEscrow));
         freshEscrow.setRegistry(address(freshRegistry));
         usdc.mint(address(freshEscrow), 1000e6);
-        freshEscrow.setExpectedWorkflowId(workflowId);
-        freshEscrow.setExpectedAuthor(workflowOwner);
         // Create auction on fresh registry
         vm.prank(sequencer);
         freshRegistry.createAuction(
@@ -412,8 +410,9 @@ contract AuctionEscrowTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(sequencerPk, digest);
         freshRegistry.recordResult(packet, abi.encodePacked(r, s, v));
 
-        // Forward with any workflowName - should pass since expectedWorkflowName is bytes10(0)
+        // Settlement is rejected because CRE expectations were never configured on escrow
         bytes memory report = _buildReport();
+        vm.expectRevert(AuctionEscrow.CRENotConfigured.selector);
         forwarder.forwardReport(address(freshEscrow), report);
     }
 
@@ -789,6 +788,32 @@ contract AuctionEscrowTest is Test {
         assertEq(escrow.expectedWorkflowId(), newId);
         assertEq(escrow.expectedWorkflowName(), newName);
         assertEq(escrow.expectedAuthor(), address(0x2222222222222222222222222222222222222222));
+    }
+
+    function test_setExpectedWorkflowId_revertsZero() public {
+        vm.expectRevert(AuctionEscrow.InvalidCREConfig.selector);
+        escrow.setExpectedWorkflowId(bytes32(0));
+    }
+
+    function test_setExpectedWorkflowName_revertsZero() public {
+        vm.expectRevert(AuctionEscrow.InvalidCREConfig.selector);
+        escrow.setExpectedWorkflowName(bytes10(0));
+    }
+
+    function test_setExpectedAuthor_revertsZero() public {
+        vm.expectRevert(AuctionEscrow.InvalidCREConfig.selector);
+        escrow.setExpectedAuthor(address(0));
+    }
+
+    function test_configureCRE_revertsZero() public {
+        vm.expectRevert(AuctionEscrow.InvalidCREConfig.selector);
+        escrow.configureCRE(bytes32(0), bytes10("bad-config"), address(0x2222222222222222222222222222222222222222));
+
+        vm.expectRevert(AuctionEscrow.InvalidCREConfig.selector);
+        escrow.configureCRE(keccak256("settlement-workflow"), bytes10(0), address(0x2222222222222222222222222222222222222222));
+
+        vm.expectRevert(AuctionEscrow.InvalidCREConfig.selector);
+        escrow.configureCRE(keccak256("settlement-workflow"), bytes10("validname"), address(0));
     }
 
     function test_setExpectedWorkflowName_bytes10() public {

@@ -38,6 +38,7 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
     bytes32 public expectedWorkflowId;
     bytes10 public expectedWorkflowName; // FIX: changed from string to bytes10 (CRE metadata native type)
     address public expectedAuthor;
+    bool public isCREConfigured;
 
     /* ── External contracts ─────────────────────────────────────── */
 
@@ -94,6 +95,8 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
     error ZeroAddress();
     error ZeroAmount();
     error InvalidReport();
+    error CRENotConfigured();
+    error InvalidCREConfig();
     error SolvencyViolation();
     error UnauthorizedWithdraw();
     error DesignatedWalletConflict(); // FIX: new error for cross-auction wallet misrouting
@@ -148,21 +151,31 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
 
     /// @notice Configure expected CRE workflow parameters (called after CRE registration)
     function setExpectedWorkflowId(bytes32 workflowId_) external onlyOwner {
+        if (workflowId_ == bytes32(0)) revert InvalidCREConfig();
         expectedWorkflowId = workflowId_;
+        _setCREConfigured();
     }
 
     function setExpectedWorkflowName(bytes10 name_) external onlyOwner {
+        if (name_ == bytes10(0)) revert InvalidCREConfig();
         expectedWorkflowName = name_;
+        _setCREConfigured();
     }
 
     function setExpectedAuthor(address author_) external onlyOwner {
+        if (author_ == address(0)) revert InvalidCREConfig();
         expectedAuthor = author_;
+        _setCREConfigured();
     }
 
     function configureCRE(bytes32 workflowId_, bytes10 name_, address author_) external onlyOwner {
+        if (workflowId_ == bytes32(0) || name_ == bytes10(0) || author_ == address(0)) {
+            revert InvalidCREConfig();
+        }
         expectedWorkflowId = workflowId_;
         expectedWorkflowName = name_;
         expectedAuthor = author_;
+        isCREConfigured = true;
         emit CREConfigured(workflowId_, name_, author_);
     }
 
@@ -210,6 +223,8 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
     ///      Metadata layout (per Chainlink spec):
     ///        bytes32 workflowId | bytes10 workflowName | address workflowOwner | bytes2 reportId
     function onReport(bytes calldata metadata, bytes calldata report) external onlyForwarder {
+        if (!isCREConfigured) revert CRENotConfigured();
+
         // Validate CRE metadata
         if (metadata.length < 64) revert InvalidReport();
 
@@ -219,12 +234,19 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
         // workflowOwner is address at offset 42 (32+10)
         address workflowOwner = address(bytes20(metadata[42:62]));
 
-        // Verify expected values (skip check if not configured)
-        if (expectedWorkflowId != bytes32(0) && workflowId != expectedWorkflowId) revert InvalidReport();
-        if (expectedWorkflowName != bytes10(0) && workflowName != expectedWorkflowName) revert InvalidReport();
-        if (expectedAuthor != address(0) && workflowOwner != expectedAuthor) revert InvalidReport();
+        // Verify expected values
+        if (workflowId != expectedWorkflowId) revert InvalidReport();
+        if (workflowName != expectedWorkflowName) revert InvalidReport();
+        if (workflowOwner != expectedAuthor) revert InvalidReport();
 
         _processReport(report);
+    }
+
+    function _setCREConfigured() internal {
+        isCREConfigured =
+            expectedWorkflowId != bytes32(0)
+                && expectedWorkflowName != bytes10(0)
+                && expectedAuthor != address(0);
     }
 
     /// @dev Decode and execute settlement: release winner bond, mark settled

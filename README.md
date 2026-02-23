@@ -174,7 +174,8 @@ agent-auction/
 │   └── base-sepolia.json               #   All contract addresses + ABIs + config
 ├── frontend/                            # Next.js spectator UI (WS-3 scope)
 ├── designs/                             # Pencil design files + references
-├── docs/
+├── docs/                                # Documentation (see docs/README.md for full index)
+│   ├── README.md                        #   ★ Documentation index & navigation guide
 │   ├── full_contract_arch(amended).md   # ★ SOURCE OF TRUTH — full architecture spec
 │   ├── developer-guide.md              #   Developer onboarding + integration guide
 │   ├── research/                        #   Architecture research + English deep specs (01–06)
@@ -284,6 +285,12 @@ npm run build                  # Production build
 npm run lint                   # ESLint
 ```
 
+### CRE Configuration Policy
+
+- **Real KeystoneForwarder (testnet + production)**: `AuctionEscrow.configureCRE(...)` is mandatory before settlement.
+- **Contract behavior**: `onReport()` is fail-closed and reverts when CRE is not configured.
+- **Simulation**: local simulation may use mock-forwarder-only settings; do not treat that as production authorization posture.
+
 ## Roadmap
 
 | Phase | Focus | Status |
@@ -304,6 +311,8 @@ npm run lint                   # ESLint
 - [ ] Any third party can replay the event log and arrive at the same winner
 
 ## Developer Guide
+
+For a full index of all documentation — architecture specs, deep specs, workstream plans, troubleshooting solutions, and legacy design docs — see **[`docs/README.md`](docs/README.md)**.
 
 For detailed developer onboarding — how to interact with deployed contracts, create auctions, deposit bonds, run CRE settlement, and integrate with the platform — see **[`docs/developer-guide.md`](docs/developer-guide.md)**.
 

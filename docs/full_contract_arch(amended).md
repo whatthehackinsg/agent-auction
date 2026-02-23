@@ -879,15 +879,16 @@ Step 9:  DO Sequencer deploy + ZK vkey configuration
          ACTION: configure MPC committee API endpoint + committee pubkey
 
 Step 10: CRE Workflow registration (Chainlink Runtime Environment)
-         ACTION: register CRE Workflow with:
-           - Trigger: EVM Log Trigger on AuctionRegistry.AuctionEnded event
-           - Compute: fetch ReplayBundleV1, sha256 verify, Poseidon chain replay, rule replay
-           - Write: EVMClient → KeystoneForwarder → AuctionEscrow.onReport()
-         ACTION: record workflowId, workflowName ("auctSettle"), workflowOwner
-         ACTION: call AuctionEscrow.setExpectedWorkflowId(workflowId)
-         ACTION: call AuctionEscrow.setExpectedWorkflowName("auctSettle")
-         ACTION: call AuctionEscrow.setExpectedAuthor(workflowOwnerAddress)
-         ACTION: for local dev, deploy MockKeystoneForwarder that calls onReport() directly
+          ACTION: register CRE Workflow with:
+            - Trigger: EVM Log Trigger on AuctionRegistry.AuctionEnded event
+            - Compute: fetch ReplayBundleV1, sha256 verify, Poseidon chain replay, rule replay
+            - Write: EVMClient → KeystoneForwarder → AuctionEscrow.onReport()
+          ACTION: record workflowId, workflowName ("auctSettle"), workflowOwner
+          ACTION: call AuctionEscrow.configureCRE(workflowId, workflowNameBytes10, workflowOwnerAddress)
+          RULE: for any real KeystoneForwarder deployment (testnet or production), configureCRE is mandatory before settlement
+          RULE: AuctionEscrow.onReport() is fail-closed; if CRE is not configured, settlement reverts
+          NOTE: simulation environments using Chainlink MockForwarder can use simulation-only settings because metadata checks may not be available end-to-end
+          ACTION: for local contract dev/tests, deploy MockKeystoneForwarder that calls onReport() directly with matching metadata
 ```
 
 **Verification key deployment note:** ZK vkeys (bid_range_vkey.json, registry_member_vkey.json) are produced by the trusted setup ceremony (Circom → snarkjs phase 2 → `snarkjs zkey export verificationkey`). Load into DO at startup. Any circuit change requires re-running phase 2 and re-loading vkeys. No Solidity verifier redeployment needed.
