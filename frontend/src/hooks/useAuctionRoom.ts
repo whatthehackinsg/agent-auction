@@ -13,13 +13,15 @@ export interface AuctionEvent {
 }
 
 export function useAuctionRoom(auctionId: string | undefined) {
-  const [events, setEvents] = useState<AuctionEvent[]>([])
+  const [events] = useState<AuctionEvent[]>([])
   const [isConnected, setIsConnected] = useState(false)
 
   // STUB: Real WebSocket connection implemented in Task 19
   // Will connect to ws://ENGINE_URL/auctions/:id/stream
   const connect = useCallback(() => {
-    console.log('[useAuctionRoom] WebSocket connection stub — will be implemented in Task 19')
+    console.log(
+      `[useAuctionRoom] WebSocket connection stub for auction ${auctionId ?? 'unknown'} — will be implemented in Task 19`,
+    )
     setIsConnected(false)
   }, [auctionId])
 

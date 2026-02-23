@@ -42,10 +42,12 @@ function toBlobPart(payload: Uint8Array | ArrayBuffer | string): BlobPart {
   }
 
   if (payload instanceof Uint8Array) {
-    return payload
+    const copy = new Uint8Array(payload.byteLength)
+    copy.set(payload)
+    return copy.buffer
   }
 
-  return new Uint8Array(payload)
+  return payload
 }
 
 function toErrorBody(body: string | undefined): string {
