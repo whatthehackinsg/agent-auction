@@ -5,11 +5,12 @@
  * and the validateAction dispatcher.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { ActionType, type ActionRequest } from '../src/types/engine'
 import {
   checkNonce,
   checkNullifier,
+  commitValidationMutation,
   handleJoin,
   handleBid,
   handleDeliver,
@@ -62,6 +63,11 @@ describe('checkNonce', () => {
 
   beforeEach(() => {
     storage = createMockStorage()
+    process.env.ENGINE_ALLOW_INSECURE_STUBS = 'true'
+  })
+
+  afterEach(() => {
+    delete process.env.ENGINE_ALLOW_INSECURE_STUBS
   })
 
   it('accepts nonce 0 for first action', async () => {
@@ -69,8 +75,7 @@ describe('checkNonce', () => {
       checkNonce(TEST_AGENT, ActionType.JOIN, 0, storage),
     ).resolves.toBeUndefined()
 
-    // Verify nonce was stored
-    expect(storage._store.get(`nonce:${TEST_AGENT}:JOIN`)).toBe(0)
+    expect(storage._store.get(`nonce:${TEST_AGENT}:JOIN`)).toBeUndefined()
   })
 
   it('rejects non-zero nonce for first action', async () => {
@@ -81,14 +86,29 @@ describe('checkNonce', () => {
 
   it('accepts sequential nonces 0, 1, 2', async () => {
     await checkNonce(TEST_AGENT, ActionType.BID, 0, storage)
+    await commitValidationMutation(
+      { agentId: TEST_AGENT, actionType: ActionType.BID, nonce: 0 },
+      storage,
+    )
     await checkNonce(TEST_AGENT, ActionType.BID, 1, storage)
+    await commitValidationMutation(
+      { agentId: TEST_AGENT, actionType: ActionType.BID, nonce: 1 },
+      storage,
+    )
     await checkNonce(TEST_AGENT, ActionType.BID, 2, storage)
+    await commitValidationMutation(
+      { agentId: TEST_AGENT, actionType: ActionType.BID, nonce: 2 },
+      storage,
+    )
 
     expect(storage._store.get(`nonce:${TEST_AGENT}:BID`)).toBe(2)
   })
 
   it('rejects duplicate nonce', async () => {
-    await checkNonce(TEST_AGENT, ActionType.BID, 0, storage)
+    await commitValidationMutation(
+      { agentId: TEST_AGENT, actionType: ActionType.BID, nonce: 0 },
+      storage,
+    )
     await expect(
       checkNonce(TEST_AGENT, ActionType.BID, 0, storage),
     ).rejects.toThrow('expected 1')
@@ -100,16 +120,30 @@ describe('checkNullifier', () => {
 
   beforeEach(() => {
     storage = createMockStorage()
+    process.env.ENGINE_ALLOW_INSECURE_STUBS = 'true'
+  })
+
+  afterEach(() => {
+    delete process.env.ENGINE_ALLOW_INSECURE_STUBS
   })
 
   it('accepts fresh nullifier', async () => {
     await expect(
       checkNullifier('0xdeadbeef', storage),
     ).resolves.toBeUndefined()
+    expect(storage._store.has('nullifier:0xdeadbeef')).toBe(false)
   })
 
   it('rejects double-spent nullifier', async () => {
-    await checkNullifier('0xdeadbeef', storage)
+    await commitValidationMutation(
+      {
+        agentId: TEST_AGENT,
+        actionType: ActionType.JOIN,
+        nonce: 0,
+        nullifierHash: '0xdeadbeef',
+      },
+      storage,
+    )
     await expect(
       checkNullifier('0xdeadbeef', storage),
     ).rejects.toThrow('Nullifier already spent')
@@ -121,15 +155,22 @@ describe('handleJoin', () => {
 
   beforeEach(() => {
     storage = createMockStorage()
+    process.env.ENGINE_ALLOW_INSECURE_STUBS = 'true'
+  })
+
+  afterEach(() => {
+    delete process.env.ENGINE_ALLOW_INSECURE_STUBS
   })
 
   it('valid join with nonce 0 succeeds', async () => {
     const action = makeAction({ type: ActionType.JOIN, nonce: 0 })
     const result = await handleJoin(action, storage, TEST_AUCTION_ID)
 
-    expect(result.type).toBe(ActionType.JOIN)
-    expect(result.agentId).toBe(TEST_AGENT)
-    expect(result.wallet).toBe(TEST_WALLET)
+    expect(result.action.type).toBe(ActionType.JOIN)
+    expect(result.action.agentId).toBe(TEST_AGENT)
+    expect(result.action.wallet).toBe(TEST_WALLET)
+    expect(result.mutation.nullifierHash).toMatch(/^0x[0-9a-f]+$/)
+    expect(storage._store.size).toBe(0)
   })
 
   it('join with wrong nonce (1 instead of 0) fails', async () => {
@@ -137,11 +178,13 @@ describe('handleJoin', () => {
     await expect(
       handleJoin(action, storage, TEST_AUCTION_ID),
     ).rejects.toThrow('expected 0')
+    expect(storage._store.size).toBe(0)
   })
 
   it('double-join from same wallet fails (nullifier)', async () => {
     const action = makeAction({ type: ActionType.JOIN, nonce: 0 })
-    await handleJoin(action, storage, TEST_AUCTION_ID)
+    const first = await handleJoin(action, storage, TEST_AUCTION_ID)
+    await commitValidationMutation(first.mutation, storage)
 
     // Second join from same wallet — nullifier already spent
     const action2 = makeAction({ type: ActionType.JOIN, nonce: 1 })
@@ -156,6 +199,11 @@ describe('handleBid', () => {
 
   beforeEach(() => {
     storage = createMockStorage()
+    process.env.ENGINE_ALLOW_INSECURE_STUBS = 'true'
+  })
+
+  afterEach(() => {
+    delete process.env.ENGINE_ALLOW_INSECURE_STUBS
   })
 
   it('valid bid with amount > highestBid succeeds', async () => {
@@ -166,8 +214,9 @@ describe('handleBid', () => {
     })
     const result = await handleBid(action, storage, TEST_AUCTION_ID, '1000000')
 
-    expect(result.type).toBe(ActionType.BID)
-    expect(result.amount).toBe('2000000')
+    expect(result.action.type).toBe(ActionType.BID)
+    expect(result.action.amount).toBe('2000000')
+    expect(storage._store.size).toBe(0)
   })
 
   it('bid with amount <= highestBid fails', async () => {
@@ -209,6 +258,11 @@ describe('handleDeliver', () => {
 
   beforeEach(() => {
     storage = createMockStorage()
+    process.env.ENGINE_ALLOW_INSECURE_STUBS = 'true'
+  })
+
+  afterEach(() => {
+    delete process.env.ENGINE_ALLOW_INSECURE_STUBS
   })
 
   it('valid deliver succeeds', async () => {
@@ -219,8 +273,8 @@ describe('handleDeliver', () => {
     })
     const result = await handleDeliver(action, storage, TEST_AUCTION_ID)
 
-    expect(result.type).toBe(ActionType.DELIVER)
-    expect(result.agentId).toBe(TEST_AGENT)
+    expect(result.action.type).toBe(ActionType.DELIVER)
+    expect(result.action.agentId).toBe(TEST_AGENT)
   })
 })
 
@@ -229,12 +283,17 @@ describe('validateAction (dispatcher)', () => {
 
   beforeEach(() => {
     storage = createMockStorage()
+    process.env.ENGINE_ALLOW_INSECURE_STUBS = 'true'
+  })
+
+  afterEach(() => {
+    delete process.env.ENGINE_ALLOW_INSECURE_STUBS
   })
 
   it('routes JOIN to handleJoin', async () => {
     const action = makeAction({ type: ActionType.JOIN, nonce: 0 })
     const result = await validateAction(action, storage, TEST_AUCTION_ID, '0')
-    expect(result.type).toBe(ActionType.JOIN)
+    expect(result.action.type).toBe(ActionType.JOIN)
   })
 
   it('routes BID to handleBid', async () => {
@@ -244,14 +303,14 @@ describe('validateAction (dispatcher)', () => {
       amount: '1000000',
     })
     const result = await validateAction(action, storage, TEST_AUCTION_ID, '0')
-    expect(result.type).toBe(ActionType.BID)
-    expect(result.amount).toBe('1000000')
+    expect(result.action.type).toBe(ActionType.BID)
+    expect(result.action.amount).toBe('1000000')
   })
 
   it('routes DELIVER to handleDeliver', async () => {
     const action = makeAction({ type: ActionType.DELIVER, nonce: 0 })
     const result = await validateAction(action, storage, TEST_AUCTION_ID, '0')
-    expect(result.type).toBe(ActionType.DELIVER)
+    expect(result.action.type).toBe(ActionType.DELIVER)
   })
 
   it('rejects unsupported action type', async () => {
@@ -259,5 +318,21 @@ describe('validateAction (dispatcher)', () => {
     await expect(
       validateAction(action, storage, TEST_AUCTION_ID, '0'),
     ).rejects.toThrow('Unsupported action type')
+  })
+})
+
+describe('fail-closed validation', () => {
+  let storage: ReturnType<typeof createMockStorage>
+
+  beforeEach(() => {
+    storage = createMockStorage()
+    delete process.env.ENGINE_ALLOW_INSECURE_STUBS
+  })
+
+  it('rejects action signatures when insecure stubs are disabled', async () => {
+    const action = makeAction({ type: ActionType.JOIN, nonce: 0 })
+    await expect(handleJoin(action, storage, TEST_AUCTION_ID)).rejects.toThrow(
+      'Invalid EIP-712 signature',
+    )
   })
 })

@@ -200,7 +200,7 @@ describe('API routes (Hono)', () => {
     expect(json.events[1].seq).toBe(2)
   })
 
-  it('x402-gated endpoints return 402 without receipt', async () => {
+  it('manifest/events endpoints are open when x402 mode is off', async () => {
     const auctionId = randomAuctionId()
     await db
       .prepare(
@@ -210,14 +210,15 @@ describe('API routes (Hono)', () => {
       .run()
 
     const eventsRes = await app.request(`http://localhost/auctions/${auctionId}/events`, {}, env)
-    expect(eventsRes.status).toBe(402)
+    expect(eventsRes.status).toBe(200)
 
     const manifestRes = await app.request(`http://localhost/auctions/${auctionId}/manifest`, {}, env)
-    expect(manifestRes.status).toBe(402)
+    expect(manifestRes.status).toBe(200)
   })
 
-  it('rejects duplicate x402 receipt hash with 409', async () => {
+  it('rejects duplicate x402 receipt hash with 409 in insecure header-hash mode', async () => {
     const auctionId = randomAuctionId()
+    env.X402_MODE = 'insecure_header_hash'
     await db
       .prepare(
         'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)',
@@ -238,10 +239,12 @@ describe('API routes (Hono)', () => {
       env,
     )
     expect(second.status).toBe(409)
+    delete env.X402_MODE
   })
 
-  it('GET /auctions/:id/manifest succeeds with valid x402 receipt', async () => {
+  it('GET /auctions/:id/manifest succeeds with valid x402 receipt in insecure header-hash mode', async () => {
     const auctionId = randomAuctionId()
+    env.X402_MODE = 'insecure_header_hash'
     const manifestHash = '0x' + 'cd'.repeat(32)
     await db
       .prepare(
@@ -259,6 +262,7 @@ describe('API routes (Hono)', () => {
     const body = await res.json()
     expect(body.auctionId).toBe(auctionId)
     expect(body.manifestHash).toBe(manifestHash)
+    delete env.X402_MODE
   })
 
   it('GET /auctions/:id/replay returns canonical replay bytes', async () => {

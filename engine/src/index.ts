@@ -11,6 +11,7 @@ export interface Env {
   AUCTION_DB: D1Database
   AUCTION_ROOM: DurableObjectNamespace
   SEQUENCER_PRIVATE_KEY: string
+  X402_MODE?: string
 }
 
 const app = new Hono<{ Bindings: Env }>()

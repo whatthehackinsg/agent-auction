@@ -11,6 +11,8 @@ import { Miniflare } from "miniflare";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+process.env.ENGINE_ALLOW_INSECURE_STUBS = "true";
+
 // ─── Schema ──────────────────────────────────────────────────────────
 
 const SCHEMA_PATH = path.resolve(__dirname, "..", "schema.sql");

@@ -8,7 +8,7 @@ import type {
 import { ActionType } from './types/engine'
 import { computeEventHash, computePayloadHash, ZERO_HASH } from './lib/crypto'
 import { toHex, toBytes } from 'viem'
-import { validateAction } from './handlers/actions'
+import { validateAction, commitValidationMutation } from './handlers/actions'
 import type { AuctionSettlementPacket } from './types/contracts'
 import { recordResultOnChain, signSettlementPacket } from './lib/settlement'
 import { signInclusionReceipt } from './lib/inclusion-receipt'
@@ -215,13 +215,14 @@ export class AuctionRoom implements DurableObject {
         }
       }
 
-      const validated = await validateAction(
+      const validation = await validateAction(
         action,
         this.state.storage,
         this.auctionId,
         this.highestBid,
       )
-      const result = await this.ingestAction(validated)
+      const result = await this.ingestAction(validation.action)
+      await commitValidationMutation(validation.mutation, this.state.storage)
       return Response.json(result)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown error'

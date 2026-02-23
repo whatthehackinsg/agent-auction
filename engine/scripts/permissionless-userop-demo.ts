@@ -45,6 +45,11 @@ const publicClient = createPublicClient({
 const owner = privateKeyToAccount(privateKey as Hex)
 
 async function main() {
+  const chainId = await publicClient.getChainId()
+  if (chainId !== baseSepolia.id) {
+    throw new Error(`RPC chainId mismatch: expected ${baseSepolia.id}, got ${chainId}`)
+  }
+
   const account = await toSimpleSmartAccount({
     client: publicClient,
     owner,

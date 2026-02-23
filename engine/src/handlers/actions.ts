@@ -14,6 +14,18 @@ import { ActionType } from '../types/engine'
 import type { ActionRequest, ValidatedAction } from '../types/engine'
 import { toBytes, toHex } from 'viem'
 
+export interface ValidationMutation {
+  agentId: string
+  actionType: ActionType
+  nonce: number
+  nullifierHash?: string
+}
+
+export interface ValidationResult {
+  action: ValidatedAction
+  mutation: ValidationMutation
+}
+
 // ─── Storage Key Helpers ──────────────────────────────────────────────
 
 /** Storage key for an agent's last accepted nonce for a given action type */
@@ -31,7 +43,6 @@ function nullifierKey(hash: string): string {
 /**
  * Check that the action nonce is sequential for this agent+actionType.
  * First action must have nonce 0; subsequent must be lastSeen + 1.
- * On success, stores the new nonce.
  */
 export async function checkNonce(
   agentId: string,
@@ -59,14 +70,12 @@ export async function checkNonce(
     }
   }
 
-  // Store accepted nonce
-  await storage.put(key, nonce)
 }
 
 // ─── Nullifier Validation ─────────────────────────────────────────────
 
 /**
- * Check that a nullifier hash has not been spent. If valid, marks it as spent.
+ * Check that a nullifier hash has not been spent.
  * Used for JOIN actions to prevent double-joining.
  */
 export async function checkNullifier(
@@ -80,7 +89,16 @@ export async function checkNullifier(
     throw new Error(`Nullifier already spent: ${nullifierHash}`)
   }
 
-  await storage.put(key, true)
+}
+
+export async function commitValidationMutation(
+  mutation: ValidationMutation,
+  storage: DurableObjectStorage,
+): Promise<void> {
+  await storage.put(nonceKey(mutation.agentId, mutation.actionType), mutation.nonce)
+  if (mutation.nullifierHash) {
+    await storage.put(nullifierKey(mutation.nullifierHash), true)
+  }
 }
 
 // ─── Signature Verification (stub) ───────────────────────────────────
@@ -100,6 +118,13 @@ function verifySignature(action: ActionRequest): void {
   }
 }
 
+async function verifyMembership(action: ActionRequest): Promise<void> {
+  const result = await verifyMembershipProof(action.proof ?? null, null)
+  if (!result.valid) {
+    throw new Error(`Invalid membership proof for agent ${action.agentId}`)
+  }
+}
+
 // ─── Per-Action Handlers ──────────────────────────────────────────────
 
 /**
@@ -110,8 +135,9 @@ export async function handleJoin(
   action: ActionRequest,
   storage: DurableObjectStorage,
   auctionId: string,
-): Promise<ValidatedAction> {
+): Promise<ValidationResult> {
   verifySignature(action)
+  await verifyMembership(action)
 
   // Derive and check nullifier for join uniqueness
   const nullifier = deriveNullifier(
@@ -126,13 +152,21 @@ export async function handleJoin(
   await checkNonce(action.agentId, ActionType.JOIN, action.nonce, storage)
 
   return {
-    type: action.type,
-    agentId: action.agentId,
-    wallet: action.wallet,
-    amount: action.amount,
-    nonce: action.nonce,
-    signature: action.signature,
-    proof: action.proof,
+    action: {
+      type: action.type,
+      agentId: action.agentId,
+      wallet: action.wallet,
+      amount: action.amount,
+      nonce: action.nonce,
+      signature: action.signature,
+      proof: action.proof,
+    },
+    mutation: {
+      agentId: action.agentId,
+      actionType: ActionType.JOIN,
+      nonce: action.nonce,
+      nullifierHash,
+    },
   }
 }
 
@@ -145,7 +179,7 @@ export async function handleBid(
   storage: DurableObjectStorage,
   auctionId: string,
   highestBid: string,
-): Promise<ValidatedAction> {
+): Promise<ValidationResult> {
   verifySignature(action)
 
   // Check nonce
@@ -163,13 +197,20 @@ export async function handleBid(
   }
 
   return {
-    type: action.type,
-    agentId: action.agentId,
-    wallet: action.wallet,
-    amount: action.amount,
-    nonce: action.nonce,
-    signature: action.signature,
-    proof: action.proof,
+    action: {
+      type: action.type,
+      agentId: action.agentId,
+      wallet: action.wallet,
+      amount: action.amount,
+      nonce: action.nonce,
+      signature: action.signature,
+      proof: action.proof,
+    },
+    mutation: {
+      agentId: action.agentId,
+      actionType: ActionType.BID,
+      nonce: action.nonce,
+    },
   }
 }
 
@@ -180,20 +221,27 @@ export async function handleDeliver(
   action: ActionRequest,
   storage: DurableObjectStorage,
   auctionId: string,
-): Promise<ValidatedAction> {
+): Promise<ValidationResult> {
   verifySignature(action)
 
   // Check nonce
   await checkNonce(action.agentId, ActionType.DELIVER, action.nonce, storage)
 
   return {
-    type: action.type,
-    agentId: action.agentId,
-    wallet: action.wallet,
-    amount: action.amount,
-    nonce: action.nonce,
-    signature: action.signature,
-    proof: action.proof,
+    action: {
+      type: action.type,
+      agentId: action.agentId,
+      wallet: action.wallet,
+      amount: action.amount,
+      nonce: action.nonce,
+      signature: action.signature,
+      proof: action.proof,
+    },
+    mutation: {
+      agentId: action.agentId,
+      actionType: ActionType.DELIVER,
+      nonce: action.nonce,
+    },
   }
 }
 
@@ -208,7 +256,7 @@ export async function validateAction(
   storage: DurableObjectStorage,
   auctionId: string,
   highestBid: string,
-): Promise<ValidatedAction> {
+): Promise<ValidationResult> {
   switch (action.type) {
     case ActionType.JOIN:
       return handleJoin(action, storage, auctionId)

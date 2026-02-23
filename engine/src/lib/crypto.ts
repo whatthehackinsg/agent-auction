@@ -1,5 +1,11 @@
 import { keccak256, encodePacked, toBytes, toHex, concat, numberToHex } from 'viem'
 
+function allowInsecureStubs(): boolean {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env
+  return env?.ENGINE_ALLOW_INSECURE_STUBS === 'true'
+}
+
 /**
  * Compute event hash for the append-only event chain.
  * STUB: Replace with Poseidon from @agent-auction/crypto when WS-1 delivers
@@ -39,8 +45,10 @@ export async function verifyMembershipProof(
   proof: unknown,
   signals: unknown
 ): Promise<{ valid: boolean; registryRoot: string; nullifier: string }> {
-  // STUB: Always returns valid — real implementation uses Groth16 verification
-  return { valid: true, registryRoot: '0x00', nullifier: '0x00' }
+  if (allowInsecureStubs()) {
+    return { valid: true, registryRoot: '0x00', nullifier: '0x00' }
+  }
+  return { valid: false, registryRoot: '0x00', nullifier: '0x00' }
 }
 
 /**
@@ -52,8 +60,10 @@ export function verifyEIP712Signature(
   sig: Uint8Array,
   signer: string
 ): boolean {
-  // STUB: Always returns true — real implementation uses ecrecover
-  return true
+  if (allowInsecureStubs()) {
+    return true
+  }
+  return false
 }
 
 /**
