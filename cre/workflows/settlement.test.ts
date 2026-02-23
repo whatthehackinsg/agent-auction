@@ -19,7 +19,7 @@ import {
   decodeAuctionEndedLog,
   encodeSettlementReport,
   onAuctionEnded,
-} from "./settlement";
+} from "./settlement/helpers";
 
 const CHAIN_SELECTOR = 10344971235874465080n;
 const CHAIN_SELECTOR_NAME = "ethereum-testnet-sepolia-base-1";

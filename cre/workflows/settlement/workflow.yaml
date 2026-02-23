@@ -1,0 +1,15 @@
+local-simulation:
+  user-workflow:
+    workflow-name: "auction-settlement"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.json"
+    secrets-path: ""
+
+base-sepolia:
+  user-workflow:
+    workflow-name: "auction-settlement"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.json"
+    secrets-path: ""

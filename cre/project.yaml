@@ -1,13 +1,18 @@
-version: "1.0"
-name: "auction-settlement"
-description: "CRE Settlement Workflow — verifies auction results and releases escrow via KeystoneForwarder"
+# ==========================================================================
+# CRE PROJECT SETTINGS FILE
+# ==========================================================================
+# Project-level RPC and account settings for CRE CLI targets.
 
-targets:
-  base-sepolia:
-    rpc_urls:
-      base-sepolia: "${BASE_SEPOLIA_RPC}"
+# ==========================================================================
+local-simulation:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia-base-1
+      url: https://sepolia.base.org
 
-workflows:
-  settlement:
-    path: "./workflows/settlement.ts"
-    config: "./config/base-sepolia.json"
+# ==========================================================================
+base-sepolia:
+  cre-cli:
+    don-family: "zone-a"
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia-base-1
+      url: https://sepolia.base.org

@@ -22,6 +22,9 @@ contracts/out/
 contracts/cache/
 contracts/broadcast/
 
+# CRE build artifacts
+.cre_build_tmp.*
+
 # Misc
 my-video/
 skills-lock.json
