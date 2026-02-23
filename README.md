@@ -214,20 +214,27 @@ L2 (Base Sepolia) — 6 contracts (all compiled & tested, 113 tests passing)
 ```
 **Security**: 2-round audit complete, 9 vulnerabilities fixed (see `contracts/docs/`).
 ### Deployed Addresses (Base Sepolia — chainId 84532)
-
 All contracts verified on [Basescan](https://sepolia.basescan.org).
 
+#### Active Contracts
 | Contract | Address |
 |---|---|
 | EntryPoint (canonical) | [`0x0000000071727De22E5E9d8BAf0edAc6f37da032`](https://sepolia.basescan.org/address/0x0000000071727De22E5E9d8BAf0edAc6f37da032) |
 | MockUSDC | [`0xfEE786495d165b16dc8e68B6F8281193e041737d`](https://sepolia.basescan.org/address/0xfEE786495d165b16dc8e68B6F8281193e041737d) |
 | MockIdentityRegistry | [`0x68E06c33D4957102362ACffC2BFF9E6b38199318`](https://sepolia.basescan.org/address/0x68E06c33D4957102362ACffC2BFF9E6b38199318) |
-| MockKeystoneForwarder | [`0x846ae85403D1BBd3B343F1b214D297969b39Ce23`](https://sepolia.basescan.org/address/0x846ae85403D1BBd3B343F1b214D297969b39Ce23) |
 | AgentAccountFactory | [`0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD`](https://sepolia.basescan.org/address/0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD) |
 | AgentPaymaster | [`0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d`](https://sepolia.basescan.org/address/0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d) |
 | AuctionRegistry (v2) | [`0xFEc7a05707AF85C6b248314E20FF8EfF590c3639`](https://sepolia.basescan.org/address/0xFEc7a05707AF85C6b248314E20FF8EfF590c3639) |
 | AuctionEscrow (v2) | [`0x20944f46AB83F7eA40923D7543AF742Da829743c`](https://sepolia.basescan.org/address/0x20944f46AB83F7eA40923D7543AF742Da829743c) |
-| KeystoneForwarder (real) | [`0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5`](https://sepolia.basescan.org/address/0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5) |
+| KeystoneForwarder (real Chainlink) | [`0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5`](https://sepolia.basescan.org/address/0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5) |
+
+#### Outdated Contracts (v1 — no longer in use)
+
+| Contract | Address | Reason |
+|---|---|---|
+| ~~AuctionRegistry (v1)~~ | `0x81c015F6189da183Bf19a5Bb8ca7FDd7995B35F9` | Replaced by v2 — redeployed to bind with real KeystoneForwarder |
+| ~~AuctionEscrow (v1)~~ | `0x211086a6D1c08aB2082154829472FC24f8C40358` | Replaced by v2 — was using MockKeystoneForwarder, `setEscrow()` is one-time-only so both had to be redeployed |
+| ~~MockKeystoneForwarder~~ | `0x846ae85403D1BBd3B343F1b214D297969b39Ce23` | Replaced by real Chainlink KeystoneForwarder (`0x82300bd7...`) for production CRE settlement |
 
 Deployer / Sequencer: `0x633ec0e633AA4d8BbCCEa280331A935747416737`
 
