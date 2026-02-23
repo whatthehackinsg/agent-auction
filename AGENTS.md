@@ -4,7 +4,7 @@
 
 **Agent-native auction platform** for the Chainlink 2026 Hackathon. AI agents autonomously discover, join, bid in, and settle auctions — with on-chain USDC escrow, verifiable event ordering, and CRE-based trustless settlement.
 
-**Stage**: Design complete → contracts implemented & tested → **deployed to Base Sepolia** (all verified on Basescan).
+**Stage**: Design complete → contracts implemented & tested → deployed to Base Sepolia → **CRE E2E settlement confirmed on-chain** (`transmissionSuccess=true`).
 
 ## Repository Map
 
@@ -178,7 +178,7 @@ TEST ONLY
 | WS | Owner | Scope | Status |
 |---|---|---|---|
 | WS-1 | ZK Researcher | Circom circuits, trusted setup, crypto libs | In Progress |
-| WS-2 | Zyro | Smart contracts, CRE settlement, deployment | Contracts done, deploying |
+| WS-2 | Zyro | Smart contracts, CRE settlement, deployment | **E2E settlement done** — contracts deployed (v2), CRE workflow confirmed on-chain |
 | WS-3 | AI Engineer 2 | DO sequencer, HTTP/MCP API, frontend, demo | In Progress |
 
 Plans: `docs/plans/ws1-zk-crypto.md`, `ws2-contracts-cre.md`, `ws3-engine-frontend.md`

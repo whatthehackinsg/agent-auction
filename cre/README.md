@@ -65,8 +65,9 @@ cast send $ESCROW "configureCRE(bytes32,bytes10,address)" \
 
 | Contract | Address (Base Sepolia) |
 |---|---|
-| AuctionRegistry (trigger source) | `0x81c015F6189da183Bf19a5Bb8ca7FDd7995B35F9` |
-| AuctionEscrow (IReceiver target) | `0x211086a6D1c08aB2082154829472FC24f8C40358` |
+| AuctionRegistry v2 (trigger source) | `0xFEc7a05707AF85C6b248314E20FF8EfF590c3639` |
+| AuctionEscrow v2 (IReceiver target) | `0x20944f46AB83F7eA40923D7543AF742Da829743c` |
+| KeystoneForwarder (real) | `0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5` |
 | MockIdentityRegistry | `0x68E06c33D4957102362ACffC2BFF9E6b38199318` |
 
 ## MVP Limitations
@@ -74,3 +75,11 @@ cast send $ESCROW "configureCRE(bytes32,bytes10,address)" \
 - Replay bundle verification is presence-only (fetches and checks non-empty)
 - Full Poseidon hash chain replay and winner re-derivation is P1 scope
 - `replayContentHash` sha256 comparison not yet implemented
+
+## E2E Settlement — Confirmed
+
+Full end-to-end CRE settlement has been confirmed on Base Sepolia via `cre workflow simulate --broadcast`:
+
+- **Settlement TX**: [`0x0b8e9ede940fcfe3f82365bc5bb0c174635e4f0e979ffdb67fbfabd10a98ce69`](https://sepolia.basescan.org/tx/0x0b8e9ede940fcfe3f82365bc5bb0c174635e4f0e979ffdb67fbfabd10a98ce69)
+- **Result**: `transmissionSuccess=true`, 3 events emitted (AuctionSettled, SettlementProcessed, KeystoneForwarder transmission log)
+- **AuctionEnded TX used as trigger**: [`0xccffa3a456a96fdfdd75b6ff3e1ad08fbf251703d2d218c8c6de101719672033`](https://sepolia.basescan.org/tx/0xccffa3a456a96fdfdd75b6ff3e1ad08fbf251703d2d218c8c6de101719672033)

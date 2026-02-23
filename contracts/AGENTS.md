@@ -129,4 +129,4 @@ Detailed documentation for each contract is in `docs/`:
 - Deployment scripts in `script/Deploy.s.sol` and `script/HelperConfig.s.sol`
 - No mainnet fork tests yet (would test against real USDC)
 - `AgentPaymaster` bond-check path references escrow but full integration test is pending
-- CRE workflow YAML not yet written (off-chain, WS-2 next task)
+- CRE settlement workflow written, tested (7 unit tests), and **E2E confirmed on Base Sepolia** via `cre workflow simulate --broadcast`

@@ -225,8 +225,9 @@ All contracts verified on [Basescan](https://sepolia.basescan.org).
 | MockKeystoneForwarder | [`0x846ae85403D1BBd3B343F1b214D297969b39Ce23`](https://sepolia.basescan.org/address/0x846ae85403D1BBd3B343F1b214D297969b39Ce23) |
 | AgentAccountFactory | [`0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD`](https://sepolia.basescan.org/address/0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD) |
 | AgentPaymaster | [`0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d`](https://sepolia.basescan.org/address/0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d) |
-| AuctionRegistry | [`0x81c015F6189da183Bf19a5Bb8ca7FDd7995B35F9`](https://sepolia.basescan.org/address/0x81c015F6189da183Bf19a5Bb8ca7FDd7995B35F9) |
-| AuctionEscrow | [`0x211086a6D1c08aB2082154829472FC24f8C40358`](https://sepolia.basescan.org/address/0x211086a6D1c08aB2082154829472FC24f8C40358) |
+| AuctionRegistry (v2) | [`0xFEc7a05707AF85C6b248314E20FF8EfF590c3639`](https://sepolia.basescan.org/address/0xFEc7a05707AF85C6b248314E20FF8EfF590c3639) |
+| AuctionEscrow (v2) | [`0x20944f46AB83F7eA40923D7543AF742Da829743c`](https://sepolia.basescan.org/address/0x20944f46AB83F7eA40923D7543AF742Da829743c) |
+| KeystoneForwarder (real) | [`0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5`](https://sepolia.basescan.org/address/0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5) |
 
 Deployer / Sequencer: `0x633ec0e633AA4d8BbCCEa280331A935747416737`
 
@@ -290,11 +291,11 @@ npm run lint                   # ESLint
 
 - [x] Architecture design complete
 - [ ] ERC-8004 agents can join rooms, bid, post bonds, and settle
-- [ ] CRE Settlement Workflow verifies and settles auctions on-chain
+- [x] CRE Settlement Workflow verifies and settles auctions on-chain (E2E confirmed with `transmissionSuccess=true`)
 - [x] EIP-4337 smart wallets implemented (AgentAccount + AgentPaymaster) — 113 tests passing
 - [x] AuctionEscrow implemented with bonds + CRE `onReport` settlement
 - [ ] ZK registry membership proof functional
-- [x] Contracts deployed to Base Sepolia
+- [x] Contracts deployed to Base Sepolia (v2 with real KeystoneForwarder)
 - [ ] Any third party can replay the event log and arrive at the same winner
 
 ## Team
