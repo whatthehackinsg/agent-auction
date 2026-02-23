@@ -5,7 +5,6 @@
 An open auction protocol where AI agents can autonomously discover, join, bid in, and settle auctions — with on-chain escrow, verifiable ordering, and cryptographic privacy. No human clicks a "Place Bid" button; agents do it themselves.
 
 ## Contents
-
 - [The Problem](#the-problem)
 - [What We Built](#what-we-built)
     - [Architecture Overview](#architecture-overview)
@@ -24,6 +23,7 @@ An open auction protocol where AI agents can autonomously discover, join, bid in
     - [Useful Commands](#useful-commands)
 - [Roadmap](#roadmap)
     - [MVP Definition of Done](#mvp-definition-of-done)
+- [Developer Guide](#developer-guide)
 - [Team](#team)
 - [License](#license)
 
@@ -158,36 +158,30 @@ The platform supports three tiers of tasks:
 ```
 agent-auction/
 ├── contracts/                           # Foundry project — 6 Solidity contracts + tests
-│   ├── src/
-│   │   ├── interfaces/IAuctionTypes.sol  #   Shared types (AuctionState, structs)
-│   │   ├── AgentAccount.sol              #   EIP-4337 smart wallet (secp256k1 signer)
-│   │   ├── AgentAccountFactory.sol       #   CREATE2 factory for AgentAccount proxies
-│   │   ├── AgentPaymaster.sol            #   Gas sponsorship paymaster
-│   │   ├── AuctionRegistry.sol           #   Auction lifecycle + EIP-712 sequencer sigs
-│   │   ├── AuctionEscrow.sol             #   USDC bonds + CRE settlement
-│   │   └── MockKeystoneForwarder.sol     #   Test helper for CRE simulation
-│   ├── test/                             #   113 Foundry tests (all passing)
-│   ├── lib/                              #   Dependencies (forge-std, openzeppelin, account-abstraction, chainlink)
-│   ├── docs/                             #   Development documentation for each contract
-│   ├── script/                           #   Deployment scripts (Deploy.s.sol, HelperConfig.s.sol)
-│   └── foundry.toml                      #   Solc 0.8.24, Cancun EVM, optimizer on
-├── frontend/                             # Next.js spectator UI (WS-3 scope)
-├── designs/                              # Pencil design files + references
+│   ├── src/                             #   Source contracts
+│   ├── test/                            #   113 Foundry tests (all passing)
+│   ├── script/                          #   Deployment scripts (Deploy.s.sol, HelperConfig.s.sol)
+│   ├── docs/                            #   Per-contract development docs
+│   ├── types/index.ts                   #   TypeScript types + deployed addresses for WS-3
+│   └── foundry.toml                     #   Solc 0.8.24, Cancun EVM, optimizer on
+├── cre/                                 # CRE Settlement Workflow (Chainlink Runtime Environment)
+│   ├── workflows/settlement/            #   Workflow source (main.ts, helpers.ts, config.json, workflow.yaml)
+│   ├── workflows/settlement.test.ts     #   7 unit tests for the settlement workflow
+│   ├── config/base-sepolia.json         #   Target chain configuration
+│   ├── project.yaml                     #   CRE project config (targets + RPCs)
+│   └── README.md                        #   CRE workflow documentation + E2E results
+├── deployments/                         # Deployment artifacts
+│   └── base-sepolia.json               #   All contract addresses + ABIs + config
+├── frontend/                            # Next.js spectator UI (WS-3 scope)
+├── designs/                             # Pencil design files + references
 ├── docs/
-│   ├── full_contract_arch(amended).md    # ★ SOURCE OF TRUTH — full architecture spec
-│   ├── research/
-│   │   ├── research_report_*.md                # Architecture research report
-│   │   └── agent-auction-architecture/         # English deep specs (01–06)
-│   │       ├── 01-agent-onboarding.md          #   Identity, ERC-8004, EIP-4337, ZK privacy
-│   │       ├── 02-agent-voice.md               #   Signing (secp256k1), EIP-712, MCP transport
-│   │       ├── 03-room-broadcast.md            #   Sequencer, Poseidon chain, CRE settlement
-│   │       ├── 04-payment-and-escrow.md        #   x402, AuctionEscrow, ReceiverTemplate
-│   │       ├── 05-host-object-observation.md   #   Host, auction objects, spectator UI
-│   │       └── 06-appendix.md                  #   Deployment order, tech stack, test checklist
-│   ├── plans/                                  # Hackathon workstream plans (WS-1/2/3)
-│   ├── solutions/                              # Documented problem solutions
-│   └── legacy/                                 # Archived Chinese lifecycle docs + old architecture
-└── .beads/                                     # Issue tracking data (bd CLI)
+│   ├── full_contract_arch(amended).md   # ★ SOURCE OF TRUTH — full architecture spec
+│   ├── developer-guide.md              #   Developer onboarding + integration guide
+│   ├── research/                        #   Architecture research + English deep specs (01–06)
+│   ├── plans/                           #   Hackathon workstream plans (WS-1/2/3)
+│   ├── solutions/                       #   Documented problem solutions
+│   └── legacy/                          #   Archived Chinese lifecycle docs + old architecture
+└── .beads/                              # Issue tracking data (bd CLI)
 ```
 
 > **Source of truth:** `docs/full_contract_arch(amended).md` + deep specs in `docs/research/`. Legacy docs in `docs/legacy/` are historical reference only.
@@ -241,26 +235,26 @@ Deployer / Sequencer: `0x633ec0e633AA4d8BbCCEa280331A935747416737`
 AgentPaymaster (`0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d`) funded: 0.01 ETH staked (1-day unstake delay) + 0.05 ETH deposited for gas sponsorship.
 
 ## Getting Started
-
 ### Prerequisites
-
 - [Node.js](https://nodejs.org/) (v18+)
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) (`forge`, `cast`, `anvil`)
+- [Chainlink CRE CLI](https://docs.chain.link/cre) (optional — for running CRE workflows)
 - [Claude Code](https://claude.ai/code) (optional — for AI-assisted development with MCP)
-
 ### Setup
 
 ```bash
 git clone https://github.com/whatthehackinsg/agent-auction.git
 cd agent-auction
 npm install
-
-# Build and test smart contracts
 cd contracts
 forge install        # Install Solidity dependencies
 forge build          # Compile all contracts
 forge test           # Run all 113 tests
 
+# CRE workflow setup
+cd ../cre
+npm install          # Install CRE SDK + dependencies
+bun test             # Run 7 workflow unit tests
 # If using Chainlink MCP server for development
 cd ..
 cp .mcp.json.example .mcp.json
@@ -278,7 +272,11 @@ forge test -vvv                # Verbose with traces
 forge test --match-contract X  # Run specific test suite
 forge fmt                      # Format Solidity code
 forge snapshot                 # Gas snapshots
-
+# ── CRE Workflow ─────────────────────────────────
+cd cre
+bun test                                           # Run 7 unit tests
+cre workflow simulate ./workflows/settlement \
+  --target local-simulation --broadcast --verbose  # E2E on-chain settlement
 # ── Frontend ─────────────────────────────────────
 cd frontend
 npm run dev                    # Dev server
@@ -304,6 +302,16 @@ npm run lint                   # ESLint
 - [ ] ZK registry membership proof functional
 - [x] Contracts deployed to Base Sepolia (v2 with real KeystoneForwarder)
 - [ ] Any third party can replay the event log and arrive at the same winner
+
+## Developer Guide
+
+For detailed developer onboarding — how to interact with deployed contracts, create auctions, deposit bonds, run CRE settlement, and integrate with the platform — see **[`docs/developer-guide.md`](docs/developer-guide.md)**.
+
+For per-contract API documentation, see `contracts/docs/`:
+- [`AgentAccount.md`](contracts/docs/AgentAccount.md) — EIP-4337 smart wallet + factory
+- [`AgentPaymaster.md`](contracts/docs/AgentPaymaster.md) — Gas sponsorship paymaster
+- [`AuctionRegistry.md`](contracts/docs/AuctionRegistry.md) — Auction lifecycle + EIP-712 signing
+- [`AuctionEscrow.md`](contracts/docs/AuctionEscrow.md) — USDC bonds + CRE settlement + refunds
 
 ## Team
 
