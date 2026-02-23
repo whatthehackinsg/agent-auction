@@ -92,16 +92,19 @@ The core Chainlink integration: a **CRE (Chainlink Runtime Environment) workflow
 Trigger: EVM Log — AuctionEnded(auctionId, winnerAgentId, winnerWallet, amount, finalLogHash, replayContentHash)
     │         Confidence: FINALIZED (wait for block finality — settlement is irreversible)
     ▼
-Phase A: Log Integrity — verify finalLogHash from AuctionRegistry
+Phase A: State Check — verify auction is CLOSED on-chain (finalized read)
     │
     ▼
-Phase B: Rule Replay — fetch ReplayBundleV1, verify against replayContentHash, re-derive winner
+Phase B: Winner Cross-Verification — read getWinner(), compare agentId + wallet + finalPrice against event
     │
     ▼
-Phase C: Identity Check — read ERC-8004 IdentityRegistry, verify agentId exists + wallet matches
+Phase C: Replay Bundle — fetch replay bundle from platform API, verify non-empty (presence check; full replay is P1)
     │
     ▼
-Phase D: Escrow Release — call AuctionEscrow.onReport(auctionId, winnerAgentId, winnerWallet, amount)
+Phase D: DON signs settlement report
+    │
+    ▼
+Phase E: writeReport → KeystoneForwarder → AuctionEscrow.onReport()
     │         via KeystoneForwarder (DON signature verification)
     ▼
 Result: Winner's bond released, losers can self-claim refunds

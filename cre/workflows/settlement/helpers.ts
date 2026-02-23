@@ -1,13 +1,14 @@
 import {
   bytesToHex,
   type Runtime,
+  type NodeRuntime,
   EVMClient,
   HTTPClient,
   hexToBase64,
   TxStatus,
   getNetwork,
   encodeCallMsg,
-  LATEST_BLOCK_NUMBER,
+  LAST_FINALIZED_BLOCK_NUMBER,
 } from "@chainlink/cre-sdk";
 import {
   encodeAbiParameters,
@@ -43,7 +44,6 @@ export type Config = {
   chainSelectorName: string;
   auctionRegistryAddress: string;
   auctionEscrowAddress: string;
-  identityRegistryAddress: string;
   replayBundleBaseUrl: string;
   gasLimit: string;
   skipReplayVerification?: string;
@@ -139,10 +139,10 @@ export const onAuctionEnded = (
     .callContract(runtime, {
       call: encodeCallMsg({
         from: "0x0000000000000000000000000000000000000000",
-        to: runtime.config.auctionRegistryAddress,
+        to: runtime.config.auctionRegistryAddress as Hex,
         data: stateCallData,
       }),
-      blockNumber: LATEST_BLOCK_NUMBER,
+      blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
     })
     .result();
 
@@ -168,10 +168,10 @@ export const onAuctionEnded = (
     .callContract(runtime, {
       call: encodeCallMsg({
         from: "0x0000000000000000000000000000000000000000",
-        to: runtime.config.auctionRegistryAddress,
+        to: runtime.config.auctionRegistryAddress as Hex,
         data: winnerCallData,
       }),
-      blockNumber: LATEST_BLOCK_NUMBER,
+      blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
     })
     .result();
 
@@ -193,6 +193,11 @@ export const onAuctionEnded = (
       `Wallet mismatch: event=${event.winnerWallet} stored=${storedWallet}`
     );
   }
+  if (storedPrice !== event.finalPrice) {
+    throw new Error(
+      `Price mismatch: event=${event.finalPrice} stored=${storedPrice}`
+    );
+  }
 
   runtime.log(
     "[SETTLEMENT] Phase B: Winner cross-verified against on-chain state"
@@ -205,26 +210,28 @@ export const onAuctionEnded = (
       "[SETTLEMENT] Phase C: Replay verification SKIPPED (skipReplayVerification=true)"
     );
   } else {
-    const bundleUrl = `${runtime.config.replayBundleBaseUrl}/replay/${event.auctionId}`;
-
+    const baseUrl = runtime.config.replayBundleBaseUrl;
+    if (!baseUrl || baseUrl.includes("example.com")) {
+      throw new Error(
+        "replayBundleBaseUrl is not configured \u2014 set a real URL or enable skipReplayVerification"
+      );
+    }
+    const bundleUrl = `${baseUrl}/replay/${event.auctionId}`;
     const bundleResponse = httpClient
-      .sendRequest(runtime, {
+      .sendRequest(runtime as unknown as NodeRuntime<Config>, {
         url: bundleUrl,
         method: "GET",
         headers: { Accept: "application/octet-stream" },
       })
       .result();
-
     if (bundleResponse.statusCode !== 200) {
       throw new Error(
         `Failed to fetch replay bundle: HTTP ${bundleResponse.statusCode}`
       );
     }
-
     if (!bundleResponse.body || bundleResponse.body.length === 0) {
       throw new Error("Replay bundle is empty");
     }
-
     runtime.log(
       `[SETTLEMENT] Phase C: Replay bundle fetched (${bundleResponse.body.length} bytes)`
     );

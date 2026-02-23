@@ -46,8 +46,7 @@ const BASE_CONFIG = {
   chainSelectorName: CHAIN_SELECTOR_NAME,
   auctionRegistryAddress: "0xFEc7a05707AF85C6b248314E20FF8EfF590c3639",
   auctionEscrowAddress: "0x20944f46AB83F7eA40923D7543AF742Da829743c",
-  identityRegistryAddress: "0x68E06c33D4957102362ACffC2BFF9E6b38199318",
-  replayBundleBaseUrl: "https://api.auction.example.com",
+  replayBundleBaseUrl: "https://replay.auction-platform.io",
   gasLimit: "500000",
 };
 
@@ -256,6 +255,60 @@ describe("settlement workflow", () => {
     const runtime = makeRuntime();
     expect(() => onAuctionEnded(runtime, makeAuctionEndedLog())).toThrow(
       "Settlement tx reverted"
+    );
+  });
+
+  test("throws when finalPrice mismatches on-chain stored price", () => {
+    const evmMock = EvmMock.testInstance(CHAIN_SELECTOR);
+    let callCount = 0;
+
+    evmMock.callContract = () => {
+      callCount += 1;
+
+      if (callCount === 1) {
+        const encodedState = encodeAbiParameters(parseAbiParameters("uint8"), [2]);
+        return { data: hexToBase64(encodedState) };
+      }
+
+      const encodedWinner = encodeAbiParameters(
+        parseAbiParameters("uint256, address, uint256"),
+        [MOCK_WINNER_AGENT_ID, MOCK_WINNER_WALLET, 999_999n]
+      );
+      return { data: hexToBase64(encodedWinner) };
+    };
+
+    const runtime = makeRuntime();
+    expect(() => onAuctionEnded(runtime, makeAuctionEndedLog())).toThrow(
+      "Price mismatch"
+    );
+  });
+
+  test("throws when replayBundleBaseUrl is a placeholder", () => {
+    const evmMock = EvmMock.testInstance(CHAIN_SELECTOR);
+    let callCount = 0;
+
+    evmMock.callContract = () => {
+      callCount += 1;
+
+      if (callCount === 1) {
+        const encodedState = encodeAbiParameters(parseAbiParameters("uint8"), [2]);
+        return { data: hexToBase64(encodedState) };
+      }
+
+      const encodedWinner = encodeAbiParameters(
+        parseAbiParameters("uint256, address, uint256"),
+        [MOCK_WINNER_AGENT_ID, MOCK_WINNER_WALLET, MOCK_FINAL_PRICE]
+      );
+      return { data: hexToBase64(encodedWinner) };
+    };
+
+    const runtime = makeRuntime();
+    runtime.config = {
+      ...BASE_CONFIG,
+      replayBundleBaseUrl: "https://api.auction.example.com",
+    };
+    expect(() => onAuctionEnded(runtime, makeAuctionEndedLog())).toThrow(
+      "replayBundleBaseUrl is not configured"
     );
   });
 });

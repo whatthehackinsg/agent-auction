@@ -8,11 +8,11 @@ Chainlink CRE (Chainlink Runtime Environment) workflow that trustlessly settles 
 AuctionEnded event (AuctionRegistry)
     │  confidence: FINALIZED
     ▼
-Phase A: Verify auction state is CLOSED on-chain
+Phase A: Verify auction state is CLOSED on-chain (finalized read)
     ▼
-Phase B: Cross-check winner against AuctionRegistry.getWinner()
+Phase B: Cross-check winner against AuctionRegistry.getWinner() — agentId, wallet, AND finalPrice
     ▼
-Phase C: Fetch replay bundle from platform API, verify non-empty
+Phase C: Fetch replay bundle from platform API, verify non-empty (guards placeholder URLs)
     ▼
 Phase D: DON signs settlement report
     ▼
@@ -81,6 +81,8 @@ cast send $ESCROW "configureCRE(bytes32,bytes10,address)" \
 - Replay bundle verification is presence-only (fetches and checks non-empty)
 - Full Poseidon hash chain replay and winner re-derivation is P1 scope
 - `replayContentHash` sha256 comparison not yet implemented
+- `identityRegistryAddress` removed from config — identity verification is not part of the CRE workflow (handled by contracts directly)
+- All `callContract` reads use `LAST_FINALIZED_BLOCK_NUMBER` for production safety (protects against chain reorgs)
 
 ## E2E Settlement — Confirmed
 

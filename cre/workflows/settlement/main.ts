@@ -1,14 +1,13 @@
 import { Runner, EVMClient, handler, getNetwork } from "@chainlink/cre-sdk";
 import { keccak256, toHex } from "viem";
 import { z } from "zod";
-import { onAuctionEnded, AUCTION_ENDED_SIGNATURE, type Config } from "./helpers";
+import { onAuctionEnded, type Config } from "./helpers";
 const configSchema = z.object({
   chainSelectorName: z.string(),
   auctionRegistryAddress: z.string(),
   auctionEscrowAddress: z.string(),
-  identityRegistryAddress: z.string(),
   replayBundleBaseUrl: z.string(),
-  gasLimit: z.string().default("500000"),
+  gasLimit: z.string(),
   skipReplayVerification: z.string().optional(),
 });
 const initWorkflow = (config: Config) => {

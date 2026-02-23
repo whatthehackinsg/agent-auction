@@ -2,7 +2,6 @@
   "chainSelectorName": "ethereum-testnet-sepolia-base-1",
   "auctionRegistryAddress": "0xFEc7a05707AF85C6b248314E20FF8EfF590c3639",
   "auctionEscrowAddress": "0x20944f46AB83F7eA40923D7543AF742Da829743c",
-  "identityRegistryAddress": "0x68E06c33D4957102362ACffC2BFF9E6b38199318",
-  "replayBundleBaseUrl": "https://api.auction.example.com",
+  "replayBundleBaseUrl": "TODO:CONFIGURE_REPLAY_API_URL",
   "gasLimit": "500000"
 }
