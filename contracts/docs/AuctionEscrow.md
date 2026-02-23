@@ -73,11 +73,12 @@ Set post-deploy by the owner after the CRE workflow is registered on-chain.
 
 | Name | Type | Description |
 |---|---|---|
-| `expectedWorkflowId` | `bytes32` | Expected CRE workflow ID. Skipped if zero. |
-| `expectedWorkflowName` | `bytes10` | Expected workflow name (native CRE metadata type). Skipped if zero. |
-| `expectedAuthor` | `address` | Expected workflow owner/author. Skipped if zero. |
+| `expectedWorkflowId` | `bytes32` | Expected CRE workflow ID (non-zero). |
+| `expectedWorkflowName` | `bytes10` | Expected workflow name (native CRE metadata type, non-zero). |
+| `expectedAuthor` | `address` | Expected workflow owner/author (non-zero). |
+| `isCREConfigured` | `bool` | Fail-closed gate. `onReport` reverts until CRE config is complete. |
 
-All three can be configured individually or together via `configureCRE`. When set to their zero values, the corresponding check is skipped. This allows incremental configuration during development.
+All three fields are validated strictly once configured. Zero-value CRE config is rejected.
 
 ### External Contracts
 
@@ -177,7 +178,7 @@ Updates the platform admin address. The admin can record bonds, process emergenc
 function setExpectedWorkflowId(bytes32 workflowId_) external onlyOwner
 ```
 
-Sets the expected CRE workflow ID for `onReport` validation. Set to `bytes32(0)` to skip this check.
+Sets the expected CRE workflow ID for `onReport` validation. `bytes32(0)` is rejected.
 
 #### setExpectedWorkflowName
 
@@ -185,7 +186,7 @@ Sets the expected CRE workflow ID for `onReport` validation. Set to `bytes32(0)`
 function setExpectedWorkflowName(bytes10 name_) external onlyOwner
 ```
 
-Sets the expected CRE workflow name. Uses `bytes10` to match the native CRE metadata type (not a string). Set to `bytes10(0)` to skip this check.
+Sets the expected CRE workflow name. Uses `bytes10` to match the native CRE metadata type (not a string). `bytes10(0)` is rejected.
 
 #### setExpectedAuthor
 
@@ -193,7 +194,7 @@ Sets the expected CRE workflow name. Uses `bytes10` to match the native CRE meta
 function setExpectedAuthor(address author_) external onlyOwner
 ```
 
-Sets the expected CRE workflow author/owner address. Set to `address(0)` to skip this check.
+Sets the expected CRE workflow author/owner address. `address(0)` is rejected.
 
 #### configureCRE
 
@@ -502,7 +503,7 @@ Offset  Size    Type      Field
 
 Total minimum size: 64 bytes.
 
-The contract validates each field against the expected values (if configured). Fields set to their zero value are skipped during validation, allowing partial configuration during development and testing.
+`onReport` is fail-closed: it reverts with `CRENotConfigured` until CRE configuration is set. After that, all metadata fields are validated with exact equality (workflowId, workflowName, workflowOwner).
 
 **Why `bytes10` for workflowName?** The CRE metadata format uses `bytes10` natively for the workflow name field. Earlier versions of this contract used `string`, which required hashing for comparison and didn't match the on-wire format. The `bytes10` type enables direct comparison without conversion overhead.
 
@@ -623,7 +624,7 @@ if (USDC.balanceOf(address(this)) < totalBonded + totalWithdrawable) revert Solv
 
 ```solidity
 bytes10 workflowName = bytes10(metadata[32:42]);
-if (expectedWorkflowName != bytes10(0) && workflowName != expectedWorkflowName) revert InvalidReport();
+if (workflowName != expectedWorkflowName) revert InvalidReport();
 ```
 
 ### 5. Cancelled Auction Refunds via registry.isCancelled()
