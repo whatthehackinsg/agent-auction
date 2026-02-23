@@ -231,6 +231,8 @@ L2 (Base Sepolia) — 6 contracts (all compiled & tested, 117 tests passing)
 ### Deployed Addresses (Base Sepolia — chainId 84532)
 All contracts verified on [Basescan](https://sepolia.basescan.org).
 
+> **Deployment status note:** The addresses below are the currently active V2 deployment set. If contract source code changes after this deployment, those changes are **not live on-chain** until a new deployment is executed and this section is updated.
+
 #### Active Contracts
 | Contract | Address |
 |---|---|

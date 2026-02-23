@@ -59,7 +59,7 @@ enum AuctionState {
 }
 ```
 
-State transitions follow a strict forward-only path: `NONE -> OPEN -> CLOSED -> SETTLED` or `NONE -> OPEN -> CLOSED -> CANCELLED`. No backward transitions are allowed.
+State transitions follow a strict forward-only path: `NONE -> OPEN -> CLOSED -> SETTLED` or `NONE -> OPEN -> CANCELLED`. No backward transitions are allowed.
 
 ### AuctionSettlementPacket (struct)
 
@@ -68,6 +68,7 @@ struct AuctionSettlementPacket {
     bytes32 auctionId;        // Unique auction identifier
     bytes32 manifestHash;     // Hash of the auction manifest (task description)
     bytes32 finalLogHash;     // Hash of the complete append-only event log
+    bytes32 replayContentHash;// Hash of replay content for independent winner verification
     uint256 winnerAgentId;    // ERC-8004 agent ID of the winner
     address winnerWallet;     // Payout address for the winner
     uint256 winningBidAmount; // Final winning bid in USDC (6 decimals)
@@ -75,7 +76,7 @@ struct AuctionSettlementPacket {
 }
 ```
 
-This struct is ABI-encoded by the CRE workflow and delivered to `AuctionEscrow.onReport()` via `KeystoneForwarder`. It contains everything needed to verify and execute settlement on-chain.
+This struct is signed by the sequencer and submitted to `AuctionRegistry.recordResult()`. It contains the canonical settlement packet used for EIP-712 verification and `AuctionEnded` emission.
 
 ### BondRecord (struct)
 
@@ -485,42 +486,25 @@ IERC20(USDC).transfer(predicted, 100e6); // 100 USDC
 factory.createAccount(agentSigner, salt);
 ```
 
-### Executing a Bond Deposit (via UserOperation)
+### Executing a Bond Transfer (via UserOperation)
 
-The agent signs a UserOperation that calls `execute` to approve and deposit USDC into `AuctionEscrow`:
+The agent signs a UserOperation that calls `execute` to transfer USDC to `AuctionEscrow`:
 
 ```solidity
-// Step 1: Agent builds calldata for USDC approval
-bytes memory approveData = abi.encodeCall(
-    IERC20.approve,
+bytes memory transferData = abi.encodeCall(
+    IERC20.transfer,
     (address(escrow), bondAmount)
 );
 
-// Step 2: Agent builds calldata for bond deposit
-bytes memory depositData = abi.encodeCall(
-    AuctionEscrow.depositBond,
-    (auctionId, agentId, bondAmount)
-);
-
-// Step 3: Wrap in executeBatch for atomic execution
-address[] memory targets = new address[](2);
-targets[0] = address(usdc);
-targets[1] = address(escrow);
-
-uint256[] memory values = new uint256[](2);
-// both zero, USDC is an ERC-20 call
-
-bytes[] memory datas = new bytes[](2);
-datas[0] = approveData;
-datas[1] = depositData;
-
-// Step 4: Build UserOperation with this as callData
+// Build UserOperation with this as callData
 bytes memory callData = abi.encodeCall(
-    AgentAccount.executeBatch,
-    (targets, values, datas)
+    AgentAccount.execute,
+    (address(usdc), 0, transferData)
 );
 // Sign the UserOp with the agent's runtime key, submit to bundler
 ```
+
+After transfer settlement, the platform/sequencer admin records the bond in escrow via `recordBond(...)` using observed `(txHash, logIndex)`.
 
 ### Rotating the Runtime Signer
 

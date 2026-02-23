@@ -2,7 +2,7 @@
 
 > Auction lifecycle state machine with EIP-712 sequencer signatures and CRE settlement integration.
 
-**Source**: `contracts/src/AuctionRegistry.sol` (287 lines)
+**Source**: `contracts/src/AuctionRegistry.sol` (288 lines)
 **Solidity**: 0.8.24 | **EVM**: Cancun | **Target**: Base Sepolia (chainId 84532)
 **Inherits**: `IAuctionTypes`, `Ownable` (OpenZeppelin v5.1)
 **Uses**: `ECDSA` (OpenZeppelin)
@@ -84,7 +84,7 @@ struct AuctionData {
     uint256 deadline;            // Unix timestamp: auction must close before this
     // --- Populated at close (recordResult) ---
     bytes32 finalLogHash;        // Hash of the complete append-only event log
-    bytes32 replayContentHash;   // Placeholder for IPFS-pinned replay bundle hash
+    bytes32 replayContentHash;   // Hash of replay bundle content used for independent winner verification
     uint256 winnerAgentId;       // ERC-8004 agent ID of the winner
     address winnerWallet;        // Payout address for the winner (can be rotated)
     uint256 finalPrice;          // Winning bid amount (USDC)
@@ -94,7 +94,7 @@ struct AuctionData {
 
 **Fields set at creation** (`createAuction`): `state`, `manifestHash`, `roomConfigHash`, `reservePrice`, `depositAmount`, `deadline`. All remaining fields initialize to zero.
 
-**Fields set at close** (`recordResult`): `state` (to CLOSED), `finalLogHash`, `winnerAgentId`, `winnerWallet`, `finalPrice`, `closeTimestamp`. The `replayContentHash` is set to `bytes32(0)` because the CRE workflow fetches replay data from IPFS directly.
+**Fields set at close** (`recordResult`): `state` (to CLOSED), `finalLogHash`, `replayContentHash`, `winnerAgentId`, `winnerWallet`, `finalPrice`, `closeTimestamp`.
 
 ---
 
@@ -127,11 +127,11 @@ DOMAIN_SEPARATOR = keccak256(abi.encode(
 ));
 ```
 
-**SETTLEMENT_TYPEHASH** encodes all 7 fields of the settlement packet:
+**SETTLEMENT_TYPEHASH** encodes all 8 fields of the settlement packet:
 
 ```solidity
 bytes32 public constant SETTLEMENT_TYPEHASH = keccak256(
-    "AuctionSettlementPacket(bytes32 auctionId,bytes32 manifestHash,bytes32 finalLogHash,uint256 winnerAgentId,address winnerWallet,uint256 winningBidAmount,uint64 closeTimestamp)"
+    "AuctionSettlementPacket(bytes32 auctionId,bytes32 manifestHash,bytes32 finalLogHash,bytes32 replayContentHash,uint256 winnerAgentId,address winnerWallet,uint256 winningBidAmount,uint64 closeTimestamp)"
 );
 ```
 
@@ -143,6 +143,7 @@ bytes32 structHash = keccak256(abi.encode(
     packet.auctionId,
     packet.manifestHash,
     packet.finalLogHash,
+    packet.replayContentHash,
     packet.winnerAgentId,
     packet.winnerWallet,
     packet.winningBidAmount,
@@ -291,7 +292,7 @@ Records the auction result. This is the single on-chain write when an auction cl
 
 | Parameter | Type | Description |
 |---|---|---|
-| `packet` | `AuctionSettlementPacket` | Settlement data: auctionId, manifestHash, finalLogHash, winnerAgentId, winnerWallet, winningBidAmount, closeTimestamp. |
+| `packet` | `AuctionSettlementPacket` | Settlement data: auctionId, manifestHash, finalLogHash, replayContentHash, winnerAgentId, winnerWallet, winningBidAmount, closeTimestamp. |
 | `sequencerSig` | `bytes` | EIP-712 signature from the sequencer over the packet. |
 
 **Access**: Permissionless (anyone can submit, but the signature must be from the sequencer).
@@ -305,7 +306,7 @@ Records the auction result. This is the single on-chain write when an auction cl
 **Verification flow:**
 1. Check auction is OPEN.
 2. Verify `packet.manifestHash == auction.manifestHash` (integrity check).
-3. Compute EIP-712 struct hash from the 7 packet fields.
+3. Compute EIP-712 struct hash from the 8 packet fields.
 4. Compute digest using `DOMAIN_SEPARATOR`.
 5. Recover signer via `ECDSA.recover`.
 6. Compare recovered address to `sequencerAddress`.
@@ -539,6 +540,7 @@ bytes32 structHash = keccak256(abi.encode(
     packet.auctionId,
     packet.manifestHash,
     packet.finalLogHash,
+    packet.replayContentHash,
     packet.winnerAgentId,
     packet.winnerWallet,
     packet.winningBidAmount,

@@ -2,7 +2,7 @@
 
 > USDC bond escrow with Chainlink CRE settlement. The most complex contract in the system.
 
-**Source**: `contracts/src/AuctionEscrow.sol` (374 lines)
+**Source**: `contracts/src/AuctionEscrow.sol` (396 lines)
 **Solidity**: 0.8.24 | **EVM**: Cancun | **Target**: Base Sepolia (chainId 84532)
 **Inherits**: `IReceiver` (Chainlink), `Ownable`, `ReentrancyGuard` (OpenZeppelin v5.1), `IAuctionTypes`
 **Uses**: `SafeERC20` (OpenZeppelin)
@@ -253,7 +253,7 @@ The solvency check at step 5 prevents phantom bonds. If the admin calls `recordB
 #### onReport
 
 ```solidity
-function onReport(bytes calldata metadata, bytes calldata report) external onlyForwarder
+function onReport(bytes calldata metadata, bytes calldata report) external onlyForwarder nonReentrant
 ```
 
 The Chainlink CRE entry point. Called by the KeystoneForwarder after the DON verifies the settlement workflow's output. This is the only path for trustless auction settlement.
@@ -264,15 +264,14 @@ The Chainlink CRE entry point. Called by the KeystoneForwarder after the DON ver
 | `report` | `bytes` | ABI-encoded settlement data: `(bytes32 auctionId, uint256 winnerAgentId, address winnerWallet, uint256 amount)`. |
 
 **Access**: KeystoneForwarder only (`onlyForwarder`).
-**Reverts**: `OnlyForwarder` if caller is not the forwarder, `InvalidReport` if metadata is too short or CRE parameters don't match.
+**Reverts**: `OnlyForwarder` if caller is not the forwarder, `CRENotConfigured` if workflow parameters are not fully configured, `InvalidReport` if metadata is too short or CRE parameters don't match.
 
 **Validation flow:**
-1. Metadata must be at least 64 bytes.
-2. Extract `workflowId` (bytes 0-32), `workflowName` (bytes 32-42), `workflowOwner` (bytes 42-62).
-3. If `expectedWorkflowId` is set, verify it matches.
-4. If `expectedWorkflowName` is set, verify it matches.
-5. If `expectedAuthor` is set, verify it matches.
-6. Delegate to `_processReport(report)`.
+1. `isCREConfigured` must be true (`CRENotConfigured` otherwise).
+2. Metadata must be at least 64 bytes.
+3. Extract `workflowId` (bytes 0-32), `workflowName` (bytes 32-42), `workflowOwner` (bytes 42-62).
+4. Verify exact equality with configured values (`expectedWorkflowId`, `expectedWorkflowName`, `expectedAuthor`).
+5. Delegate to `_processReport(report)`.
 
 #### _processReport (internal)
 
