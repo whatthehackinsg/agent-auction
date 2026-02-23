@@ -25,9 +25,10 @@ contract CreateTestAuction is Script {
     uint256 constant WINNING_BID = 200_000; // 0.2 USDC
     bytes32 constant FINAL_LOG_HASH = keccak256("test-final-log-hash");
 
+    bytes32 constant REPLAY_CONTENT_HASH = keccak256("test-replay-content-hash");
     // EIP-712 domain from AuctionRegistry constructor
     bytes32 constant SETTLEMENT_TYPEHASH = keccak256(
-        "AuctionSettlementPacket(bytes32 auctionId,bytes32 manifestHash,bytes32 finalLogHash,uint256 winnerAgentId,address winnerWallet,uint256 winningBidAmount,uint64 closeTimestamp)"
+        "AuctionSettlementPacket(bytes32 auctionId,bytes32 manifestHash,bytes32 finalLogHash,bytes32 replayContentHash,uint256 winnerAgentId,address winnerWallet,uint256 winningBidAmount,uint64 closeTimestamp)"
     );
 
     function run() external {
@@ -71,6 +72,7 @@ contract CreateTestAuction is Script {
                 AUCTION_ID,
                 MANIFEST_HASH,
                 FINAL_LOG_HASH,
+                REPLAY_CONTENT_HASH,
                 WINNER_AGENT_ID,
                 WINNER_WALLET,
                 WINNING_BID,
@@ -88,6 +90,7 @@ contract CreateTestAuction is Script {
             auctionId: AUCTION_ID,
             manifestHash: MANIFEST_HASH,
             finalLogHash: FINAL_LOG_HASH,
+            replayContentHash: REPLAY_CONTENT_HASH,
             winnerAgentId: WINNER_AGENT_ID,
             winnerWallet: WINNER_WALLET,
             winningBidAmount: WINNING_BID,

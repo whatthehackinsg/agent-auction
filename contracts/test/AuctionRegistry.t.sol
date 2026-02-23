@@ -42,6 +42,7 @@ contract AuctionRegistryTest is Test {
             auctionId: auctionId,
             manifestHash: manifestHash,
             finalLogHash: keccak256("finalLog"),
+            replayContentHash: keccak256("replayContent"),
             winnerAgentId: 42,
             winnerWallet: address(0x1111111111111111111111111111111111111111),
             winningBidAmount: 200e6,
@@ -56,6 +57,7 @@ contract AuctionRegistryTest is Test {
                 packet.auctionId,
                 packet.manifestHash,
                 packet.finalLogHash,
+                packet.replayContentHash,
                 packet.winnerAgentId,
                 packet.winnerWallet,
                 packet.winningBidAmount,
@@ -178,7 +180,7 @@ contract AuctionRegistryTest is Test {
             address(0x1111111111111111111111111111111111111111),
             200e6,
             keccak256("finalLog"),
-            manifestHash
+            keccak256("replayContent")
         );
         registry.recordResult(packet, sig);
     }
@@ -203,6 +205,7 @@ contract AuctionRegistryTest is Test {
                 packet.auctionId,
                 packet.manifestHash,
                 packet.finalLogHash,
+                packet.replayContentHash,
                 packet.winnerAgentId,
                 packet.winnerWallet,
                 packet.winningBidAmount,
@@ -388,6 +391,7 @@ contract AuctionRegistryTest is Test {
             auctionId: auctionId,
             manifestHash: keccak256("wrong-manifest"),
             finalLogHash: keccak256("finalLog"),
+            replayContentHash: keccak256("replayContent"),
             winnerAgentId: 42,
             winnerWallet: address(0x1111111111111111111111111111111111111111),
             winningBidAmount: 200e6,

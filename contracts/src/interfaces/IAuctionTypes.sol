@@ -14,6 +14,7 @@ interface IAuctionTypes {
         bytes32 auctionId;
         bytes32 manifestHash;
         bytes32 finalLogHash;
+        bytes32 replayContentHash;
         uint256 winnerAgentId;
         address winnerWallet;
         uint256 winningBidAmount;

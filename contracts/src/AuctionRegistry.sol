@@ -17,7 +17,7 @@ contract AuctionRegistry is IAuctionTypes, Ownable {
 
     /// @dev EIP-712 typehash for settlement packet signature verification
     bytes32 public constant SETTLEMENT_TYPEHASH = keccak256(
-        "AuctionSettlementPacket(bytes32 auctionId,bytes32 manifestHash,bytes32 finalLogHash,uint256 winnerAgentId,address winnerWallet,uint256 winningBidAmount,uint64 closeTimestamp)"
+        "AuctionSettlementPacket(bytes32 auctionId,bytes32 manifestHash,bytes32 finalLogHash,bytes32 replayContentHash,uint256 winnerAgentId,address winnerWallet,uint256 winningBidAmount,uint64 closeTimestamp)"
     );
 
     /* ── Immutables ─────────────────────────────────────────────── */
@@ -190,6 +190,7 @@ contract AuctionRegistry is IAuctionTypes, Ownable {
                 packet.auctionId,
                 packet.manifestHash,
                 packet.finalLogHash,
+                packet.replayContentHash,
                 packet.winnerAgentId,
                 packet.winnerWallet,
                 packet.winningBidAmount,
@@ -203,7 +204,7 @@ contract AuctionRegistry is IAuctionTypes, Ownable {
         // Store result
         auction.state = AuctionState.CLOSED;
         auction.finalLogHash = packet.finalLogHash;
-        auction.replayContentHash = bytes32(0); // Not in our packet struct; CRE fetches from IPFS
+        auction.replayContentHash = packet.replayContentHash;
         auction.winnerAgentId = packet.winnerAgentId;
         auction.winnerWallet = packet.winnerWallet;
         auction.finalPrice = packet.winningBidAmount;
@@ -215,7 +216,7 @@ contract AuctionRegistry is IAuctionTypes, Ownable {
             packet.winnerWallet,
             packet.winningBidAmount,
             packet.finalLogHash,
-            packet.manifestHash // replayContentHash placeholder — CRE uses IPFS pin
+            packet.replayContentHash
         );
     }
 

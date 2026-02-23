@@ -222,7 +222,7 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
     /// @dev Validates metadata then processes the settlement report.
     ///      Metadata layout (per Chainlink spec):
     ///        bytes32 workflowId | bytes10 workflowName | address workflowOwner | bytes2 reportId
-    function onReport(bytes calldata metadata, bytes calldata report) external onlyForwarder {
+    function onReport(bytes calldata metadata, bytes calldata report) external onlyForwarder nonReentrant {
         if (!isCREConfigured) revert CRENotConfigured();
 
         // Validate CRE metadata
