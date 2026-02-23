@@ -6,11 +6,13 @@ import { serializeReplayBundle, computeContentHash } from './lib/replay-bundle'
 import { type AuctionEvent, ActionType } from './types/engine'
 import { getBondStatus, pollAndRecordBondTransfers } from './lib/bond-watcher'
 import { requireX402 } from './middleware/x402'
+import { pinReplayBundleToIpfs } from './lib/ipfs'
 
 export interface Env {
   AUCTION_DB: D1Database
   AUCTION_ROOM: DurableObjectNamespace
   SEQUENCER_PRIVATE_KEY: string
+  PINATA_API_KEY?: string
 }
 
 const app = new Hono<{ Bindings: Env }>()
@@ -205,11 +207,36 @@ app.get('/auctions/:id/replay', async (c) => {
   const replayBytes = serializeReplayBundle(auctionId, events)
   const replayHash = computeContentHash(replayBytes)
 
+  let replayCid: string | null = null
+  const cidRow = await c.env.AUCTION_DB
+    .prepare('SELECT replay_cid FROM auctions WHERE auction_id = ?')
+    .bind(auctionId)
+    .first<{ replay_cid: string | null }>()
+
+  replayCid = cidRow?.replay_cid ?? null
+
+  if (!replayCid) {
+    const pin = await pinReplayBundleToIpfs(replayBytes, {
+      pinataJwt: c.env.PINATA_API_KEY,
+      fileName: `${auctionId}.replay.bin`,
+    })
+
+    if (pin.cid) {
+      replayCid = pin.cid
+      // Best effort persistence: ignore DB errors to preserve replay serving path.
+      await c.env.AUCTION_DB
+        .prepare('UPDATE auctions SET replay_cid = ? WHERE auction_id = ?')
+        .bind(replayCid, auctionId)
+        .run()
+    }
+  }
+
   return new Response(replayBytes, {
     status: 200,
     headers: {
       'Content-Type': 'application/octet-stream',
       'X-Replay-Content-Hash': toHex(replayHash),
+      ...(replayCid ? { 'X-IPFS-CID': replayCid } : {}),
     },
   })
 })

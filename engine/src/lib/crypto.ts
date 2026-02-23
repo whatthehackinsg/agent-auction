@@ -2,7 +2,10 @@ import { keccak256, encodePacked, toBytes, toHex, concat, numberToHex } from 'vi
 
 /**
  * Compute event hash for the append-only event chain.
- * STUB: Replace with Poseidon from @agent-auction/crypto when WS-1 delivers
+ * STUB: Replace with Poseidon from WS-1 crypto package when available.
+ * Swap target:
+ *   import { computeEventHash as ws1ComputeEventHash } from '@agent-auction/crypto/poseidon-chain'
+ *   export function computeEventHash(...) { return ws1ComputeEventHash(...) }
  */
 export function computeEventHash(
   seq: bigint,
@@ -16,7 +19,10 @@ export function computeEventHash(
 
 /**
  * Compute payload hash from action fields.
- * STUB: Replace with Poseidon from @agent-auction/crypto when WS-1 delivers
+ * STUB: Replace with Poseidon-based payload hash from WS-1.
+ * Swap target:
+ *   import { computePayloadHash as ws1ComputePayloadHash } from '@agent-auction/crypto/poseidon-chain'
+ *   export function computePayloadHash(...) { return ws1ComputePayloadHash(...) }
  */
 export function computePayloadHash(
   actionType: number,
@@ -33,7 +39,10 @@ export function computePayloadHash(
 
 /**
  * Verify ZK membership proof.
- * STUB: Replace with snarkjs.groth16.verify() when WS-1 delivers
+ * STUB: Replace with real Groth16 verification from WS-1.
+ * Swap target:
+ *   import { verifyMembershipProof as ws1VerifyMembershipProof } from '@agent-auction/crypto/snarkjs-verify'
+ *   export async function verifyMembershipProof(...) { return ws1VerifyMembershipProof(...) }
  */
 export async function verifyMembershipProof(
   proof: unknown,
@@ -45,7 +54,10 @@ export async function verifyMembershipProof(
 
 /**
  * Verify EIP-712 typed data signature.
- * STUB: Replace with real ecrecover-based verification from @agent-auction/crypto
+ * STUB: Replace with real EIP-712 signature verification from WS-1.
+ * Swap target:
+ *   import { verifyEIP712Signature as ws1VerifyEIP712Signature } from '@agent-auction/crypto/eip712-typed-data'
+ *   export function verifyEIP712Signature(...) { return ws1VerifyEIP712Signature(...) }
  */
 export function verifyEIP712Signature(
   hash: Uint8Array,
@@ -58,7 +70,10 @@ export function verifyEIP712Signature(
 
 /**
  * Derive nullifier for an agent's action in a specific auction.
- * STUB: Replace with Poseidon-based nullifier from @agent-auction/crypto when WS-1 delivers
+ * STUB: Replace with Poseidon-based nullifier from WS-1.
+ * Swap target:
+ *   import { deriveNullifier as ws1DeriveNullifier } from '@agent-auction/crypto/nullifier'
+ *   export function deriveNullifier(...) { return ws1DeriveNullifier(...) }
  */
 export function deriveNullifier(
   agentSecret: Uint8Array,

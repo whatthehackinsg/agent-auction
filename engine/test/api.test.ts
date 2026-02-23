@@ -266,6 +266,13 @@ describe('API routes (Hono)', () => {
 
     await db
       .prepare(
+        'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline, replay_cid) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(auctionId, '0x' + 'aa'.repeat(32), 1, '1', '0', Math.floor(Date.now() / 1000) + 60, 'bafy-test-cid')
+      .run()
+
+    await db
+      .prepare(
         'INSERT INTO events (auction_id, seq, prev_hash, event_hash, payload_hash, action_type, agent_id, wallet, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .bind(
@@ -293,6 +300,7 @@ describe('API routes (Hono)', () => {
 
     const contentHash = res.headers.get('X-Replay-Content-Hash')
     expect(contentHash).toMatch(/^0x[0-9a-f]{64}$/)
+    expect(res.headers.get('X-IPFS-CID')).toBe('bafy-test-cid')
   })
 
   it('GET /auctions/:id/bonds/:agentId returns bond observation status', async () => {

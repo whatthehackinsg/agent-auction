@@ -3,12 +3,14 @@ import {
   createPublicClient,
   http,
   getAddress,
+  isAddress,
   type Address,
   type Hex,
 } from "viem"
 import { baseSepolia } from "viem/chains"
 import { privateKeyToAccount } from "viem/accounts"
-import { entryPoint07Address, toSimpleSmartAccount } from "permissionless/accounts"
+import { entryPoint07Address } from "viem/account-abstraction"
+import { toSimpleSmartAccount } from "permissionless/accounts"
 import { createSmartAccountClient } from "permissionless"
 import { createPimlicoClient } from "permissionless/clients/pimlico"
 
@@ -29,8 +31,8 @@ if (bundlerEndpoints.length === 0) {
   )
 }
 
-const baseRpcUrl = requireEnv("BASE_SEPOLIA_RPC_URL")
-const privateKey = requireEnv("PRIVATE_KEY")
+const baseRpcUrl = requireUrlFromEnv("BASE_SEPOLIA_RPC_URL")
+const privateKey = requirePrivateKey("PRIVATE_KEY")
 const destination = process.env.DESTINATION
 const txValueWei = process.env.TX_VALUE_WEI
   ? BigInt(process.env.TX_VALUE_WEI)
@@ -42,7 +44,7 @@ const publicClient = createPublicClient({
   transport: http(baseRpcUrl),
 })
 
-const owner = privateKeyToAccount(privateKey as Hex)
+const owner = privateKeyToAccount(privateKey)
 
 async function main() {
   const account = await toSimpleSmartAccount({
@@ -54,16 +56,23 @@ async function main() {
     },
   })
 
-  const to = destination ? getAddress(destination as Address) : account.address
+  const accountAddress = account.address
+
+  if (!isAddress(accountAddress)) {
+    throw new Error("Could not derive a valid smart account address from permissionless config.")
+  }
+
+  const to = destination ? getAddress(destination as Address) : accountAddress
 
   console.log("EntryPoint", entryPoint07Address)
-  console.log("Smart account", account.address)
+  console.log("Smart account", accountAddress)
   console.log("Destination", to)
 
   let lastError: unknown
+
   for (let i = 0; i < bundlerEndpoints.length; i++) {
     const bundlerUrl = bundlerEndpoints[i]
-    const paymasterUrl = paymasterEndpoints[i] ?? paymasterEndpoints[0] ?? undefined
+    const paymasterUrl = paymasterEndpoints[i]
 
     console.log(`Attempting bundler: ${bundlerUrl}`)
 
@@ -82,15 +91,17 @@ async function main() {
       account,
       chain: baseSepolia,
       bundlerTransport: http(bundlerUrl, { timeout: requestTimeoutMs }),
-      paymaster: pimlicoPaymaster
+      ...(pimlicoPaymaster
         ? {
-            getPaymasterData: pimlicoPaymaster.getPaymasterData,
-            getPaymasterStubData: pimlicoPaymaster.getPaymasterStubData,
+            paymaster: {
+              getPaymasterData: pimlicoPaymaster.getPaymasterData,
+              getPaymasterStubData: pimlicoPaymaster.getPaymasterStubData,
+            },
+            paymasterContext: {
+              mode: "SPONSORED",
+            },
           }
-        : undefined,
-      paymasterContext: {
-        mode: "SPONSORED",
-      },
+        : {}),
     })
 
     try {
@@ -144,14 +155,50 @@ function parseEndpointList(primary?: string, fallbackList?: string): string[] {
           .filter(Boolean)
       : []),
   ]
-  return Array.from(new Set(endpoints))
+
+  const uniqueEndpoints = new Set<string>()
+
+  for (const endpoint of endpoints) {
+    uniqueEndpoints.add(requireUrl(endpoint))
+  }
+
+  return Array.from(uniqueEndpoints)
 }
 
-function requireEnv(name: string) {
+function requireEnvValue(name: string): string {
   const value = process.env[name]
   if (!value || value.trim() === "") {
     throw new Error(`Environment variable ${name} is required.`)
   }
+
+  return value
+}
+
+function requireUrl(raw: string): string {
+  const url = raw.trim()
+
+  try {
+    new URL(url)
+  } catch {
+    throw new Error(`Invalid URL value: ${raw}`)
+  }
+
+  return url
+}
+
+function requireUrlFromEnv(name: string): string {
+  return requireUrl(requireEnvValue(name))
+}
+
+function requirePrivateKey(name: string): Hex {
+  const value = requireEnvValue(name)
+
+  if (!/^0x[0-9a-fA-F]{64}$/.test(value)) {
+    throw new Error(
+      `Environment variable ${name} must be a 32-byte hex string with 0x prefix.`,
+    )
+  }
+
   return value
 }
 

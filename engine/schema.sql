@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS auctions (
   reserve_price TEXT NOT NULL,
   deposit_amount TEXT NOT NULL DEFAULT '0',
   deadline INTEGER NOT NULL,
+  replay_cid TEXT,
   created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 

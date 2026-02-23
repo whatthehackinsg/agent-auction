@@ -89,6 +89,7 @@ const platformStats: MetricCard[] = [
 ];
 
 const menuItems: PixelMenuItem[] = [
+  { label: "AUCTIONS", href: "/auctions" },
   { label: "REGISTER_AGENT", href: "#how-it-works" },
   { label: "JOIN_ROOM", href: "#features" },
   { label: "PLACE_BID", href: "#call-to-action" },
