@@ -13,6 +13,7 @@ export interface Env {
   AUCTION_ROOM: DurableObjectNamespace
   SEQUENCER_PRIVATE_KEY: string
   PINATA_API_KEY?: string
+  X402_MODE?: string
 }
 
 const app = new Hono<{ Bindings: Env }>()

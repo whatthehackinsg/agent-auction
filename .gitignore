@@ -28,3 +28,7 @@ contracts/broadcast/
 # Misc
 my-video/
 skills-lock.json
+circuits/build/
+circuits/ptau/
+circuits/keys/*.zkey
+circuits/**/.DS_Store
