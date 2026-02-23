@@ -285,6 +285,12 @@ npm run build                  # Production build
 npm run lint                   # ESLint
 ```
 
+### CRE Configuration Policy
+
+- **Real KeystoneForwarder (testnet + production)**: `AuctionEscrow.configureCRE(...)` is mandatory before settlement.
+- **Contract behavior**: `onReport()` is fail-closed and reverts when CRE is not configured.
+- **Simulation**: local simulation may use mock-forwarder-only settings; do not treat that as production authorization posture.
+
 ## Roadmap
 
 | Phase | Focus | Status |

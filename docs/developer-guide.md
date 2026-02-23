@@ -564,7 +564,12 @@ cast send 0x20944f46AB83F7eA40923D7543AF742Da829743c \
   --private-key $PRIVATE_KEY
 ```
 
-Setting any CRE parameter to its zero value skips that check during `onReport` validation. This is useful during development.
+`configureCRE` is required for any real KeystoneForwarder deployment (including testnet). `onReport` is fail-closed and reverts until CRE config is set.
+
+Environment policy:
+- **CRE CLI simulation (Chainlink MockForwarder path)**: keep simulation-only behavior; do not treat it as production auth posture.
+- **Repo local contract tests (`MockKeystoneForwarder`)**: configure mock metadata and expected values so `onReport` validation remains active.
+- **Base Sepolia / production (real KeystoneForwarder)**: always run `configureCRE` before enabling settlement.
 
 ### E2E Confirmation
 

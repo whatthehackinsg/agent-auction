@@ -139,6 +139,8 @@ contract Deploy is Script {
             escrow.setExpectedAuthor(mockForwarder.workflowOwner());
             console2.log("AuctionEscrow CRE config set (mock workflow params)");
         }
+        // NOTE: Real KeystoneForwarder deployments must call configureCRE(workflowId, workflowName, workflowOwner)
+        // after CRE workflow registration/activation. onReport() is fail-closed until configured.
 
         // ── Step 8b: Paymaster target allowlist ────────────────
         paymaster.setAllowedTarget(address(escrow), true);
