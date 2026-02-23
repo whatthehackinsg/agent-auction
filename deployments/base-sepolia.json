@@ -25,6 +25,10 @@
       "abi": "../contracts/out/MockKeystoneForwarder.sol/MockKeystoneForwarder.json",
       "note": "Simulates Chainlink KeystoneForwarder for testing — calls onReport() directly"
     },
+    "RealKeystoneForwarder": {
+      "address": "0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5",
+      "note": "Canonical Chainlink KeystoneForwarder on Base Sepolia — used by CRE --broadcast"
+    },
     "AgentAccountFactory": {
       "address": "0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD",
       "abi": "../contracts/out/AgentAccountFactory.sol/AgentAccountFactory.json",
@@ -36,14 +40,14 @@
       "note": "EIP-4337 gas sponsor — 0.01 ETH staked, 0.05 ETH deposited"
     },
     "AuctionRegistry": {
-      "address": "0x81c015F6189da183Bf19a5Bb8ca7FDd7995B35F9",
+      "address": "0xFEc7a05707AF85C6b248314E20FF8EfF590c3639",
       "abi": "../contracts/out/AuctionRegistry.sol/AuctionRegistry.json",
-      "note": "Auction lifecycle: OPEN → CLOSED → SETTLED/CANCELLED (EIP-712 sequencer sigs)"
+      "note": "Auction lifecycle: OPEN → CLOSED → SETTLED/CANCELLED (EIP-712 sequencer sigs). V2 — redeployed to rebind escrow."
     },
     "AuctionEscrow": {
-      "address": "0x211086a6D1c08aB2082154829472FC24f8C40358",
+      "address": "0x20944f46AB83F7eA40923D7543AF742Da829743c",
       "abi": "../contracts/out/AuctionEscrow.sol/AuctionEscrow.json",
-      "note": "USDC bond escrow + CRE settlement via IReceiver.onReport()"
+      "note": "USDC bond escrow + CRE settlement via IReceiver.onReport(). V2 — uses real KeystoneForwarder."
     }
   },
 
@@ -57,7 +61,7 @@
       "name": "AgentAuction",
       "version": "1",
       "chainId": 84532,
-      "verifyingContract": "0x81c015F6189da183Bf19a5Bb8ca7FDd7995B35F9"
+      "verifyingContract": "0xFEc7a05707AF85C6b248314E20FF8EfF590c3639"
     }
   },
 

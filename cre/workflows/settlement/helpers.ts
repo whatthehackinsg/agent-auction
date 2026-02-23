@@ -7,7 +7,7 @@ import {
   TxStatus,
   getNetwork,
   encodeCallMsg,
-  LAST_FINALIZED_BLOCK_NUMBER,
+  LATEST_BLOCK_NUMBER,
 } from "@chainlink/cre-sdk";
 import {
   encodeAbiParameters,
@@ -46,6 +46,7 @@ export type Config = {
   identityRegistryAddress: string;
   replayBundleBaseUrl: string;
   gasLimit: string;
+  skipReplayVerification?: string;
 };
 
 function toHexLogField(value: LogField | undefined, field: string): Hex {
@@ -129,6 +130,8 @@ export const onAuctionEnded = (
     `[SETTLEMENT] auctionId=${event.auctionId} winner=${event.winnerAgentId} price=${event.finalPrice}`
   );
 
+  // ── Phase A: Verify auction state is CLOSED ────────────────────
+
   const stateCallData = (GET_AUCTION_STATE_SELECTOR +
     event.auctionId.slice(2)) as Hex;
 
@@ -139,7 +142,7 @@ export const onAuctionEnded = (
         to: runtime.config.auctionRegistryAddress,
         data: stateCallData,
       }),
-      blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
+      blockNumber: LATEST_BLOCK_NUMBER,
     })
     .result();
 
@@ -156,6 +159,8 @@ export const onAuctionEnded = (
 
   runtime.log("[SETTLEMENT] Phase A: Auction state verified CLOSED");
 
+  // ── Phase B: Cross-verify winner against on-chain state ────────
+
   const winnerCallData = (GET_WINNER_SELECTOR +
     event.auctionId.slice(2)) as Hex;
 
@@ -166,7 +171,7 @@ export const onAuctionEnded = (
         to: runtime.config.auctionRegistryAddress,
         data: winnerCallData,
       }),
-      blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
+      blockNumber: LATEST_BLOCK_NUMBER,
     })
     .result();
 
@@ -193,29 +198,39 @@ export const onAuctionEnded = (
     "[SETTLEMENT] Phase B: Winner cross-verified against on-chain state"
   );
 
-  const bundleUrl = `${runtime.config.replayBundleBaseUrl}/replay/${event.auctionId}`;
+  // ── Phase C: Replay bundle verification ────────────────────────
 
-  const bundleResponse = httpClient
-    .sendRequest(runtime, {
-      url: bundleUrl,
-      method: "GET",
-      headers: { Accept: "application/octet-stream" },
-    })
-    .result();
+  if (runtime.config.skipReplayVerification === "true") {
+    runtime.log(
+      "[SETTLEMENT] Phase C: Replay verification SKIPPED (skipReplayVerification=true)"
+    );
+  } else {
+    const bundleUrl = `${runtime.config.replayBundleBaseUrl}/replay/${event.auctionId}`;
 
-  if (bundleResponse.statusCode !== 200) {
-    throw new Error(
-      `Failed to fetch replay bundle: HTTP ${bundleResponse.statusCode}`
+    const bundleResponse = httpClient
+      .sendRequest(runtime, {
+        url: bundleUrl,
+        method: "GET",
+        headers: { Accept: "application/octet-stream" },
+      })
+      .result();
+
+    if (bundleResponse.statusCode !== 200) {
+      throw new Error(
+        `Failed to fetch replay bundle: HTTP ${bundleResponse.statusCode}`
+      );
+    }
+
+    if (!bundleResponse.body || bundleResponse.body.length === 0) {
+      throw new Error("Replay bundle is empty");
+    }
+
+    runtime.log(
+      `[SETTLEMENT] Phase C: Replay bundle fetched (${bundleResponse.body.length} bytes)`
     );
   }
 
-  if (!bundleResponse.body || bundleResponse.body.length === 0) {
-    throw new Error("Replay bundle is empty");
-  }
-
-  runtime.log(
-    `[SETTLEMENT] Phase C: Replay bundle fetched (${bundleResponse.body.length} bytes)`
-  );
+  // ── Phase D: Sign settlement report ────────────────────────────
 
   const reportPayload = encodeSettlementReport(
     event.auctionId,
@@ -234,6 +249,8 @@ export const onAuctionEnded = (
     .result();
 
   runtime.log("[SETTLEMENT] Phase D: Report signed by DON");
+
+  // ── Phase E: Write report to AuctionEscrow via forwarder ───────
 
   const writeResult = evmClient
     .writeReport(runtime, {

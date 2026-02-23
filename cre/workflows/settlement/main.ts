@@ -9,6 +9,7 @@ const configSchema = z.object({
   identityRegistryAddress: z.string(),
   replayBundleBaseUrl: z.string(),
   gasLimit: z.string().default("500000"),
+  skipReplayVerification: z.string().optional(),
 });
 const initWorkflow = (config: Config) => {
   const network = getNetwork({
