@@ -10,10 +10,10 @@ export function PixelTrailLayer() {
   return (
     <div className="pointer-events-none absolute inset-0 z-[20] hidden lg:block">
       <PixelTrail
-        gridSize={40}
+        gridSize={50}
         trailSize={0.1}
-        maxAge={200}
-        interpolate={3}
+        maxAge={250}
+        interpolate={5}
         color="#5227FF"
         gooeyEnabled
         gooStrength={2}

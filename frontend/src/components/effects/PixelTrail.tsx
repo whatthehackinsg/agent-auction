@@ -90,6 +90,7 @@ function GooeyFilter({ id, strength }: { id: string; strength: number }) {
         pointerEvents: "none",
       }}
     >
+      <title>Pixel trail gooey filter</title>
       <defs>
         <filter id={id}>
           <feGaussianBlur in="SourceGraphic" stdDeviation={strength} result="blur" />
@@ -190,7 +191,7 @@ export default function PixelTrail({
     inset: 0,
     pointerEvents: "none",
     ...(canvasProps?.style ?? {}),
-    ...(useGooey ? { filter: `url("#${filterId}")` } : {}),
+    ...(useGooey ? { filter: `url(#${filterId})` } : {}),
   } satisfies CSSProperties;
 
   return (
