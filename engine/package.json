@@ -1,0 +1,25 @@
+{
+  "name": "auction-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent-native auction engine — Cloudflare Workers + Durable Objects",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "hono": "^4.12.2",
+    "viem": "^2.46.2"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.12.14",
+    "@cloudflare/workers-types": "^4.20260302.0",
+    "miniflare": "^4.20260219.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18",
+    "wrangler": "^4.67.0"
+  }
+}

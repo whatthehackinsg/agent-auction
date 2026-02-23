@@ -1,0 +1,17 @@
+name = "auction-engine"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "AUCTION_DB"
+database_name = "auction-db"
+database_id = "local-dev-id"
+
+[[durable_objects.bindings]]
+name = "AUCTION_ROOM"
+class_name = "AuctionRoom"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["AuctionRoom"]
