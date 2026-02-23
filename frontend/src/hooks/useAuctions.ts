@@ -13,13 +13,13 @@ export interface AuctionSummary {
 }
 
 export function useAuctions() {
-  const { data, error, isLoading, mutate } = useSWR<AuctionSummary[]>(
+  const { data, error, isLoading, mutate } = useSWR<{ auctions: AuctionSummary[] }>(
     '/auctions',
     fetcher,
     { refreshInterval: 5000 } // Poll every 5s
   )
   return {
-    auctions: data ?? [],
+    auctions: data?.auctions ?? [],
     isLoading,
     error,
     mutate,

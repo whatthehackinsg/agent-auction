@@ -425,6 +425,10 @@ The signature must come from the current `winnerWallet`.
 
 ## TypeScript Integration
 
+For a Base Sepolia account-abstraction demo flow using `permissionless.js` and `viem` (EntryPoint v0.7) with bundler/paymaster fallback, see:
+
+- `docs/permissionless-demo-script.md`
+
 Import types and addresses from `contracts/types/index.ts`:
 
 ```typescript
