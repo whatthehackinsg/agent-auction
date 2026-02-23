@@ -1,0 +1,13 @@
+version: "1.0"
+name: "auction-settlement"
+description: "CRE Settlement Workflow — verifies auction results and releases escrow via KeystoneForwarder"
+
+targets:
+  base-sepolia:
+    rpc_urls:
+      base-sepolia: "${BASE_SEPOLIA_RPC}"
+
+workflows:
+  settlement:
+    path: "./workflows/settlement.ts"
+    config: "./config/base-sepolia.json"

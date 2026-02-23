@@ -1,0 +1,65 @@
+{
+  "chainId": 84532,
+  "network": "base-sepolia",
+  "deployer": "0x633ec0e633AA4d8BbCCEa280331A935747416737",
+  "deployedAt": "2026-02-22",
+
+  "entryPoint": {
+    "address": "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
+    "note": "Canonical EIP-4337 EntryPoint v0.7 (not deployed by us)"
+  },
+
+  "contracts": {
+    "MockUSDC": {
+      "address": "0xfEE786495d165b16dc8e68B6F8281193e041737d",
+      "abi": "../contracts/out/MockUSDC.sol/MockUSDC.json",
+      "note": "ERC-20 mock USDC (6 decimals)"
+    },
+    "MockIdentityRegistry": {
+      "address": "0x68E06c33D4957102362ACffC2BFF9E6b38199318",
+      "abi": "../contracts/out/MockIdentityRegistry.sol/MockIdentityRegistry.json",
+      "note": "Mock ERC-8004 IdentityRegistry — ownerOf(agentId) returns registered owner"
+    },
+    "MockKeystoneForwarder": {
+      "address": "0x846ae85403D1BBd3B343F1b214D297969b39Ce23",
+      "abi": "../contracts/out/MockKeystoneForwarder.sol/MockKeystoneForwarder.json",
+      "note": "Simulates Chainlink KeystoneForwarder for testing — calls onReport() directly"
+    },
+    "AgentAccountFactory": {
+      "address": "0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD",
+      "abi": "../contracts/out/AgentAccountFactory.sol/AgentAccountFactory.json",
+      "note": "CREATE2 factory for AgentAccount proxies"
+    },
+    "AgentPaymaster": {
+      "address": "0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d",
+      "abi": "../contracts/out/AgentPaymaster.sol/AgentPaymaster.json",
+      "note": "EIP-4337 gas sponsor — 0.01 ETH staked, 0.05 ETH deposited"
+    },
+    "AuctionRegistry": {
+      "address": "0x81c015F6189da183Bf19a5Bb8ca7FDd7995B35F9",
+      "abi": "../contracts/out/AuctionRegistry.sol/AuctionRegistry.json",
+      "note": "Auction lifecycle: OPEN → CLOSED → SETTLED/CANCELLED (EIP-712 sequencer sigs)"
+    },
+    "AuctionEscrow": {
+      "address": "0x211086a6D1c08aB2082154829472FC24f8C40358",
+      "abi": "../contracts/out/AuctionEscrow.sol/AuctionEscrow.json",
+      "note": "USDC bond escrow + CRE settlement via IReceiver.onReport()"
+    }
+  },
+
+  "config": {
+    "sequencerAddress": "0x633ec0e633AA4d8BbCCEa280331A935747416737",
+    "usdcDecimals": 6,
+    "paymasterStake": "0.01 ETH",
+    "paymasterDeposit": "0.05 ETH",
+    "paymasterUnstakeDelay": 86400,
+    "eip712Domain": {
+      "name": "AgentAuction",
+      "version": "1",
+      "chainId": 84532,
+      "verifyingContract": "0x81c015F6189da183Bf19a5Bb8ca7FDd7995B35F9"
+    }
+  },
+
+  "explorer": "https://sepolia.basescan.org"
+}
