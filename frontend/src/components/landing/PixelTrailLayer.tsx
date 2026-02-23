@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 
 const PixelTrail = dynamic(() => import("@/components/effects/PixelTrail"), {
@@ -7,8 +8,23 @@ const PixelTrail = dynamic(() => import("@/components/effects/PixelTrail"), {
 });
 
 export function PixelTrailLayer() {
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+    const update = () => setIsDesktop(mediaQuery.matches);
+
+    update();
+    mediaQuery.addEventListener("change", update);
+    return () => mediaQuery.removeEventListener("change", update);
+  }, []);
+
+  if (!isDesktop) {
+    return null;
+  }
+
   return (
-    <div className="pointer-events-none absolute inset-0 z-[20] hidden lg:block">
+    <div className="pointer-events-none absolute inset-0 z-[20]">
       <PixelTrail
         gridSize={50}
         trailSize={0.1}
