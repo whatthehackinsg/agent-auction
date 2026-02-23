@@ -1,5 +1,5 @@
 {
-  "chainSelectorName": "base-sepolia",
+  "chainSelectorName": "ethereum-testnet-sepolia-base-1",
   "auctionRegistryAddress": "0x81c015F6189da183Bf19a5Bb8ca7FDd7995B35F9",
   "auctionEscrowAddress": "0x211086a6D1c08aB2082154829472FC24f8C40358",
   "identityRegistryAddress": "0x68E06c33D4957102362ACffC2BFF9E6b38199318",

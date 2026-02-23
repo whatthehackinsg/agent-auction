@@ -12,7 +12,6 @@ import {
   Runner,
   EVMClient,
   HTTPClient,
-  EVMLogTrigger,
   handler,
   hexToBase64,
   bytesToHex,
@@ -45,6 +44,13 @@ const configSchema = z.object({
 
 type Config = z.infer<typeof configSchema>;
 
+type LogField = string | Uint8Array;
+
+type AuctionEndedLogInput = {
+  topics: Array<LogField | undefined>;
+  data: LogField | undefined;
+};
+
 // ─── ABI Fragments ───────────────────────────────────────────────────
 
 const AUCTION_ENDED_SIGNATURE = keccak256(
@@ -66,10 +72,20 @@ const AUCTION_STATE_CLOSED = 2n;
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
-function decodeAuctionEndedLog(log: {
-  topics: string[];
-  data: string;
-}): {
+function toHexLogField(value: LogField | undefined, field: string): Hex {
+  if (typeof value === "string") {
+    if (!value.startsWith("0x")) {
+      throw new Error(`Invalid ${field}: expected 0x-prefixed hex string`);
+    }
+    return value as Hex;
+  }
+  if (value instanceof Uint8Array) {
+    return bytesToHex(value) as Hex;
+  }
+  throw new Error(`Missing ${field}`);
+}
+
+export function decodeAuctionEndedLog(log: AuctionEndedLogInput): {
   auctionId: Hex;
   winnerAgentId: bigint;
   winnerWallet: Hex;
@@ -77,16 +93,21 @@ function decodeAuctionEndedLog(log: {
   finalLogHash: Hex;
   replayContentHash: Hex;
 } {
+  if (!log.topics || log.topics.length < 3) {
+    throw new Error("Malformed AuctionEnded log: expected at least 3 topics");
+  }
+
   // topics[0] = event sig, topics[1] = auctionId (indexed), topics[2] = winnerAgentId (indexed)
-  const auctionId = log.topics[1] as Hex;
-  const winnerAgentId = BigInt(log.topics[2]);
+  const auctionId = toHexLogField(log.topics[1], "topics[1]");
+  const winnerAgentId = BigInt(toHexLogField(log.topics[2], "topics[2]"));
+  const dataHex = toHexLogField(log.data, "data");
 
   // Non-indexed: (address winnerWallet, uint256 finalPrice, bytes32 finalLogHash, bytes32 replayContentHash)
   const decoded = decodeAbiParameters(
     parseAbiParameters(
       "address winnerWallet, uint256 finalPrice, bytes32 finalLogHash, bytes32 replayContentHash"
     ),
-    log.data as Hex
+    dataHex
   );
 
   return {
@@ -99,7 +120,7 @@ function decodeAuctionEndedLog(log: {
   };
 }
 
-function encodeSettlementReport(
+export function encodeSettlementReport(
   auctionId: Hex,
   winnerAgentId: bigint,
   winnerWallet: Hex,
@@ -115,7 +136,10 @@ function encodeSettlementReport(
 
 // ─── Main Callback ───────────────────────────────────────────────────
 
-const onAuctionEnded = (runtime: Runtime<Config>, log: any): string => {
+export const onAuctionEnded = (
+  runtime: Runtime<Config>,
+  log: AuctionEndedLogInput
+): string => {
   runtime.log("[SETTLEMENT] AuctionEnded event received");
 
   const network = getNetwork({
@@ -154,7 +178,7 @@ const onAuctionEnded = (runtime: Runtime<Config>, log: any): string => {
 
   const [auctionState] = decodeAbiParameters(
     parseAbiParameters("uint8"),
-    stateResult.returnData as Hex
+    bytesToHex(stateResult.data) as Hex
   );
 
   if (BigInt(auctionState) !== AUCTION_STATE_CLOSED) {
@@ -184,7 +208,7 @@ const onAuctionEnded = (runtime: Runtime<Config>, log: any): string => {
 
   const [storedAgentId, storedWallet, storedPrice] = decodeAbiParameters(
     parseAbiParameters("uint256, address, uint256"),
-    winnerResult.returnData as Hex
+    bytesToHex(winnerResult.data) as Hex
   );
 
   if (storedAgentId !== event.winnerAgentId) {
@@ -285,16 +309,21 @@ const onAuctionEnded = (runtime: Runtime<Config>, log: any): string => {
 // ─── Workflow Init ───────────────────────────────────────────────────
 
 const initWorkflow = (config: Config) => {
-  const logTrigger = new EVMLogTrigger({
-    chainSelector: config.chainSelectorName,
-    addresses: [config.auctionRegistryAddress],
-    eventSignatures: [
-      "AuctionEnded(bytes32,uint256,address,uint256,bytes32,bytes32)",
-    ],
-    confidenceLevel: "FINALIZED",
+  const network = getNetwork({
+    chainFamily: "evm",
+    chainSelectorName: config.chainSelectorName,
+    isTestnet: true,
+  });
+  if (!network) throw new Error("Network not found");
+
+  const evmClient = new EVMClient(network.chainSelector.selector);
+  const logTrigger = evmClient.logTrigger({
+    addresses: [hexToBase64(config.auctionRegistryAddress as Hex)],
+    topics: [{ values: [hexToBase64(AUCTION_ENDED_SIGNATURE)] }],
+    confidence: "CONFIDENCE_LEVEL_FINALIZED",
   });
 
-  return [handler(logTrigger.trigger(), onAuctionEnded)];
+  return [handler(logTrigger, onAuctionEnded)];
 };
 
 // ─── Entry Point ─────────────────────────────────────────────────────
@@ -304,7 +333,9 @@ export async function main() {
   await runner.run(initWorkflow);
 }
 
-main().catch((err) => {
-  console.error("Workflow failed:", err);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error("Workflow failed:", err);
+    process.exit(1);
+  });
+}
