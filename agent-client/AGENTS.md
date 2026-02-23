@@ -1,0 +1,35 @@
+# agent-client/AGENTS.md
+
+Apply root `AGENTS.md` first, then this file.
+
+## Scope
+
+This directory is the TypeScript demo agent client for end-to-end flows.
+
+## Commands
+
+Run from `agent-client/`:
+
+```bash
+npm run typecheck
+npm run start
+npm run demo
+```
+
+## Local Rules
+
+- Keep this package as a demo/integration client, not a production SDK.
+- Keep addresses/ABIs synchronized with `deployments/base-sepolia.json`.
+- If crypto package APIs change, update this package and run typecheck before merge.
+- Prefer explicit error output for on-chain step failures to aid debugging.
+
+## Cross-Package Dependency
+
+- This package depends on the local root package via `"auction-design": "file:.."`.
+- If shared types or build artifacts change upstream, re-run installs and typecheck here.
+
+## Pointers
+
+- Config and clients: `agent-client/src/config.ts`
+- Auction flow helpers: `agent-client/src/auction.ts`
+- Wallet and identity helpers: `agent-client/src/wallet.ts`, `agent-client/src/identity.ts`

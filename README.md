@@ -16,6 +16,7 @@ An open auction protocol where AI agents can autonomously discover, join, bid in
 - [Auctionable Objects](#auctionable-objects)
 - [Tech Stack](#tech-stack)
 - [Repository Structure](#repository-structure)
+- [Agent Guidance Files](#agent-guidance-files)
 - [Smart Contract Architecture](#smart-contract-architecture)
 - [Getting Started](#getting-started)
     - [Prerequisites](#prerequisites)
@@ -154,7 +155,7 @@ The platform supports three tiers of tasks:
 | **Auction Engine** | Cloudflare Workers + Durable Objects |
 | **Agent Interface** | MCP Streamable HTTP, REST API |
 | **Frontend** | Next.js / React (spectator UI) |
-| **Testing** | Foundry (forge test), 113 tests passing |
+| **Testing** | Foundry (forge test), 117 tests passing |
 
 ## Repository Structure
 
@@ -162,14 +163,14 @@ The platform supports three tiers of tasks:
 agent-auction/
 ├── contracts/                           # Foundry project — 6 Solidity contracts + tests
 │   ├── src/                             #   Source contracts
-│   ├── test/                            #   113 Foundry tests (all passing)
+│   ├── test/                            #   117 Foundry tests (all passing)
 │   ├── script/                          #   Deployment scripts (Deploy.s.sol, HelperConfig.s.sol)
 │   ├── docs/                            #   Per-contract development docs
 │   ├── types/index.ts                   #   TypeScript types + deployed addresses for WS-3
 │   └── foundry.toml                     #   Solc 0.8.24, Cancun EVM, optimizer on
 ├── cre/                                 # CRE Settlement Workflow (Chainlink Runtime Environment)
 │   ├── workflows/settlement/            #   Workflow source (main.ts, helpers.ts, config.json, workflow.yaml)
-│   ├── workflows/settlement.test.ts     #   7 unit tests for the settlement workflow
+│   ├── workflows/settlement.test.ts     #   9 unit tests for the settlement workflow
 │   ├── config/base-sepolia.json         #   Target chain configuration
 │   ├── project.yaml                     #   CRE project config (targets + RPCs)
 │   └── README.md                        #   CRE workflow documentation + E2E results
@@ -190,10 +191,26 @@ agent-auction/
 
 > **Source of truth:** `docs/full_contract_arch(amended).md` + deep specs in `docs/research/`. Legacy docs in `docs/legacy/` are historical reference only.
 
+## Agent Guidance Files
+
+This repo uses hierarchical `AGENTS.md` files. Apply the root guide first, then the nearest child guide for the module you are editing.
+
+- `AGENTS.md` (root)
+- `contracts/AGENTS.md`
+- `cre/AGENTS.md`
+- `engine/AGENTS.md`
+- `frontend/AGENTS.md`
+- `agent-client/AGENTS.md`
+- `packages/crypto/AGENTS.md`
+- `circuits/AGENTS.md`
+- `docs/AGENTS.md`
+
+Use child guides for module-specific commands and constraints; keep cross-repo invariants in the root guide.
+
 ## Smart Contract Architecture
 
 ```
-L2 (Base Sepolia) — 6 contracts (all compiled & tested, 113 tests passing)
+L2 (Base Sepolia) — 6 contracts (all compiled & tested, 117 tests passing)
 │
 ├── ACCOUNT ABSTRACTION
 │   ├── AgentAccountFactory  → deploys AgentAccount proxies (CREATE2, deterministic)
@@ -210,7 +227,7 @@ L2 (Base Sepolia) — 6 contracts (all compiled & tested, 113 tests passing)
     ├── IAuctionTypes        → AuctionState enum, AuctionSettlementPacket, BondRecord structs
     └── MockKeystoneForwarder → Simulates Chainlink KeystoneForwarder for local CRE testing
 ```
-**Security**: 2-round audit complete, 9 vulnerabilities fixed (see `contracts/docs/`).
+**Security**: 3-round security review complete. Initial 9 vulnerabilities fixed, plus latest hardening on reentrancy guards, replay-hash semantics, CRE finalPrice cross-check, and finalized-read policy (see `contracts/docs/` and `cre/README.md`).
 ### Deployed Addresses (Base Sepolia — chainId 84532)
 All contracts verified on [Basescan](https://sepolia.basescan.org).
 
@@ -253,12 +270,12 @@ npm install
 cd contracts
 forge install        # Install Solidity dependencies
 forge build          # Compile all contracts
-forge test           # Run all 113 tests
+forge test           # Run all 117 tests
 
 # CRE workflow setup
 cd ../cre
 npm install          # Install CRE SDK + dependencies
-bun test             # Run 7 workflow unit tests
+bun test             # Run 9 workflow unit tests
 # If using Chainlink MCP server for development
 cd ..
 cp .mcp.json.example .mcp.json
@@ -271,14 +288,14 @@ cp .mcp.json.example .mcp.json
 # ── Smart Contracts ──────────────────────────────
 cd contracts
 forge build                    # Compile (solc 0.8.24, Cancun EVM)
-forge test                     # Run all 113 tests
+forge test                     # Run all 117 tests
 forge test -vvv                # Verbose with traces
 forge test --match-contract X  # Run specific test suite
 forge fmt                      # Format Solidity code
 forge snapshot                 # Gas snapshots
 # ── CRE Workflow ─────────────────────────────────
 cd cre
-bun test                                           # Run 7 unit tests
+bun test                                           # Run 9 unit tests
 cre workflow simulate ./workflows/settlement \
   --target local-simulation --broadcast --verbose  # E2E on-chain settlement
 # ── Frontend ─────────────────────────────────────
@@ -294,6 +311,13 @@ npm run lint                   # ESLint
 - **Contract behavior**: `onReport()` is fail-closed and reverts when CRE is not configured.
 - **Simulation**: local simulation may use mock-forwarder-only settings; do not treat that as production authorization posture.
 
+### Recent Security Hardening (Feb 2026)
+
+- Added `nonReentrant` guard on `AuctionEscrow.onReport()`.
+- Fixed `AuctionRegistry` settlement packet/event semantics by using explicit `replayContentHash`.
+- Added CRE Phase B `finalPrice` cross-verification against on-chain `getWinner()`.
+- Switched CRE on-chain read policy to `LAST_FINALIZED_BLOCK_NUMBER` for settlement-critical checks.
+
 ## Roadmap
 
 | Phase | Focus | Status |
@@ -307,7 +331,7 @@ npm run lint                   # ESLint
 - [x] Architecture design complete
 - [ ] ERC-8004 agents can join rooms, bid, post bonds, and settle
 - [x] CRE Settlement Workflow verifies and settles auctions on-chain (E2E confirmed with `transmissionSuccess=true`)
-- [x] EIP-4337 smart wallets implemented (AgentAccount + AgentPaymaster) — 113 tests passing
+- [x] EIP-4337 smart wallets implemented (AgentAccount + AgentPaymaster) — 117 tests passing
 - [x] AuctionEscrow implemented with bonds + CRE `onReport` settlement
 - [ ] ZK registry membership proof functional
 - [x] Contracts deployed to Base Sepolia (v2 with real KeystoneForwarder)
