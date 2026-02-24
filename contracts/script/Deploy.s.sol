@@ -9,6 +9,7 @@ import {AgentAccountFactory} from "../src/AgentAccountFactory.sol";
 import {AgentPaymaster, IERC8004Registry} from "../src/AgentPaymaster.sol";
 import {AuctionRegistry} from "../src/AuctionRegistry.sol";
 import {AuctionEscrow} from "../src/AuctionEscrow.sol";
+import {AgentPrivacyRegistry} from "../src/AgentPrivacyRegistry.sol";
 import {MockKeystoneForwarder} from "../src/MockKeystoneForwarder.sol";
 import {MockUSDC} from "../src/mocks/MockUSDC.sol";
 import {MockIdentityRegistry} from "../src/mocks/MockIdentityRegistry.sol";
@@ -43,6 +44,7 @@ contract Deploy is Script {
     AgentPaymaster public paymaster;
     AuctionRegistry public registry;
     AuctionEscrow public escrow;
+    AgentPrivacyRegistry public privacyRegistry;
 
     // Config
     HelperConfig public helperConfig;
@@ -113,6 +115,10 @@ contract Deploy is Script {
         // ── Step 6: Deploy AuctionEscrow ────────────────────────
         escrow = new AuctionEscrow(IERC20(usdc), keystoneForwarder);
         console2.log("AuctionEscrow deployed:", address(escrow));
+
+        // ── Step 6b: Deploy AgentPrivacyRegistry ─────────────────
+        privacyRegistry = new AgentPrivacyRegistry();
+        console2.log("AgentPrivacyRegistry deployed:", address(privacyRegistry));
 
         // ── Step 7: Cross-bind contracts ────────────────────────
 
@@ -197,6 +203,7 @@ contract Deploy is Script {
         console2.log("AgentPaymaster:      ", address(paymaster));
         console2.log("AuctionRegistry:     ", address(registry));
         console2.log("AuctionEscrow:       ", address(escrow));
+        console2.log("AgentPrivacyRegistry:", address(privacyRegistry));
         console2.log("");
         console2.log("-- Wiring --");
         console2.log("Registry.escrow =    ", address(escrow));

@@ -19,7 +19,7 @@ This directory contains architecture specs, developer guides, plans, and solutio
 ## Documentation Structure
 
 - `docs/README.md`: index and navigation entry point
-- `docs/plans/`: workstream and execution plans
+- `plans/`: workstream and execution plans (project root, moved from docs/)
 - `docs/solutions/`: troubleshooting write-ups and known fixes
 - `docs/research/`: deep architecture specs and reports
 

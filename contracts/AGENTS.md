@@ -51,3 +51,9 @@ forge snapshot
 - Contract docs: `contracts/docs/`
 - Deployment scripts: `contracts/script/Deploy.s.sol`, `contracts/script/HelperConfig.s.sol`
 - Architecture source of truth: `docs/full_contract_arch(amended).md`
+
+## Deployment Notes
+
+- All 6 core contracts are deployed and verified on Base Sepolia (see root README for addresses).
+- `AgentPrivacyRegistry` is added to `Deploy.s.sol` (Step 6b) but has **not been deployed on-chain yet**. It has no constructor args and no cross-contract bindings — deploy when ready with `forge script`.
+- Test count reflects core contracts only (117). AgentPrivacyRegistry has no dedicated test file yet.

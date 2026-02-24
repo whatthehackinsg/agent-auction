@@ -12,6 +12,7 @@
     "permissionless-demo": "tsx scripts/permissionless-userop-demo.ts"
   },
   "dependencies": {
+    "@agent-auction/crypto": "file:../packages/crypto",
     "hono": "^4.12.2",
     "permissionless": "^0.3.4",
     "tslib": "^2.8.1",

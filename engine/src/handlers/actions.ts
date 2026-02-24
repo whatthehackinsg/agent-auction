@@ -140,7 +140,7 @@ export async function handleJoin(
   await verifyMembership(action)
 
   // Derive and check nullifier for join uniqueness
-  const nullifier = deriveNullifier(
+  const nullifier = await deriveNullifier(
     toBytes(action.wallet as `0x${string}`, { size: 32 }),
     toBytes(auctionId as `0x${string}`, { size: 32 }),
     0, // ActionType.JOIN = 0

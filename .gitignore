@@ -25,6 +25,9 @@ contracts/broadcast/
 # CRE build artifacts
 .cre_build_tmp.*
 
+# Package build output
+packages/crypto/dist/
+
 # Misc
 my-video/
 skills-lock.json

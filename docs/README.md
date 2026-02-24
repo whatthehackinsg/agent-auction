@@ -14,7 +14,7 @@ This folder contains architecture specs, developer guides, research, workstream 
 | **Start integrating with contracts** | [`developer-guide.md`](developer-guide.md) — addresses, `cast` examples, TypeScript |
 | **Read per-contract API docs** | [`../contracts/docs/`](../contracts/docs/) — AgentAccount, Paymaster, Registry, Escrow |
 | **Understand a specific subsystem** | [Deep Specs (01–06)](#deep-specs) below |
-| **See what each workstream owns** | [`plans/`](#workstream-plans) below |
+| **See what each workstream owns** | [`../plans/`](#workstream-plans) below |
 | **Debug a known issue** | [`solutions/`](#solutions--troubleshooting) below |
 | **Read the original Chinese design docs** | [`legacy/`](#legacy-chinese-design-docs) — historical reference only |
 
@@ -90,10 +90,10 @@ Located in [`../contracts/docs/`](../contracts/docs/):
 
 | File | Workstream | Owner | Status |
 |---|---|---|---|
-| [`plans/ws1-zk-crypto.md`](plans/ws1-zk-crypto.md) | WS-1: ZK & Crypto | ZK Researcher | In Progress |
-| [`plans/ws2-contracts-cre.md`](plans/ws2-contracts-cre.md) | WS-2: Contracts & CRE | Zyro | ✅ E2E Settlement Done |
-| [`plans/ws3-engine-frontend.md`](plans/ws3-engine-frontend.md) | WS-3: Engine & Frontend | AI Engineer 2 | In Progress |
-| [`plans/2026-02-22-parallel-workstream-split.md`](plans/2026-02-22-parallel-workstream-split.md) | Parallel Split Plan | — | Reference |
+| [`../plans/ws1-zk-crypto.md`](../plans/ws1-zk-crypto.md) | WS-1: ZK & Crypto | ZK Researcher | In Progress |
+| [`../plans/ws2-contracts-cre.md`](../plans/ws2-contracts-cre.md) | WS-2: Contracts & CRE | Zyro | ✅ E2E Settlement Done |
+| [`../plans/ws3-engine-frontend.md`](../plans/ws3-engine-frontend.md) | WS-3: Engine & Frontend | AI Engineer 2 | In Progress |
+| [`../plans/2026-02-22-parallel-workstream-split.md`](../plans/2026-02-22-parallel-workstream-split.md) | Parallel Split Plan | — | Reference |
 
 ---
 

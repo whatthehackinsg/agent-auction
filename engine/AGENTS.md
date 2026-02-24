@@ -37,3 +37,12 @@ npm run deploy
 - Room core: `engine/src/auction-room.ts`
 - Action validation: `engine/src/handlers/actions.ts`
 - Chain helpers: `engine/src/lib/`
+
+## Crypto Delegation
+
+As of Feb 2026, `src/lib/crypto.ts` and `src/lib/replay-bundle.ts` delegate to `@agent-auction/crypto` (local dependency at `packages/crypto`).
+
+- **Real implementations**: `computeEventHash` (Poseidon), `computePayloadHash`, `deriveNullifier` — all async.
+- **Stubs kept** (CF Workers incompatible): `verifyMembershipProof` (needs `node:fs` for snarkjs vkey loading), `verifyEIP712Signature` (API mismatch — engine passes `(hash, sig, signer)`, package expects structured EIP-712 typed data).
+- Stubs are fail-closed by default; set `ENGINE_ALLOW_INSECURE_STUBS=true` for local dev only.
+- Build `packages/crypto` (`npm run build`) before running engine typecheck or tests.

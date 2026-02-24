@@ -554,8 +554,8 @@ CRE Write Target:     AuctionEscrow.onReport() via KeystoneForwarder
 | `full_contract_arch(amended).md` | **Source of truth** — complete contract + off-chain architecture |
 | `research/agent-auction-architecture/01-06.md` | Deep English implementation specs (aligned with amended) |
 | `research/research_report_*.md` | Orchestrator index (links to 01-06) |
-| `plans/2026-02-22-parallel-workstream-split.md` | Team split + day-by-day schedule |
-| `plans/ws1-zk-crypto.md` | WS-1 detailed tasks |
-| `plans/ws2-contracts-cre.md` | WS-2 detailed tasks |
-| `plans/ws3-engine-frontend.md` | WS-3 detailed tasks |
+| `plans/2026-02-22-parallel-workstream-split.md` | Team split + day-by-day schedule (project root) |
+| `plans/ws1-zk-crypto.md` | WS-1 detailed tasks (project root) |
+| `plans/ws2-contracts-cre.md` | WS-2 detailed tasks (project root) |
+| `plans/ws3-engine-frontend.md` | WS-3 detailed tasks (project root) |
 | `legacy/` | Old on-chain architecture + Chinese lifecycle docs (historical reference only) |

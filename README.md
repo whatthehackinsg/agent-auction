@@ -161,7 +161,7 @@ The platform supports three tiers of tasks:
 
 ```
 agent-auction/
-├── contracts/                           # Foundry project — 6 Solidity contracts + tests
+├── contracts/                           # Foundry project — 7 Solidity contracts + tests
 │   ├── src/                             #   Source contracts
 │   ├── test/                            #   117 Foundry tests (all passing)
 │   ├── script/                          #   Deployment scripts (Deploy.s.sol, HelperConfig.s.sol)
@@ -183,9 +183,9 @@ agent-auction/
 │   ├── full_contract_arch(amended).md   # ★ SOURCE OF TRUTH — full architecture spec
 │   ├── developer-guide.md              #   Developer onboarding + integration guide
 │   ├── research/                        #   Architecture research + English deep specs (01–06)
-│   ├── plans/                           #   Hackathon workstream plans (WS-1/2/3)
 │   ├── solutions/                       #   Documented problem solutions
 │   └── legacy/                          #   Archived Chinese lifecycle docs + old architecture
+├── plans/                               # Hackathon workstream plans (WS-1/2/3)
 ├── engine/                              # Cloudflare Workers + Durable Objects auction engine
 ├── agent-client/                        # TypeScript agent demo client
 ├── packages/crypto/                     # Shared crypto primitives (Poseidon, EIP-712, snarkjs, onboarding)
@@ -217,7 +217,7 @@ Use child guides for module-specific commands and constraints; keep cross-repo i
 ## Smart Contract Architecture
 
 ```
-L2 (Base Sepolia) — 6 contracts (all compiled & tested, 117 tests passing)
+L2 (Base Sepolia) — 7 contracts (all compiled & tested, 117 tests passing)
 │
 ├── ACCOUNT ABSTRACTION
 │   ├── AgentAccountFactory  → deploys AgentAccount proxies (CREATE2, deterministic)
@@ -229,6 +229,9 @@ L2 (Base Sepolia) — 6 contracts (all compiled & tested, 117 tests passing)
 │
 ├── PAYMENT
 │   └── AuctionEscrow        → USDC bonds + CRE settlement via IReceiver.onReport()
+│
+├── PRIVACY
+│   └── AgentPrivacyRegistry  → ZK membership root + nullifier tracking (NOT YET DEPLOYED)
 │
 └── SHARED
     ├── IAuctionTypes        → AuctionState enum, AuctionSettlementPacket, BondRecord structs
@@ -251,6 +254,7 @@ All contracts verified on [Basescan](https://sepolia.basescan.org).
 | AuctionRegistry (v2) | [`0xFEc7a05707AF85C6b248314E20FF8EfF590c3639`](https://sepolia.basescan.org/address/0xFEc7a05707AF85C6b248314E20FF8EfF590c3639) |
 | AuctionEscrow (v2) | [`0x20944f46AB83F7eA40923D7543AF742Da829743c`](https://sepolia.basescan.org/address/0x20944f46AB83F7eA40923D7543AF742Da829743c) |
 | KeystoneForwarder (real Chainlink) | [`0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5`](https://sepolia.basescan.org/address/0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5) |
+| AgentPrivacyRegistry | _Not yet deployed_ | Added to `Deploy.s.sol` (Step 6b) — no constructor args, deploy when ready |
 
 #### Outdated Contracts (v1 — no longer in use)
 

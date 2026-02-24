@@ -19,7 +19,7 @@ Treat `docs/legacy/` as historical reference only.
 
 ```
 auction-design/
-|- contracts/      Foundry contracts (6 contracts, 117 tests)
+|- contracts/      Foundry contracts (7 contracts, 117 tests)
 |- cre/            Chainlink CRE settlement workflow (9 unit tests)
 |- engine/         Cloudflare Workers + Durable Objects auction engine
 |- frontend/       Next.js spectator UI

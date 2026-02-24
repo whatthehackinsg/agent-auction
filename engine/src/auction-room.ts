@@ -313,7 +313,7 @@ export class AuctionRoom implements DurableObject {
     )
 
     // Compute event hash: hash(seq, prevHash, payloadHash)
-    const eventHash = computeEventHash(
+    const eventHash = await computeEventHash(
       BigInt(seq),
       toBytes(prevHash as `0x${string}`),
       payloadHash,
