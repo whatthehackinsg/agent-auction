@@ -106,7 +106,7 @@ Priority: CRITICAL — WS-3 needs ABIs by end of Day 2
 - [x] Push all contracts to `contracts/src/`
 - [x] Push tests to `contracts/test/`
 - [x] Run `forge build` — ABIs available in `contracts/out/`
-- [ ] Tag: `ws2/contracts-ready` _(no git tags used; delivered via main branch)_
+- [x] ~~Tag: `ws2/contracts-ready`~~ _(no git tags used; delivered via main branch)_
 
 ### Day 3-4: Deploy + Wire
 
@@ -119,7 +119,7 @@ Priority: CRITICAL — WS-3 needs deployed addresses by end of Day 4
 Follow the 10-step deployment order from amended doc Section 10:
 
 - [x] Step 1: Verify EntryPoint at `0x0000000071727De22E5E9d8BAf0edAc6f37da032`
-- [ ] Step 2: Deploy `AgentPrivacyRegistry` (from WS-1) _(added to Deploy.s.sol Step 6b but NOT deployed on-chain yet)_
+- [ ] Step 2: Deploy `AgentPrivacyRegistry` (from WS-1) _(bead pgi — added to Deploy.s.sol Step 6b but NOT deployed on-chain yet)_
   - After deploy: note address for WS-1 proof-generator
 - [x] Step 3: Deploy `AgentAccount` (implementation)
 - [x] Step 4: Deploy `AgentAccountFactory(entryPoint, agentAccountImpl)`
@@ -146,7 +146,7 @@ Follow the 10-step deployment order from amended doc Section 10:
 **Deliveries:**
 - [x] Push `deployments/base-sepolia.json`
 - [x] Push TS types to `contracts/types/`
-- [ ] Tag: `ws2/deployed` _(no git tags used)_
+- [x] ~~Tag: `ws2/deployed`~~ _(no git tags used; delivered via main branch)_
 
 ### Day 5-6: CRE Settlement Workflow
 
@@ -181,14 +181,14 @@ Using `@chainlink/cre-sdk`:
 **Deliveries:**
 - [x] Push CRE workflow to `cre/`
 - [x] Document: `{ workflowId, workflowName: "auctSettle", workflowOwner }`
-- [ ] Tag: `ws2/cre-ready` _(no git tags used)_
+- [x] ~~Tag: `ws2/cre-ready`~~ _(no git tags used; delivered via main branch)_
 
 ### Day 7-8: E2E Integration + CRE Registration
 
 **Register CRE Workflow (Step 10):**
-- [ ] `cre workflow deploy` (registers on Ethereum Mainnet Workflow Registry) _(simulation confirmed, formal registration pending)_
+- [ ] `cre workflow deploy` (registers on Ethereum Mainnet Workflow Registry) _(bead d26 — simulation confirmed, formal registration pending)_
 - [ ] Record `workflowId` from deployment output
-- [ ] Configure AuctionEscrow _(bead wq4 open — configureCRE() not yet called)_:
+- [ ] Configure AuctionEscrow _(bead wq4 — blocked on d26; configureCRE() not yet called)_:
   ```bash
   cast send $ESCROW "setExpectedWorkflowId(bytes32)" $WORKFLOW_ID
   cast send $ESCROW "setExpectedWorkflowName(string)" "auctSettle"
@@ -208,7 +208,7 @@ Using `@chainlink/cre-sdk`:
 - [x] Security review: reentrancy, access control, solvency invariant _(3-round review complete)_
 - [x] Write contracts + CRE section of README
 - [x] Verify all Foundry tests pass _(117/117)_
-- [ ] Assist demo video (show Tenderly settlement tx)
+- [ ] Assist demo video (show settlement tx on Basescan) _(bead 2c3)_
 
 ---
 
