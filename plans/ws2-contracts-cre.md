@@ -44,69 +44,69 @@ Priority: CRITICAL — WS-3 needs ABIs by end of Day 2
 ```
 
 **Project setup:**
-- [ ] `forge init contracts`
-- [ ] Install dependencies:
+- [x] `forge init contracts`
+- [x] Install dependencies:
   ```bash
   forge install eth-infinitism/account-abstraction@v0.7.0
   forge install OpenZeppelin/openzeppelin-contracts
   # For ReceiverTemplate: copy from smartcontractkit/documentation or x402-cre-price-alerts
   ```
-- [ ] Set `solidity = "0.8.24"` in `foundry.toml` (Cancun EVM target for Base Sepolia)
+- [x] Set `solidity = "0.8.24"` in `foundry.toml` (Cancun EVM target for Base Sepolia)
 
 **AgentAccount.sol** (see amended doc Section 3):
-- [ ] Simplified: `runtimeSigner` (EOA) + sig/nonce validation only
-- [ ] `address public runtimeSigner` — set at creation, rotatable via `setRuntimeSigner()`
-- [ ] `validateUserOp()`: `ECDSA.recover(userOpHash, sig) == runtimeSigner`
-- [ ] `execute(address, uint256, bytes)` — only callable by EntryPoint
-- [ ] NO ZK verifier calls (moved to DO)
+- [x] Simplified: `runtimeSigner` (EOA) + sig/nonce validation only
+- [x] `address public runtimeSigner` — set at creation, rotatable via `setRuntimeSigner()`
+- [x] `validateUserOp()`: `ECDSA.recover(userOpHash, sig) == runtimeSigner`
+- [x] `execute(address, uint256, bytes)` — only callable by EntryPoint
+- [x] NO ZK verifier calls (moved to DO)
 
 **AgentAccountFactory.sol:**
-- [ ] `createAccount(address runtimeSigner, uint256 salt)` — CREATE2
-- [ ] `getAddress(address runtimeSigner, uint256 salt)` — view, deterministic
+- [x] `createAccount(address runtimeSigner, uint256 salt)` — CREATE2
+- [x] `getAddress(address runtimeSigner, uint256 salt)` — view, deterministic
 
 **AgentPaymaster.sol** (see amended doc Section 3):
-- [ ] Method-based gating in `validatePaymasterUserOp()`:
+- [x] Method-based gating in `validatePaymasterUserOp()`:
   - `USDC.transfer` to escrow → allowed for any ERC-8004 registered agent (no prior bond required)
   - Other operations → require existing bond via `escrow.bondRecords()`
-- [ ] `postOp()`: log gas cost for analytics only (MVP)
+- [x] `postOp()`: log gas cost for analytics only (MVP)
 
 **AuctionRegistry.sol** (see amended doc Section 7):
-- [ ] `DOMAIN_SEPARATOR` — `EIP712Domain("AgentAuction", "1", chainId, address(this))`
-- [ ] `createAuction(bytes32 auctionId, bytes32 manifestHash, ...)` — simple storage write
-- [ ] `recordResult(AuctionSettlementPacket calldata packet, bytes calldata sequencerSig)` — emits `AuctionEnded`
-- [ ] `markSettled(bytes32 auctionId)` — `onlyEscrow`
-- [ ] `cancelExpiredAuction(bytes32 auctionId)` — 72h timeout
-- [ ] `updateWinnerWallet(...)` — EIP-712 wallet rotation recovery
-- [ ] State machine: `NONE → OPEN → CLOSED → SETTLED` (or `CLOSED → CANCELLED`)
-- [ ] `setEscrow(address)` — one-time binding
-- [ ] NO `anchorHash()`, NO `getAnchors()`, NO `anchorTrails` (all removed)
+- [x] `DOMAIN_SEPARATOR` — `EIP712Domain("AgentAuction", "1", chainId, address(this))`
+- [x] `createAuction(bytes32 auctionId, bytes32 manifestHash, ...)` — simple storage write
+- [x] `recordResult(AuctionSettlementPacket calldata packet, bytes calldata sequencerSig)` — emits `AuctionEnded`
+- [x] `markSettled(bytes32 auctionId)` — `onlyEscrow`
+- [x] `cancelExpiredAuction(bytes32 auctionId)` — 72h timeout
+- [x] `updateWinnerWallet(...)` — EIP-712 wallet rotation recovery
+- [x] State machine: `NONE → OPEN → CLOSED → SETTLED` (or `CLOSED → CANCELLED`)
+- [x] `setEscrow(address)` — one-time binding
+- [x] NO `anchorHash()`, NO `getAnchors()`, NO `anchorTrails` (all removed)
 
 **AuctionEscrow.sol** (see amended doc Section 8):
-- [ ] Inherits `ReceiverTemplate` + `ReentrancyGuard`
-- [ ] `recordBond(auctionId, agentId, depositor, amount, x402TxId)` — `onlyAdmin`, idempotent on txId
-- [ ] `_processReport(bytes calldata report)` — decode `abi.encode(auctionId, winnerAgentId, winnerWallet, amount)`, O(1) settlement
-- [ ] `claimRefund(auctionId, agentId)` — pull-based, deposit-time beneficiary
-- [ ] `withdraw()` — pull pattern
-- [ ] `adminRefund(...)` — emergency
-- [ ] `checkSolvency()` — view
-- [ ] Solvency invariant: `usdc.balanceOf(this) >= totalBonded + totalWithdrawable`
+- [x] Inherits `ReceiverTemplate` + `ReentrancyGuard`
+- [x] `recordBond(auctionId, agentId, depositor, amount, x402TxId)` — `onlyAdmin`, idempotent on txId
+- [x] `_processReport(bytes calldata report)` — decode `abi.encode(auctionId, winnerAgentId, winnerWallet, amount)`, O(1) settlement
+- [x] `claimRefund(auctionId, agentId)` — pull-based, deposit-time beneficiary
+- [x] `withdraw()` — pull pattern
+- [x] `adminRefund(...)` — emergency
+- [x] `checkSolvency()` — view
+- [x] Solvency invariant: `usdc.balanceOf(this) >= totalBonded + totalWithdrawable`
 
 **MockKeystoneForwarder.sol:**
-- [ ] Calls `onReport(metadata, report)` directly for local dev/testing
-- [ ] Configurable metadata (workflowId, workflowName, workflowOwner)
+- [x] Calls `onReport(metadata, report)` directly for local dev/testing
+- [x] Configurable metadata (workflowId, workflowName, workflowOwner)
 
 **Foundry Tests:**
-- [ ] `AgentAccount.t.sol`: validateUserOp passes with correct runtimeSigner, fails with wrong signer
-- [ ] `AgentPaymaster.t.sol`: bond deposit allowed for registered agent, non-bond ops require bond
-- [ ] `AuctionRegistry.t.sol`: createAuction → recordResult → markSettled state transitions
-- [ ] `AuctionEscrow.t.sol`: recordBond → processReport → claimRefund → withdraw full flow
-- [ ] `Settlement.t.sol`: integration test via MockKeystoneForwarder
+- [x] `AgentAccount.t.sol`: validateUserOp passes with correct runtimeSigner, fails with wrong signer _(15 tests)_
+- [x] `AgentPaymaster.t.sol`: bond deposit allowed for registered agent, non-bond ops require bond _(19 tests)_
+- [x] `AuctionRegistry.t.sol`: createAuction → recordResult → markSettled state transitions _(30 tests)_
+- [x] `AuctionEscrow.t.sol`: recordBond → processReport → claimRefund → withdraw full flow _(53 tests)_
+- [x] ~~`Settlement.t.sol`~~ _(integration tests folded into AuctionEscrow.t.sol instead of separate file)_
 
 **Deliveries:**
-- [ ] Push all contracts to `contracts/src/`
-- [ ] Push tests to `contracts/test/`
-- [ ] Run `forge build` — ABIs available in `contracts/out/`
-- [ ] Tag: `ws2/contracts-ready`
+- [x] Push all contracts to `contracts/src/`
+- [x] Push tests to `contracts/test/`
+- [x] Run `forge build` — ABIs available in `contracts/out/`
+- [ ] Tag: `ws2/contracts-ready` _(no git tags used; delivered via main branch)_
 
 ### Day 3-4: Deploy + Wire
 
@@ -114,120 +114,81 @@ Priority: CRITICAL — WS-3 needs ABIs by end of Day 2
 Priority: CRITICAL — WS-3 needs deployed addresses by end of Day 4
 ```
 
-**Deploy to Base Sepolia (Tenderly Virtual TestNet):**
+**Deploy to Base Sepolia** _(deployed directly via forge script, not Tenderly)_:
 
 Follow the 10-step deployment order from amended doc Section 10:
 
-- [ ] Step 1: Verify EntryPoint at `0x0000000071727De22E5E9d8BAf0edAc6f37da032`
-  ```bash
-  cast code 0x0000000071727De22E5E9d8BAf0edAc6f37da032 --rpc-url $BASE_SEPOLIA_RPC
-  ```
-- [ ] Step 2: Deploy `AgentPrivacyRegistry` (from WS-1)
+- [x] Step 1: Verify EntryPoint at `0x0000000071727De22E5E9d8BAf0edAc6f37da032`
+- [ ] Step 2: Deploy `AgentPrivacyRegistry` (from WS-1) _(added to Deploy.s.sol Step 6b but NOT deployed on-chain yet)_
   - After deploy: note address for WS-1 proof-generator
-- [ ] Step 3: Deploy `AgentAccount` (implementation)
-- [ ] Step 4: Deploy `AgentAccountFactory(entryPoint, agentAccountImpl)`
-- [ ] Step 5: Deploy `AgentPaymaster(entryPoint)` → stake ETH:
-  ```bash
-  cast send $PAYMASTER "addStake(uint32)" 86400 --value 0.1ether --rpc-url $BASE_SEPOLIA_RPC
-  cast send $PAYMASTER "deposit()" --value 0.5ether --rpc-url $BASE_SEPOLIA_RPC
-  ```
-- [ ] Step 6: Deploy `AuctionRegistry(sequencerAddress)` → DOMAIN_SEPARATOR set in constructor
-- [ ] Step 7: Deploy `AuctionEscrow(mockForwarderAddress, admin, usdc, registry, identityRegistry)`
-- [ ] Step 8: Wire: `AuctionRegistry.setEscrow(escrowAddress)`
+- [x] Step 3: Deploy `AgentAccount` (implementation)
+- [x] Step 4: Deploy `AgentAccountFactory(entryPoint, agentAccountImpl)`
+- [x] Step 5: Deploy `AgentPaymaster(entryPoint)` → stake ETH _(0.01 ETH staked, 0.05 ETH deposited)_
+- [x] Step 6: Deploy `AuctionRegistry(sequencerAddress)` → DOMAIN_SEPARATOR set in constructor
+- [x] Step 7: Deploy `AuctionEscrow` _(v2 with real KeystoneForwarder `0x82300bd7...`, not MockKeystoneForwarder)_
+- [x] Step 8: Wire: `AuctionRegistry.setEscrow(escrowAddress)`
 
 **Post-deploy verification:**
-- [ ] Verify each contract on Tenderly explorer
-- [ ] Run basic smoke tests via cast (createAuction, check state)
+- [x] Verify each contract on ~~Tenderly explorer~~ Basescan _(all verified)_
+- [x] Run basic smoke tests via cast (createAuction, check state)
 
 **Write `deployments/base-sepolia.json`:**
-```json
-{
-  "chainId": 84532,
-  "entryPoint": "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
-  "agentPrivacyRegistry": "0x...",
-  "agentAccount": "0x...",
-  "agentAccountFactory": "0x...",
-  "agentPaymaster": "0x...",
-  "auctionRegistry": "0x...",
-  "auctionEscrow": "0x...",
-  "mockKeystoneForwarder": "0x...",
-  "usdc": "0x...",
-  "identityRegistry": "0x8004A818BFB912233c491871b3d84c89A494BD9e",
-  "sequencerAddress": "0x...",
-  "bundlerEndpoint": "https://..."
-}
-```
+- [x] _(deployed addresses + ABIs published)_
 
 **EIP-4337 Bundler setup:**
-- [ ] Choose bundler: Pimlico or CDP (both support Base Sepolia EntryPoint v0.7)
+- [ ] Choose bundler: Pimlico or CDP (both support Base Sepolia EntryPoint v0.7) _(bundler endpoint not documented)_
 - [ ] Configure and test UserOp submission
 - [ ] Document bundler endpoint for WS-3
 
 **Export AuctionSettlementPacket TypeScript type:**
-```typescript
-export interface AuctionSettlementPacket {
-  auctionId: `0x${string}`;
-  manifestHash: `0x${string}`;
-  roomConfigHash: `0x${string}`;
-  finalLogHash: `0x${string}`;
-  replayContentHash: `0x${string}`;
-  eventCount: bigint;
-  closeSeq: bigint;
-  winnerAgentId: bigint;
-  winnerWallet: `0x${string}`;
-  finalPrice: bigint;
-  engineVersionHash: `0x${string}`;
-  closeTime: bigint;
-}
-```
+- [x] _(contracts/types/index.ts)_
 
 **Deliveries:**
-- [ ] Push `deployments/base-sepolia.json`
-- [ ] Push TS types to `contracts/types/`
-- [ ] Tag: `ws2/deployed`
+- [x] Push `deployments/base-sepolia.json`
+- [x] Push TS types to `contracts/types/`
+- [ ] Tag: `ws2/deployed` _(no git tags used)_
 
 ### Day 5-6: CRE Settlement Workflow
 
-**Write CRE Settlement Workflow** (`cre/workflows/settlement.ts`):
+**Write CRE Settlement Workflow** (`cre/workflows/settlement/`):
 
 Using `@chainlink/cre-sdk`:
 
-- [ ] **Trigger:** EVM Log Trigger on `AuctionEnded` event
-  - Contract: AuctionRegistry address
-  - Confidence: `FINALIZED` (irreversible fund release — MUST wait for finality)
-  - Encode addresses + topics using `hexToBase64()` from SDK
-  - Topics[0]: `keccak256("AuctionEnded(bytes32,uint256,address,uint256,bytes32,bytes32)")`
-- [ ] **Compute:**
-  1. Read `finalLogHash` and `replayContentHash` from AuctionRegistry via EVMClient
-  2. Fetch ReplayBundleV1 from configured base URL (`https://api.platform.com/replay/{auctionId}`)
-  3. `sha256(bundleBytes) == replayContentHash` — reject if mismatch
-  4. Replay Poseidon hash chain: for each event, recompute `eventHash` → final hash must equal `finalLogHash`
-  5. Replay English auction rules: iterate BID events, track highest valid bid
-  6. Derived `winnerAgentId` must match event's `winnerAgentId` — reject if mismatch
-  7. Read `ownerOf(winnerAgentId)` from ERC-8004 — must not revert
-  8. Read `getAgentWallet(winnerAgentId)` — must match `winnerWallet` from event
-- [ ] **Write:** EVMClient → KeystoneForwarder → `AuctionEscrow.onReport(metadata, report)`
+- [x] **Trigger:** EVM Log Trigger on `AuctionEnded` event
+  - [x] Contract: AuctionRegistry address
+  - [x] Confidence: `FINALIZED` (irreversible fund release — MUST wait for finality)
+  - [x] Topics[0]: keccak256 of `AuctionEnded` signature
+- [x] **Compute:**
+  1. [x] Read auction state from AuctionRegistry via EVMClient _(LAST_FINALIZED_BLOCK_NUMBER)_
+  2. [x] Cross-check winner against `getWinner()` — agentId, wallet, AND finalPrice
+  3. [x] Fetch ReplayBundleV1 from configured base URL — ~~sha256 verify~~ presence check _(full hash verification is P1)_
+  4. [ ] Replay Poseidon hash chain _(deferred to P1)_
+  5. [ ] Replay English auction rules: iterate BID events, track highest valid bid _(deferred to P1)_
+  6. [x] ~~Derived `winnerAgentId` must match event~~ Cross-verification done via getWinner()
+  7. [ ] ~~Read `ownerOf(winnerAgentId)` from ERC-8004~~ _(identity verification handled by contracts, not CRE)_
+  8. [ ] ~~Read `getAgentWallet(winnerAgentId)`~~ _(wallet verification via getWinner() instead)_
+- [x] **Write:** EVMClient → KeystoneForwarder → `AuctionEscrow.onReport(metadata, report)`
   - `report = abi.encode(bytes32 auctionId, uint256 winnerAgentId, address winnerWallet, uint256 amount)`
 
 **Configure `project.yaml`:**
-- [ ] Set RPC endpoints (Base Sepolia for execution, Ethereum Mainnet for workflow registration)
-- [ ] Pin `@chainlink/cre-sdk` version
+- [x] Set RPC endpoints (Base Sepolia)
+- [x] Pin `@chainlink/cre-sdk` version
 
 **Test locally:**
-- [ ] `cre workflow simulate` — verify full flow passes
-- [ ] Integration test in Foundry: `createAuction → recordResult → MockKeystoneForwarder.onReport → verify SETTLED state + escrow balances`
+- [x] `cre workflow simulate` — verify full flow passes _(E2E confirmed: transmissionSuccess=true, tx 0x0b8e9ede...)_
+- [x] Integration test in Foundry: full settlement flow _(AuctionEscrow.t.sol covers MockKeystoneForwarder path)_
 
 **Deliveries:**
-- [ ] Push CRE workflow to `cre/`
-- [ ] Document: `{ workflowId, workflowName: "auctSettle", workflowOwner }`
-- [ ] Tag: `ws2/cre-ready`
+- [x] Push CRE workflow to `cre/`
+- [x] Document: `{ workflowId, workflowName: "auctSettle", workflowOwner }`
+- [ ] Tag: `ws2/cre-ready` _(no git tags used)_
 
 ### Day 7-8: E2E Integration + CRE Registration
 
 **Register CRE Workflow (Step 10):**
-- [ ] `cre workflow deploy` (registers on Ethereum Mainnet Workflow Registry)
+- [ ] `cre workflow deploy` (registers on Ethereum Mainnet Workflow Registry) _(simulation confirmed, formal registration pending)_
 - [ ] Record `workflowId` from deployment output
-- [ ] Configure AuctionEscrow:
+- [ ] Configure AuctionEscrow _(bead wq4 open — configureCRE() not yet called)_:
   ```bash
   cast send $ESCROW "setExpectedWorkflowId(bytes32)" $WORKFLOW_ID
   cast send $ESCROW "setExpectedWorkflowName(string)" "auctSettle"
@@ -235,18 +196,18 @@ Using `@chainlink/cre-sdk`:
   ```
 
 **Full E2E settlement test:**
-- [ ] `createAuction` → agents bond → agents join/bid (via WS-3 engine) → close → `recordResult` → `AuctionEnded` event → CRE triggers → `onReport` → verify SETTLED + escrow credits correct
+- [x] `createAuction` → agents bond → agents join/bid → close → `recordResult` → `AuctionEnded` event → CRE triggers → `onReport` → verify SETTLED + escrow credits correct _(confirmed on Base Sepolia)_
 
 **Fix bugs surfaced by WS-3 integration:**
-- [ ] Contract interface mismatches
-- [ ] Gas estimation issues
-- [ ] ABI encoding discrepancies
+- [x] Contract interface mismatches _(3-round security review, 9 bugs fixed)_
+- [x] Gas estimation issues
+- [x] ABI encoding discrepancies
 
 ### Day 9-10: Polish
 
-- [ ] Security review: reentrancy, access control, solvency invariant
-- [ ] Write contracts + CRE section of README
-- [ ] Verify all Foundry tests pass
+- [x] Security review: reentrancy, access control, solvency invariant _(3-round review complete)_
+- [x] Write contracts + CRE section of README
+- [x] Verify all Foundry tests pass _(117/117)_
 - [ ] Assist demo video (show Tenderly settlement tx)
 
 ---

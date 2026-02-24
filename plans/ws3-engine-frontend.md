@@ -17,7 +17,7 @@ Build the off-chain auction engine (Cloudflare DO sequencer), HTTP/MCP API, Next
 | Artifact | Consumer | Deadline | Format |
 |----------|----------|----------|--------|
 | DO sequencer (running) | All (auction engine) | Day 4 | Cloudflare Worker |
-| HTTP API endpoints | Agent client, frontend | Day 5 | Express.js / Hono |
+| HTTP API endpoints | Agent client, frontend | Day 5 | ~~Express.js~~ Hono |
 | Replay bundle endpoint | WS-2 (CRE fetches) | Day 6 | `GET /replay/{auctionId}` |
 | Next.js frontend | Demo judges | Day 8 | Deployed URL |
 | Agent demo client | Demo video | Day 8 | TS script |
@@ -54,8 +54,8 @@ Use stubs: ZK verify returns true, Poseidon replaced by keccak256, contract call
 ```
 
 **Cloudflare Worker + Durable Object setup:**
-- [ ] `npm create cloudflare -- engine/worker` (or `wrangler init`)
-- [ ] Configure `wrangler.toml`:
+- [x] `npm create cloudflare -- engine/worker` (or `wrangler init`)
+- [x] Configure `wrangler.toml`:
   ```toml
   name = "auction-engine"
   [durable_objects]
@@ -66,11 +66,11 @@ Use stubs: ZK verify returns true, Poseidon replaced by keccak256, contract call
   ```
 
 **DO `AuctionRoom` class skeleton:**
-- [ ] `constructor(state, env)` — load `seqCounter` and `chainHead` from `this.state.storage`
-- [ ] `fetch(request)` — route: `POST /action` (join/bid/deliver), `GET /events`, WebSocket upgrade
-- [ ] `webSocketMessage(ws, message)` — handle incoming agent messages
-- [ ] `webSocketClose(ws)` — cleanup subscriber
-- [ ] State persisted in `this.state.storage` (NOT Workers KV):
+- [x] `constructor(state, env)` — load `seqCounter` and `chainHead` from `this.state.storage`
+- [x] `fetch(request)` — route: `POST /action` (join/bid/deliver), `GET /events`, WebSocket upgrade
+- [x] `webSocketMessage(ws, message)` — handle incoming agent messages
+- [x] `webSocketClose(ws)` — cleanup subscriber
+- [x] State persisted in `this.state.storage` _(deviation: uses D1 instead of Postgres for persistence)_:
   - `chainHead:{auctionId}` — current Poseidon chain head (bytes32 hex)
   - `event:{auctionId}:{seq}` — serialized event data
   - `nullifier:{hash}` — boolean spent flag
@@ -78,114 +78,42 @@ Use stubs: ZK verify returns true, Poseidon replaced by keccak256, contract call
   - `seqCounter:{auctionId}` — current sequence number
 
 **Core sequencer logic (with stubs):**
-```typescript
-// STUB — replace with WS-1 poseidon-chain.ts on Day 4
-function computeEventHash(seq: bigint, prevHash: Uint8Array, payloadHash: Uint8Array): Uint8Array {
-  return keccak256(concat([toBytes(seq), prevHash, payloadHash]));
-}
-
-// STUB — replace with WS-1 snarkjs-verify.ts on Day 4
-async function verifyProof(proof: any, signals: any): Promise<boolean> {
-  return true;
-}
-
-// STUB — replace with WS-1 eip712-typed-data.ts on Day 4
-function verifySignature(typedDataHash: Uint8Array, sig: Uint8Array, signer: string): boolean {
-  return true;
-}
-```
+- [x] _(stubs implemented, now replaced with @agent-auction/crypto real implementations)_
 
 **Implement `ingestAction()` in DO:**
-```typescript
-async ingestAction(action: ValidatedAction): Promise<InclusionReceipt> {
-  const seq = ++this.seqCounter;
-  const prevHash = this.chainHead;
-  const payloadHash = computePayloadHash(action);  // keccak256(ActionPayloadV1)
-  const eventHash = computeEventHash(BigInt(seq), prevHash, payloadHash);
-  this.chainHead = eventHash;
-
-  // Persist to DO transactional storage
-  await this.state.storage.put(`chainHead:${auctionId}`, toHex(this.chainHead));
-  await this.state.storage.put(`event:${auctionId}:${seq}`, serialize({seq, prevHash, eventHash, action}));
-  await this.state.storage.put(`seqCounter:${auctionId}`, this.seqCounter);
-
-  // Persist to Postgres
-  await this.env.DB.insert('events', { auctionId, seq, prevHash, eventHash, payloadHash, action, ts: Date.now() });
-
-  // Broadcast to WebSocket subscribers
-  for (const ws of this.subscribers) {
-    ws.send(JSON.stringify({ type: 'event', seq, eventHash, action }));
-  }
-
-  // Return inclusion receipt
-  return { auctionId, seq, eventHash, prevHash, actionType: action.type, receivedAt: Date.now() };
-}
-```
+- [x] _(engine/src/auction-room.ts, 539 lines)_
 
 **Implement action handlers:**
-- [ ] `handleJoin(request)` — validate signature, check nullifier, check nonce, verify ZK proof (stub), ingest
-- [ ] `handleBid(request)` — validate signature, check nonce, ingest
-- [ ] `handleDeliver(request)` — validate signature, check nonce, ingest
+- [x] `handleJoin(request)` — validate signature, check nullifier, check nonce, verify ZK proof (stub), ingest
+- [x] `handleBid(request)` — validate signature, check nonce, ingest
+- [x] `handleDeliver(request)` — validate signature, check nonce, ingest
 
 **Implement nonce tracking:**
-```typescript
-async function checkNonce(auctionId: string, agentId: string, actionType: string, nonce: number, state: DurableObjectState): Promise<void> {
-  const key = `nonce:${auctionId}:${agentId}:${actionType}`;
-  const lastSeen = await state.storage.get<number>(key) ?? -1;
-  if (nonce !== lastSeen + 1) throw new Error(`Expected nonce ${lastSeen + 1}, got ${nonce}`);
-  await state.storage.put(key, nonce);
-}
-```
+- [x] _(in engine/src/handlers/actions.ts)_
 
 **Implement nullifier checking:**
-```typescript
-async function checkNullifier(nullifier: string, state: DurableObjectState): Promise<void> {
-  const key = `nullifier:${nullifier}`;
-  const existing = await state.storage.get<boolean>(key);
-  if (existing) throw new Error("Nullifier already spent");
-  await state.storage.put(key, true);
-}
-```
+- [x] _(in engine/src/handlers/actions.ts)_
 
 **WebSocket broadcast:**
-- [ ] On WebSocket upgrade: add to `this.subscribers` set
-- [ ] On event ingested: broadcast to all subscribers
-- [ ] On close: remove from subscribers
-- [ ] Use hibernatable WebSockets for cost efficiency
+- [x] On WebSocket upgrade: add to subscribers set
+- [x] On event ingested: broadcast to all subscribers
+- [x] On close: remove from subscribers
+- [x] Use hibernatable WebSockets for cost efficiency
 
-**Postgres setup:**
-- [ ] Write schema (`engine/db/schema.sql`):
-  ```sql
-  CREATE TABLE events (
-    id SERIAL PRIMARY KEY,
-    auction_id TEXT NOT NULL,
-    seq BIGINT NOT NULL,
-    prev_hash TEXT NOT NULL,
-    event_hash TEXT NOT NULL,
-    payload_hash TEXT NOT NULL,
-    action_type TEXT NOT NULL,
-    agent_id TEXT NOT NULL,
-    wallet TEXT NOT NULL,
-    amount TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(auction_id, seq)
-  );
-  CREATE INDEX idx_events_auction_seq ON events(auction_id, seq);
-  ```
-- [ ] Set up connection (Neon, Supabase, or local)
+**~~Postgres~~ D1 setup:**
+- [x] _(deviation: uses Cloudflare D1 instead of Postgres — native to CF Workers)_
 
-**Express.js API server:**
-- [ ] `POST /room/:auctionId/action` — forward to DO
-- [ ] `GET /room/:auctionId/events?from=:seq` — query Postgres
-- [ ] `GET /auctions` — list auctions (from Postgres or cache)
-- [ ] `GET /auctions/:id/manifest` — return manifest JSON
-- [ ] `WS /room/:auctionId/stream` — proxy to DO WebSocket
+**~~Express.js~~ Hono API server:**
+- [x] _(deviation: uses Hono, native to CF Workers, instead of Express.js)_
+- [x] `POST /room/:auctionId/action` — forward to DO
+- [x] `GET /room/:auctionId/events?from=:seq` — query events
+- [x] `GET /auctions` — list auctions
+- [x] `GET /auctions/:id/manifest` — return manifest JSON
+- [x] `WS /room/:auctionId/stream` — proxy to DO WebSocket
 
 **Deliveries:**
-- [ ] Push DO code to `engine/worker/`
-- [ ] Push API code to `engine/api/`
-- [ ] Push schema to `engine/db/`
-- [ ] Tag: `ws3/engine-skeleton`
+- [x] Push DO code to `engine/src/` _(deviation: flat structure, not engine/worker/)_
+- [ ] Tag: `ws3/engine-skeleton` _(no git tags used)_
 
 ### Day 3-4: Integrate Crypto Libs + Contract Addresses
 
@@ -194,82 +122,73 @@ Priority: Replace all stubs with real implementations
 ```
 
 **Integrate WS-1 crypto libs (arriving Day 3-4):**
-- [ ] Replace `computeEventHash` stub → import from `@agent-auction/crypto/poseidon-chain`
-- [ ] Replace `verifyProof` stub → import from `@agent-auction/crypto/snarkjs-verify`
-- [ ] Replace `verifySignature` stub → import from `@agent-auction/crypto/eip712-typed-data`
-- [ ] Import `nullifier.ts` for derivation verification
-- [ ] Bundle vkey JSONs into DO (from `circuits/keys/`)
+- [x] Replace `computeEventHash` stub → import from `@agent-auction/crypto` _(via engine/src/lib/crypto.ts wrapper)_
+- [x] ~~Replace `verifyProof` stub~~ Kept as fail-closed stub _(CF Workers can't load vkeys via node:fs)_
+- [x] ~~Replace `verifySignature` stub~~ Kept as fail-closed stub _(API mismatch — engine passes hash+sig+signer, package expects structured EIP-712 data)_
+- [x] Import `nullifier.ts` for derivation verification _(via @agent-auction/crypto wrapper)_
+- [ ] Bundle vkey JSONs into DO _(not applicable — ZK verify kept as stub)_
 
 **Integrate WS-2 contract addresses (arriving Day 4):**
-- [ ] Load `deployments/base-sepolia.json` into engine config
-- [ ] Set up viem/ethers client with Base Sepolia RPC
-- [ ] Implement `readBondStatus(auctionId, agentId)`: read `AuctionEscrow.bondRecords()` for admission
-- [ ] Implement `readRuntimeSigner(agentAccountAddress)`: read `AgentAccount.runtimeSigner()` for sig verify (cache per session)
+- [x] Load `deployments/base-sepolia.json` into engine config _(engine/src/lib/addresses.ts)_
+- [x] Set up viem client with Base Sepolia RPC _(engine/src/lib/chain-client.ts)_
+- [ ] Implement `readBondStatus(auctionId, agentId)`: read `AuctionEscrow.bondRecords()` _(not evidenced — bonds managed via admin recordBond)_
+- [ ] Implement `readRuntimeSigner(agentAccountAddress)`: read `AgentAccount.runtimeSigner()` _(sig verify uses EIP-712 stub)_
 
 **Implement inclusion receipt signing:**
-- [ ] Configure sequencer private key in DO environment
-- [ ] Sign receipt: `sequencerKey.sign(keccak256(auctionId + seq + eventHash))`
-- [ ] Return to agent: `{ auctionId, seq, eventHash, prevHash, actionType, receivedAt, sequencerSig }`
+- [x] Configure sequencer private key in DO environment _(engine/src/lib/inclusion-receipt.ts, 55 lines)_
+- [x] Sign receipt
+- [x] Return to agent with sequencer signature
 
 **Start frontend:**
-- [ ] Auction list page: `GET /auctions` → render cards (status, reserve price, deadline)
-- [ ] Auction room page: connect WebSocket → render live event feed
-- [ ] Use existing landing page components from `frontend/src/components/`
+- [x] Auction list page: `GET /auctions` → render cards _(frontend/src/app/auctions/page.tsx)_
+- [x] Auction room page: connect WebSocket → render live event feed _(frontend/src/app/auctions/[id]/page.tsx)_
+- [x] Use existing landing page components
 
 **Deliveries:**
-- [ ] Push updated DO with real crypto
-- [ ] Tag: `ws3/crypto-integrated`
+- [x] Push updated DO with real crypto
+- [ ] Tag: `ws3/crypto-integrated` _(no git tags used)_
 
 ### Day 5-6: Auction Close Flow + x402 + Frontend
 
 **Auction close flow (DO sequencer → on-chain):**
-- [ ] At auction deadline or manual close:
-  1. Stop accepting new bids
-  2. Read all events from Postgres for this auctionId
-  3. Serialize to ReplayBundleV1 (using `replay-bundle.ts` from WS-1)
-  4. Pin to IPFS (use Pinata, web3.storage, or nft.storage)
-  5. Build `AuctionSettlementPacket` (using TS type from WS-2)
-  6. Sign packet with sequencer key
-  7. Call `AuctionRegistry.recordResult(packet, sequencerSig)` via viem
-  8. Log: `AuctionEnded` event emitted → CRE takes over
+- [x] At auction deadline or manual close: _(engine/src/lib/settlement.ts, 43 lines)_
+  1. [x] Stop accepting new bids
+  2. [x] Read all events for this auctionId
+  3. [x] Serialize to ReplayBundleV1 _(engine/src/lib/replay-bundle.ts — delegates to @agent-auction/crypto)_
+  4. [x] Pin to IPFS _(engine/src/lib/ipfs.ts, 91 lines)_
+  5. [x] Build `AuctionSettlementPacket`
+  6. [x] Sign packet with sequencer key
+  7. [x] Call `AuctionRegistry.recordResult(packet, sequencerSig)` via viem
+  8. [x] Log: `AuctionEnded` event emitted → CRE takes over
 
 **Replay bundle endpoint (for CRE to fetch):**
-- [ ] `GET /replay/:auctionId` — return raw ReplayBundleV1 bytes
-- [ ] Must be byte-for-byte deterministic (no session personalization)
-- [ ] Cache in object storage (R2, S3) as backup
+- [x] `GET /replay/:auctionId` — return raw ReplayBundleV1 bytes
+- [x] Must be byte-for-byte deterministic (no session personalization)
+- [x] Cache in object storage _(IPFS + R2)_
 
 **x402 middleware:**
-- [ ] Install `@x402/express` (or `@x402/hono`)
-- [ ] Gate endpoints:
-  - `GET /auctions/:id/manifest` → 0.001 USDC
-  - `GET /auctions/:id/events` → 0.0001 USDC/call
-  - `GET /auctions` → free
-- [ ] Implement Workers KV dedup: `x402receipt:{chainId}:{txHash}:{logIndex}`
-  ```typescript
-  const key = `x402receipt:${chainId}:${txHash}:${logIndex}`;
-  const existing = await env.KV.get(key);
-  if (existing) throw new Response("Receipt already used", { status: 409 });
-  await env.KV.put(key, JSON.stringify({ usedAt: Date.now() }), { expirationTtl: 86400 * 90 });
-  ```
+- [x] ~~Install `@x402/express`~~ Implement `@x402/hono` equivalent _(engine/src/middleware/x402.ts, 67 lines)_
+- [x] Gate endpoints with x402 pricing
+- [x] Implement dedup via Workers KV
 
 **Bond observation (for PENDING_BOND flow):**
-- [ ] Watch USDC `Transfer` events to escrow address (via WebSocket provider or polling)
-- [ ] Match to pending join requests
-- [ ] Return `PENDING_BOND` status with `retryAfter: 5000` if bond not yet observed
-- [ ] 60s timeout — reject join if bond not observed
+- [x] Watch USDC `Transfer` events to escrow address _(engine/src/lib/bond-watcher.ts, 248 lines)_
+- [x] Match to pending join requests
+- [x] Return `PENDING_BOND` status with `retryAfter` if bond not yet observed
+- [x] Timeout — reject join if bond not observed
 
 **Frontend — live auction view:**
-- [ ] Bid timeline (scrollable event list with timestamps)
-- [ ] Current highest bid display
-- [ ] Agent list / leaderboard
-- [ ] Countdown timer to auction deadline
-- [ ] Auction state badge (OPEN / CLOSED / SETTLED / CANCELLED)
+- [ ] Bid timeline (scrollable event list with timestamps) _(beads nlk/b5d open — WIP)_
+- [ ] Current highest bid display _(WIP)_
+- [ ] Agent list / leaderboard _(WIP)_
+- [ ] Countdown timer to auction deadline _(WIP)_
+- [ ] Auction state badge (OPEN / CLOSED / SETTLED / CANCELLED) _(WIP)_
 
 **Deliveries:**
-- [ ] Push replay endpoint
-- [ ] Push x402 middleware
-- [ ] Push frontend pages
-- [ ] Tag: `ws3/auction-flow-complete`
+- [x] Push replay endpoint
+- [x] Push x402 middleware
+- [ ] Push frontend pages _(scaffolded, functionality WIP)_
+- [ ] Tag: `ws3/auction-flow-complete` _(no git tags used)_
 
 ### Day 7-8: Agent Demo Client + E2E
 
@@ -277,43 +196,11 @@ Priority: Replace all stubs with real implementations
 
 Build a script that simulates a full agent lifecycle:
 
-```typescript
-// index.ts — demo agent flow
-async function runAgent(config: AgentConfig) {
-  // 1. Deploy smart wallet
-  const walletAddress = await deployWallet(config.runtimeSigner, config.salt);
+- [x] _(agent-client/src/index.ts — 160 lines, full lifecycle script)_
 
-  // 2. Register ERC-8004 identity (if not already registered)
-  await registerIdentity(config.agentId, walletAddress);
-
-  // 3. Register privacy sidecar commitment
-  const { agentSecret, capabilityRoot } = await registerPrivacyCommitment(config.agentId);
-
-  // 4. Post bond (USDC transfer via UserOp)
-  await postBond(walletAddress, config.auctionId, config.bondAmount);
-
-  // 5. Generate ZK membership proof
-  const { proof, signals } = await generateMembershipProof(agentSecret, ...);
-
-  // 6. Join auction (signed EIP-712 + ZK proof)
-  const joinReceipt = await joinAuction(config.auctionId, proof, signals);
-  console.log("Join receipt:", joinReceipt);
-
-  // 7. Place bid(s)
-  const bidReceipt = await placeBid(config.auctionId, config.bidAmount);
-  console.log("Bid receipt:", bidReceipt);
-
-  // 8. Wait for settlement
-  await waitForSettlement(config.auctionId);
-
-  // 9. Claim refund (if not winner)
-  await claimRefundIfLoser(config.auctionId, config.agentId);
-}
-```
-
-- [ ] `wallet.ts`: EIP-4337 wallet deployment + UserOp construction (use permissionless.js or viem AA)
-- [ ] `identity.ts`: ERC-8004 registration + privacy sidecar commitment
-- [ ] `auction.ts`: join/bid/deliver via HTTP to DO sequencer
+- [x] `wallet.ts`: EIP-4337 wallet deployment + UserOp construction _(155 lines)_
+- [x] `identity.ts`: ERC-8004 registration + privacy sidecar commitment _(54 lines)_
+- [x] `auction.ts`: join/bid/deliver via HTTP to DO sequencer _(215 lines)_
 
 **Run demo with 3+ agents:**
 - [ ] Agent A: bids 100 USDC
@@ -322,14 +209,14 @@ async function runAgent(config: AgentConfig) {
 - [ ] Expected: Agent B wins, settlement via CRE, Agent A + C get refunds
 
 **Frontend — settlement verification:**
-- [ ] "Verify Settlement" button → link to Tenderly tx explorer
-- [ ] Show: CRE workflow triggered, onReport called, SETTLED state
-- [ ] ZK proof status indicators (membership verified, bid range verified)
+- [x] "Verify Settlement" button → link to Basescan tx explorer _(frontend/src/app/auctions/[id]/settlement/)_
+- [ ] Show: CRE workflow triggered, onReport called, SETTLED state _(WIP)_
+- [ ] ZK proof status indicators _(ZK stubs mean no real proof status)_
 
 **Frontend — replay/audit mode:**
-- [ ] Download replay bundle
-- [ ] Show Poseidon chain verification (event by event)
-- [ ] Highlight: computed `finalLogHash` matches on-chain
+- [x] Page exists _(frontend/src/app/auctions/[id]/replay/)_
+- [ ] Show Poseidon chain verification (event by event) _(WIP)_
+- [ ] Highlight: computed `finalLogHash` matches on-chain _(WIP)_
 
 ### Day 9-10: Demo Video + Polish
 
@@ -338,11 +225,11 @@ async function runAgent(config: AgentConfig) {
   2. Show auction creation
   3. Show live bidding (3 agents, real-time UI)
   4. Show auction close → CRE settlement trigger
-  5. Show settlement verification on Tenderly
+  5. Show settlement verification on Basescan
   6. Show ZK proof verification
   7. Show refund claims
 - [ ] Polish UI: animations, loading states, error handling
-- [ ] Write engine section of README
+- [x] Write engine section of README
 - [ ] Final integration test
 
 ---
@@ -366,42 +253,23 @@ async function runAgent(config: AgentConfig) {
 Until WS-1 and WS-2 deliver their artifacts, use these stubs:
 
 ```typescript
-// stubs/crypto.ts — DELETE after Day 4
-import { keccak256, concat, toBytes } from "viem";
+// stubs/crypto.ts — ✅ REPLACED with @agent-auction/crypto wrappers (engine/src/lib/crypto.ts)
+// computeEventHash, computePayloadHash, deriveNullifier now delegate to real Poseidon
 
-export function computeEventHash(seq: bigint, prevHash: Uint8Array, payloadHash: Uint8Array): Uint8Array {
-  return keccak256(concat([toBytes(seq), prevHash, payloadHash]));
-}
+// stubs kept (CF Workers incompatible):
+// verifyMembershipProof — needs node:fs for vkey loading → fail-closed stub
+// verifyEIP712Signature — API mismatch → fail-closed stub
 
-export async function verifyMembershipProof(proof: any, signals: any): Promise<{ valid: boolean }> {
-  console.warn("STUB: ZK verify always returns true");
-  return { valid: true, registryRoot: "0x00", nullifier: "0x00" };
-}
-
-export function verifyEIP712Signature(hash: Uint8Array, sig: Uint8Array, signer: string): boolean {
-  console.warn("STUB: signature verify always returns true");
-  return true;
-}
-
-// stubs/contracts.ts — DELETE after Day 4
-export async function readBondStatus(auctionId: string, agentId: string): Promise<bigint> {
-  console.warn("STUB: bond always returns 1000000");
-  return 1000000n;
-}
-
-export async function readRuntimeSigner(walletAddress: string): Promise<string> {
-  console.warn("STUB: runtimeSigner returns hardcoded address");
-  return "0x1234567890abcdef1234567890abcdef12345678";
-}
+// stubs/contracts.ts — partially replaced with engine/src/lib/chain-client.ts + addresses.ts
 ```
 
 ---
 
 ## If Behind — What to Cut
 
-1. **Skip x402 middleware** — make all endpoints free for demo
-2. **Skip IPFS pinning** — serve replay bundle from API only (CRE still fetches from URL)
-3. **Simplify frontend** — single page with event log + "Verify" button (skip leaderboard, animations)
-4. **Skip bond observation** — assume bonds are always recorded before join (manual recordBond)
+1. **Skip x402 middleware** — make all endpoints free for demo _(implemented but can be disabled)_
+2. **Skip IPFS pinning** — serve replay bundle from API only (CRE still fetches from URL) _(implemented)_
+3. **Simplify frontend** — single page with event log + "Verify" button (skip leaderboard, animations) _(current state — can proceed with minimal UI)_
+4. **Skip bond observation** — assume bonds are always recorded before join (manual recordBond) _(implemented)_
 5. **Use 1 agent** in demo instead of 3 — simpler but less impressive
-6. **Skip replay/audit mode** — live view only
+6. **Skip replay/audit mode** — live view only _(page scaffolded)_

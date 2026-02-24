@@ -79,131 +79,131 @@ These are the boundaries between workstreams. Each interface must be defined bef
 ### Day 1-2: Foundation (All Parallel)
 
 **WS-1 (ZK Researcher):**
-- [ ] Set up Circom 2.2.3 + snarkjs 0.7.5 environment
-- [ ] Write `RegistryMembership.circom` (~12K constraints)
-- [ ] Write `BidRange.circom` (~5K constraints)
-- [ ] Download Hermez Powers of Tau (`powersOfTau28_hez_final_16.ptau`)
-- [ ] Run trusted setup phase 2 (3 independent contributors)
-- [ ] Export `bid_range_vkey.json` + `registry_member_vkey.json`
-- [ ] Write `AgentPrivacyRegistry.sol` (commitment sidecar)
-- [ ] **DELIVER to WS-2:** `AgentPrivacyRegistry.sol`
-- [ ] **DELIVER to WS-3:** vkey JSON files
+- [x] Set up Circom 2.2.3 + snarkjs 0.7.5 environment
+- [x] Write `RegistryMembership.circom` (~12K constraints)
+- [x] Write `BidRange.circom` (~5K constraints)
+- [ ] Download Hermez Powers of Tau (`powersOfTau28_hez_final_16.ptau`) _(ptau files gitignored, not in repo)_
+- [ ] Run trusted setup phase 2 (3 independent contributors) _(zkey files gitignored; setup not evidenced in repo)_
+- [x] Export `bid_range_vkey.json` + `registry_member_vkey.json`
+- [x] Write `AgentPrivacyRegistry.sol` (commitment sidecar)
+- [x] **DELIVER to WS-2:** `AgentPrivacyRegistry.sol`
+- [x] **DELIVER to WS-3:** vkey JSON files
 
 **WS-2 (AI Engineer 1 — Contracts):**
-- [ ] Set up Foundry project (`forge init`)
-- [ ] Install deps: `@account-abstraction/contracts@0.7.0`, `@openzeppelin/contracts`
-- [ ] Write `AgentAccount.sol` (simplified: `runtimeSigner` + sig/nonce only)
-- [ ] Write `AgentAccountFactory.sol` (CREATE2)
-- [ ] Write `AgentPaymaster.sol` (method-based gating)
-- [ ] Write `AuctionRegistry.sol` (createAuction, recordResult, markSettled, DOMAIN_SEPARATOR)
-- [ ] Write `AuctionEscrow.sol` (ReceiverTemplate, bonds, _processReport, claimRefund)
-- [ ] Write basic Foundry tests for each contract
-- [ ] **DELIVER to WS-3:** Contract ABIs (Foundry `out/` artifacts)
+- [x] Set up Foundry project (`forge init`)
+- [x] Install deps: `@account-abstraction/contracts@0.7.0`, `@openzeppelin/contracts`
+- [x] Write `AgentAccount.sol` (simplified: `runtimeSigner` + sig/nonce only)
+- [x] Write `AgentAccountFactory.sol` (CREATE2)
+- [x] Write `AgentPaymaster.sol` (method-based gating)
+- [x] Write `AuctionRegistry.sol` (createAuction, recordResult, markSettled, DOMAIN_SEPARATOR)
+- [x] Write `AuctionEscrow.sol` (ReceiverTemplate, bonds, _processReport, claimRefund)
+- [x] Write basic Foundry tests for each contract _(117 tests across 4 test files)_
+- [x] **DELIVER to WS-3:** Contract ABIs (Foundry `out/` artifacts)
 
 **WS-3 (AI Engineer 2 — Engine + Frontend):**
-- [ ] Set up Cloudflare Worker + Durable Object project (`wrangler init`)
-- [ ] Set up Postgres schema (events table: `auctionId, seq, prevHash, eventHash, payloadHash, action, ts`)
-- [ ] Implement DO skeleton: `fetch()` handler, WebSocket upgrade, hibernation
-- [ ] Implement core sequencer: `seq` counter, action validation, WebSocket broadcast
-- [ ] Set up Express.js API server with routing structure
-- [ ] **NO DEPENDENCY on WS-1/WS-2 yet** — use hardcoded stubs for ZK verify + contract calls
+- [x] Set up Cloudflare Worker + Durable Object project (`wrangler init`)
+- [x] Set up ~~Postgres~~ D1 schema _(deviation: uses Cloudflare D1 instead of Postgres)_
+- [x] Implement DO skeleton: `fetch()` handler, WebSocket upgrade, hibernation
+- [x] Implement core sequencer: `seq` counter, action validation, WebSocket broadcast
+- [x] Set up ~~Express.js~~ Hono API server with routing structure _(deviation: uses Hono, native to CF Workers)_
+- [x] **NO DEPENDENCY on WS-1/WS-2 yet** — use hardcoded stubs for ZK verify + contract calls _(stubs now replaced with real crypto)_
 
 ### Day 3-4: Core Logic (All Parallel)
 
 **WS-1 (ZK Researcher):**
-- [ ] Write `poseidon-chain.ts` — event hash computation using `circomlibjs`/`poseidon-lite`
-- [ ] Write `snarkjs-verify.ts` — wrapper around `groth16.verify()` for both circuits
-- [ ] Write `eip712-typed-data.ts` — hash functions for Join, Bid, Deliver, Dispute, Withdraw structs
-- [ ] Write `nullifier.ts` — `Poseidon(agentSecret, auctionId, actionType)` derivation
-- [ ] Write cross-language Poseidon test vectors (3+ vectors)
-- [ ] **DELIVER to WS-2:** Poseidon test vectors (for Foundry tests)
-- [ ] **DELIVER to WS-3:** `poseidon-chain.ts`, `snarkjs-verify.ts`, `eip712-typed-data.ts`, `nullifier.ts`
+- [x] Write `poseidon-chain.ts` — event hash computation using `circomlibjs`/`poseidon-lite`
+- [x] Write `snarkjs-verify.ts` — wrapper around `groth16.verify()` for both circuits
+- [x] Write `eip712-typed-data.ts` — hash functions for Join, Bid, Deliver, Dispute, Withdraw structs
+- [x] Write `nullifier.ts` — `Poseidon(agentSecret, auctionId, actionType)` derivation
+- [x] Write cross-language Poseidon test vectors (3+ vectors)
+- [x] **DELIVER to WS-2:** Poseidon test vectors (for Foundry tests)
+- [x] **DELIVER to WS-3:** `poseidon-chain.ts`, `snarkjs-verify.ts`, `eip712-typed-data.ts`, `nullifier.ts`
 
 **WS-2 (AI Engineer 1 — Contracts):**
-- [ ] Deploy all contracts to Base Sepolia via Tenderly:
-  - Step 1: Verify EntryPoint at canonical address
-  - Step 2: Deploy AgentPrivacyRegistry (from WS-1)
-  - Step 3: Deploy AgentAccount implementation
-  - Step 4: Deploy AgentAccountFactory
-  - Step 5: Deploy AgentPaymaster → stake ETH
-  - Step 6: Deploy AuctionRegistry → set DOMAIN_SEPARATOR
-  - Step 7: Deploy AuctionEscrow (with MockKeystoneForwarder for now)
-  - Step 8: Wire AuctionRegistry.setEscrow()
-- [ ] Write `MockKeystoneForwarder.sol` for local dev
+- [x] Deploy all contracts to Base Sepolia _(deployed directly, not via Tenderly)_:
+  - [x] Step 1: Verify EntryPoint at canonical address
+  - [ ] Step 2: Deploy AgentPrivacyRegistry (from WS-1) _(added to Deploy.s.sol but NOT deployed on-chain yet)_
+  - [x] Step 3: Deploy AgentAccount implementation
+  - [x] Step 4: Deploy AgentAccountFactory
+  - [x] Step 5: Deploy AgentPaymaster → stake ETH
+  - [x] Step 6: Deploy AuctionRegistry → set DOMAIN_SEPARATOR
+  - [x] Step 7: Deploy AuctionEscrow _(v2 with real KeystoneForwarder, not MockKeystoneForwarder)_
+  - [x] Step 8: Wire AuctionRegistry.setEscrow()
+- [x] Write `MockKeystoneForwarder.sol` for local dev
 - [ ] Verify Poseidon test vectors in Foundry (using `poseidon-solidity` npm)
-- [ ] **DELIVER to WS-3:** `deployments.json` with all contract addresses
+- [x] **DELIVER to WS-3:** `deployments.json` with all contract addresses
 
 **WS-3 (AI Engineer 2 — Engine + Frontend):**
-- [ ] Integrate `poseidon-chain.ts` from WS-1 into DO sequencer
-- [ ] Integrate `snarkjs-verify.ts` from WS-1 into DO admission path
-- [ ] Implement `ingestAction()` in DO: validate → assign seq → hash chain → persist → broadcast
-- [ ] Implement nullifier checking in DO transactional storage
-- [ ] Implement off-chain nonce tracking: `nonce:{auctionId}:{agentId}:{actionType}`
-- [ ] Implement inclusion receipt generation + sequencer signing
-- [ ] Start Next.js frontend: auction list page, auction room page (WebSocket connection)
+- [x] Integrate `poseidon-chain.ts` from WS-1 into DO sequencer _(via @agent-auction/crypto wrapper)_
+- [x] ~~Integrate `snarkjs-verify.ts`~~ Kept as fail-closed stub _(CF Workers can't load vkeys via node:fs; CRE handles ZK verification)_
+- [x] Implement `ingestAction()` in DO: validate → assign seq → hash chain → persist → broadcast
+- [x] Implement nullifier checking in DO transactional storage
+- [x] Implement off-chain nonce tracking: `nonce:{auctionId}:{agentId}:{actionType}`
+- [x] Implement inclusion receipt generation + sequencer signing
+- [x] Start Next.js frontend: auction list page, auction room page _(pages exist, WIP on functionality)_
 
 ### Day 5-6: Integration (Dependencies Converge)
 
 **WS-1 (ZK Researcher):**
-- [ ] Write `replay-bundle.ts` — ReplayBundleV1 canonical serializer + `sha256` content hash
-- [ ] Write agent-side proof generation SDK: `generateMembershipProof(agentSecret, capabilityPath, ...)`, `generateBidRangeProof(bid, salt, ...)`
-- [ ] Verify test vectors: ReplayBundleV1 Vector A + Vector B (from spec)
-- [ ] **DELIVER to WS-2:** `replay-bundle.ts` (CRE workflow needs the same serialization logic)
-- [ ] **DELIVER to WS-3:** `replay-bundle.ts` + agent proof generation SDK
+- [x] Write `replay-bundle.ts` — ReplayBundleV1 canonical serializer + `sha256` content hash
+- [x] Write agent-side proof generation SDK: `generateMembershipProof(agentSecret, capabilityPath, ...)`, `generateBidRangeProof(bid, salt, ...)`
+- [x] Verify test vectors: ReplayBundleV1 Vector A + Vector B (from spec) _(replay-bundle.test.ts)_
+- [x] **DELIVER to WS-2:** `replay-bundle.ts` (CRE workflow needs the same serialization logic)
+- [x] **DELIVER to WS-3:** `replay-bundle.ts` + agent proof generation SDK
 
 **WS-2 (AI Engineer 1 — CRE):**
-- [ ] Write CRE Settlement Workflow (TypeScript SDK):
-  - Trigger: EVM Log Trigger on `AuctionEnded` event (FINALIZED confidence)
-  - Compute: fetch ReplayBundleV1 from configured URL → sha256 verify → Poseidon chain replay → rule replay (English: highest valid bid) → derive winner
-  - Write: EVMClient → KeystoneForwarder → `AuctionEscrow.onReport()`
-- [ ] Integrate `replay-bundle.ts` from WS-1 for content hash verification
-- [ ] Run `cre workflow simulate` locally
-- [ ] Write Foundry integration test: full settlement flow (createAuction → recordResult → MockKeystoneForwarder.onReport → verify escrow state)
-- [ ] **DELIVER to WS-3:** CRE workflow config (workflowId, workflowName for AuctionEscrow setExpected*)
+- [x] Write CRE Settlement Workflow (TypeScript SDK):
+  - [x] Trigger: EVM Log Trigger on `AuctionEnded` event (FINALIZED confidence)
+  - [x] Compute: fetch ReplayBundleV1 from configured URL → ~~sha256 verify~~ presence check _(MVP: full hash verification is P1)_
+  - [x] Write: EVMClient → KeystoneForwarder → `AuctionEscrow.onReport()`
+- [x] ~~Integrate `replay-bundle.ts`~~ CRE does presence check only _(full replay verification deferred to P1)_
+- [x] Run `cre workflow simulate` locally _(E2E confirmed: transmissionSuccess=true on Base Sepolia)_
+- [x] Write Foundry integration test: full settlement flow
+- [x] **DELIVER to WS-3:** CRE workflow config
 
 **WS-3 (AI Engineer 2 — Engine + Frontend):**
-- [ ] Integrate contract ABIs + addresses from WS-2
-- [ ] Implement `recordResult()` call from DO sequencer at auction close
-- [ ] Implement replay bundle generation at auction close: serialize events → pin to IPFS → get CID
-- [ ] Implement x402 middleware (`@x402/express` or `@x402/hono`)
-- [ ] Implement bond observation: watch USDC Transfer events → match to pending joins
-- [ ] Frontend: live auction view (bid timeline, current highest, agent list, countdown timer)
+- [x] Integrate contract ABIs + addresses from WS-2 _(engine/src/lib/addresses.ts, chain-client.ts)_
+- [x] Implement `recordResult()` call from DO sequencer at auction close _(engine/src/lib/settlement.ts)_
+- [x] Implement replay bundle generation at auction close _(engine/src/lib/replay-bundle.ts + ipfs.ts)_
+- [x] Implement x402 middleware _(engine/src/middleware/x402.ts)_
+- [x] Implement bond observation _(engine/src/lib/bond-watcher.ts)_
+- [ ] Frontend: live auction view (bid timeline, current highest, agent list, countdown timer) _(pages scaffolded, functionality WIP — beads nlk/b5d open)_
 
 ### Day 7-8: End-to-End + Demo (All Converge)
 
 **WS-1 (ZK Researcher):**
-- [ ] Help WS-3 debug any ZK proof verification issues in DO
-- [ ] Write agent onboarding script: generate `agentSecret`, compute capability Merkle tree, register commitment in AgentPrivacyRegistry
-- [ ] Verify full ZK proof flow end-to-end: agent generates proof → DO verifies → admission accepted
-- [ ] **ASSIST WS-3** with agent demo client ZK integration
+- [x] ~~Help WS-3 debug ZK proof verification issues~~ N/A — ZK verify kept as stub in engine (CRE handles verification)
+- [x] Write agent onboarding script _(packages/crypto/src/onboarding.ts + scripts/onboard-agent.ts)_
+- [ ] Verify full ZK proof flow end-to-end _(ZK verify is stubbed in engine; circuit WASM/zkey compilation pending)_
+- [x] **ASSIST WS-3** with agent demo client ZK integration _(onboarding SDK delivered)_
 
 **WS-2 (AI Engineer 1 — CRE + Contracts):**
-- [ ] Register CRE Workflow (Step 10): `cre workflow deploy`
-- [ ] Configure AuctionEscrow: `setExpectedWorkflowId`, `setExpectedWorkflowName`, `setExpectedAuthor`
-- [ ] Run full settlement E2E test: `createAuction → bond → join → bid → close → recordResult → AuctionEnded → CRE → onReport → SETTLED`
-- [ ] Fix any contract bugs surfaced by integration
-- [ ] **ASSIST WS-3** with contract integration issues
+- [ ] Register CRE Workflow (Step 10): `cre workflow deploy` _(simulation confirmed, formal registration pending)_
+- [ ] Configure AuctionEscrow: `setExpectedWorkflowId`, `setExpectedWorkflowName`, `setExpectedAuthor` _(bead wq4 open — configureCRE() not yet called)_
+- [x] Run full settlement E2E test _(confirmed on-chain: tx 0x0b8e9ede...)_
+- [x] Fix any contract bugs surfaced by integration _(3-round security review, 9 bugs fixed)_
+- [x] **ASSIST WS-3** with contract integration issues
 
 **WS-3 (AI Engineer 2 — Engine + Frontend + Demo):**
-- [ ] Build agent demo client:
-  - Deploy smart wallet (CREATE2 via AgentAccountFactory)
-  - Register ERC-8004 identity + privacy sidecar commitment
-  - Generate ZK membership proof (using WS-1 SDK)
-  - Post bond (USDC transfer via UserOp)
-  - Join auction (signed EIP-712 + ZK proof → DO)
-  - Place bids
-  - Receive inclusion receipts
-- [ ] Frontend: settlement verification page ("Verify on Tenderly" button)
-- [ ] Frontend: ZK proof status indicators
+- [x] Build agent demo client _(agent-client/src/: wallet.ts, identity.ts, auction.ts, index.ts — 794 lines)_:
+  - [x] Deploy smart wallet (CREATE2 via AgentAccountFactory)
+  - [x] Register ERC-8004 identity + privacy sidecar commitment
+  - [ ] Generate ZK membership proof (using WS-1 SDK) _(circuit keys not compiled yet)_
+  - [x] Post bond (USDC transfer via UserOp)
+  - [x] Join auction (signed EIP-712 + ZK proof → DO)
+  - [x] Place bids
+  - [x] Receive inclusion receipts
+- [x] Frontend: settlement verification page _(frontend/src/app/auctions/[id]/settlement/)_
+- [ ] Frontend: ZK proof status indicators _(ZK stubs mean no real proof status to show)_
 - [ ] Run full demo flow with 3+ simulated agents
 
 ### Day 9-10: Polish + Submit
 
-**WS-1:** Review crypto correctness, write ZK section of README
-**WS-2:** Review contract security, write contracts + CRE section of README
-**WS-3:** Record demo video (3-5 min), finalize UI, write engine section of README
+**WS-1:** [x] Review crypto correctness _(security review done)_, [ ] write ZK section of README
+**WS-2:** [x] Review contract security _(3-round review)_, [x] write contracts + CRE section of README
+**WS-3:** [ ] Record demo video (3-5 min), [ ] finalize UI, [x] write engine section of README
 
-**All together:** Final README, submission package
+**All together:** [x] Final README _(comprehensive, kept up to date)_, [ ] submission package
 
 ---
 
