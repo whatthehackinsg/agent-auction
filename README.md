@@ -328,6 +328,8 @@ Deployer / Sequencer: `0x633ec0e633AA4d8BbCCEa280331A935747416737`
 
 AgentPaymaster (`0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d`) funded: 0.01 ETH staked (1-day unstake delay) + 0.05 ETH deposited for gas sponsorship.
 
+EIP-4337 Bundler: Pimlico (`api.pimlico.io/v2/84532/rpc`) — full UserOp flow confirmed with AgentAccount + AgentPaymaster ([tx](https://sepolia.basescan.org/tx/0x43c2d11fec8845a05f0bb6347bd056f4c41b43f52ad3514c7fa2d7cc1faeaa1c)). First AgentAccount: [`0x04c505a1543965e2BB29c56EE26Eb6F2c907c6C7`](https://sepolia.basescan.org/address/0x04c505a1543965e2BB29c56EE26Eb6F2c907c6C7) (salt=0, lazy-deployed via UserOp).
+
 ## Getting Started
 ### Prerequisites
 - [Node.js](https://nodejs.org/) (v18+)

@@ -425,9 +425,15 @@ The signature must come from the current `winnerWallet`.
 
 ## TypeScript Integration
 
-For a Base Sepolia account-abstraction demo flow using `permissionless.js` and `viem` (EntryPoint v0.7) with bundler/paymaster fallback, see:
+For EIP-4337 UserOp demos using `permissionless.js`, `viem`, and Pimlico bundler on Base Sepolia:
 
-- `docs/permissionless-demo-script.md`
+- **Bundler connectivity test** (SimpleAccount): `engine/scripts/permissionless-userop-demo.ts`
+- **Full AgentAccount + AgentPaymaster flow** (bond deposit via UserOp): `engine/scripts/agent-userop-demo.ts`
+- Setup docs: `docs/permissionless-demo-script.md`
+
+Bundler: Pimlico (`api.pimlico.io/v2/84532/rpc`) — get API key at [dashboard.pimlico.io](https://dashboard.pimlico.io). Env: `PIMLICO_BUNDLER_URL` in `engine/.env`.
+
+Confirmed on-chain: AgentAccount lazy deploy + 1 USDC bond deposit in a single UserOp, gas sponsored by AgentPaymaster ([tx](https://sepolia.basescan.org/tx/0x43c2d11fec8845a05f0bb6347bd056f4c41b43f52ad3514c7fa2d7cc1faeaa1c)).
 
 Import types and addresses from `contracts/types/index.ts`:
 

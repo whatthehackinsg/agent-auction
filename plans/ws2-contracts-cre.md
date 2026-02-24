@@ -136,9 +136,9 @@ Follow the 10-step deployment order from amended doc Section 10:
 - [x] _(deployed addresses + ABIs published)_
 
 **EIP-4337 Bundler setup:**
-- [ ] Choose bundler: Pimlico or CDP (both support Base Sepolia EntryPoint v0.7) _(bundler endpoint not documented)_
-- [ ] Configure and test UserOp submission
-- [ ] Document bundler endpoint for WS-3
+- [x] Choose bundler: Pimlico or CDP (both support Base Sepolia EntryPoint v0.7) _(Pimlico selected — `api.pimlico.io/v2/84532/rpc`)_
+- [x] Configure and test UserOp submission _(AgentAccount + AgentPaymaster full flow confirmed — [tx](https://sepolia.basescan.org/tx/0x43c2d11fec8845a05f0bb6347bd056f4c41b43f52ad3514c7fa2d7cc1faeaa1c))_
+- [x] Document bundler endpoint for WS-3 _(deployments/base-sepolia.json, engine/AGENTS.md, docs/developer-guide.md)_
 
 **Export AuctionSettlementPacket TypeScript type:**
 - [x] _(contracts/types/index.ts)_

@@ -49,6 +49,11 @@
       "abi": "../contracts/out/AuctionEscrow.sol/AuctionEscrow.json",
       "note": "USDC bond escrow + CRE settlement via IReceiver.onReport(). V2 — uses real KeystoneForwarder."
     }
+    },
+    "AgentAccount (demo)": {
+      "address": "0x04c505a1543965e2BB29c56EE26Eb6F2c907c6C7",
+      "note": "First AgentAccount deployed via UserOp (salt=0, runtimeSigner=deployer). Lazy-deployed through Pimlico bundler."
+    }
   },
 
   "config": {
@@ -62,6 +67,13 @@
       "version": "1",
       "chainId": 84532,
       "verifyingContract": "0xFEc7a05707AF85C6b248314E20FF8EfF590c3639"
+    }
+    },
+    "bundler": {
+      "provider": "Pimlico",
+      "url": "https://api.pimlico.io/v2/84532/rpc?apikey=<PIMLICO_API_KEY>",
+      "entryPointVersion": "0.7",
+      "note": "EIP-4337 bundler for UserOp submission. Get API key at dashboard.pimlico.io"
     }
   },
 

@@ -78,9 +78,17 @@ async function main() {
   for (let i = 0; i < bundlerEndpoints.length; i++) {
     const bundlerUrl = bundlerEndpoints[i]
     const paymasterUrl = paymasterEndpoints[i]
-
     console.log(`Attempting bundler: ${bundlerUrl}`)
 
+    // Pimlico bundler client — handles gas price estimation via pimlico_getUserOperationGasPrice
+    const pimlicoBundler = createPimlicoClient({
+      chain: baseSepolia,
+      transport: http(bundlerUrl, { timeout: requestTimeoutMs }),
+      entryPoint: {
+        address: entryPoint07Address,
+        version: "0.7",
+      },
+    })
     const pimlicoPaymaster = paymasterUrl
       ? createPimlicoClient({
           chain: baseSepolia,
@@ -91,11 +99,16 @@ async function main() {
           },
         })
       : undefined
-
     const smartAccountClient = createSmartAccountClient({
       account,
       chain: baseSepolia,
       bundlerTransport: http(bundlerUrl, { timeout: requestTimeoutMs }),
+      userOperation: {
+        estimateFeesPerGas: async () => {
+          const gasPrices = await pimlicoBundler.getUserOperationGasPrice()
+          return gasPrices.fast
+        },
+      },
       ...(pimlicoPaymaster
         ? {
             paymaster: {
