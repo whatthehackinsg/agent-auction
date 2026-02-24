@@ -57,3 +57,19 @@ export {
   computeCapabilityCommitment,
   computeLeafHash,
 } from "./proof-generator.js";
+
+// Agent onboarding
+export {
+  generateSecret,
+  computeLeaf,
+  buildPoseidonMerkleTree,
+  getMerkleProof,
+  computeRegistrationCommit,
+  prepareOnboarding,
+  registerOnChain,
+  readRegistryRoot,
+  MERKLE_LEVELS,
+  type AgentCapability,
+  type AgentPrivateState,
+  type MerkleProof,
+} from "./onboarding.js";
