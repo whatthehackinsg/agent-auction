@@ -18,6 +18,7 @@ An open auction protocol where AI agents can autonomously discover, join, bid in
 - [Repository Structure](#repository-structure)
 - [Agent Guidance Files](#agent-guidance-files)
 - [Smart Contract Architecture](#smart-contract-architecture)
+- [ZK Privacy Layer](#zk-privacy-layer)
 - [Getting Started](#getting-started)
     - [Prerequisites](#prerequisites)
     - [Setup](#setup)
@@ -237,7 +238,66 @@ L2 (Base Sepolia) — 7 contracts (all compiled & tested, 117 tests passing)
     ├── IAuctionTypes        → AuctionState enum, AuctionSettlementPacket, BondRecord structs
     └── MockKeystoneForwarder → Simulates Chainlink KeystoneForwarder for local CRE testing
 ```
-**Security**: 3-round security review complete. Initial 9 vulnerabilities fixed, plus latest hardening on reentrancy guards, replay-hash semantics, CRE finalPrice cross-check, and finalized-read policy (see `contracts/docs/` and `cre/README.md`).
+**Security**: 3-round security review complete.
+
+## ZK Privacy Layer
+
+Agents prove they are registered and that their bids are valid — without revealing their identity or exact bid amount. Two Groth16 circuits (Circom 2.2.3, BN254 curve) power this:
+
+### RegistryMembership (~12K constraints)
+
+Proves "I am a registered agent with capability X" without revealing which agent.
+
+```
+Private: agentSecret, capabilityId, Merkle path (20 levels)
+Public:  registryRoot, capabilityCommitment, nullifier
+
+Proof logic:
+  1. leafHash = Poseidon(capabilityId, agentSecret, leafIndex)
+  2. Walk 20-level Merkle path → computed root must match registryRoot
+  3. capabilityCommitment = Poseidon(capabilityId, agentSecret)
+  4. nullifier = Poseidon(agentSecret, auctionId, 1)  ← prevents double-join
+```
+
+### BidRange (~5K constraints)
+
+Proves "my hidden bid is within [reservePrice, maxBudget]" without revealing the bid.
+
+```
+Private: bid, salt
+Public:  bidCommitment, reservePrice, maxBudget
+Output:  rangeOk = 1
+
+Proof logic:
+  1. bidCommitment = Poseidon(bid, salt)
+  2. bid - reservePrice ≥ 0  (64-bit decomposition)
+  3. maxBudget - bid ≥ 0     (64-bit decomposition)
+```
+
+### How It Fits Together
+
+```
+Agent (local)                          DO Sequencer (off-chain)           On-chain
+─────────────                          ────────────────────────           ────────
+1. Generate agentSecret
+2. Register commitment on-chain  ──────────────────────────────────→  AgentPrivacyRegistry.register()
+3. Generate membership proof
+   (snarkjs, ~400ms)
+4. Send proof + JOIN action  ─────→  5. snarkjs.groth16.verify()
+                                        Check nullifier not spent
+                                        Admit agent to auction
+6. Generate bid range proof
+   (snarkjs, ~200ms)
+7. Send proof + BID_COMMIT   ─────→  8. Verify bid range proof
+                                        Record sealed bid
+```
+
+- **Verification is off-chain** — `snarkjs.groth16.verify()` in the DO sequencer (~200ms, $0 gas)
+- **Nullifiers** are tracked in DO transactional storage (not on-chain)
+- **Poseidon hashing** is used everywhere (ZK-friendly, ~100x cheaper in circuits than keccak256)
+- **16 circuit tests** (8 positive + 8 negative) and **56 TypeScript tests** in `packages/crypto`
+
+See [`circuits/README.md`](circuits/README.md) for setup instructions and [`packages/crypto`](packages/crypto/) for the TypeScript SDK. Initial 9 vulnerabilities fixed, plus latest hardening on reentrancy guards, replay-hash semantics, CRE finalPrice cross-check, and finalized-read policy (see `contracts/docs/` and `cre/README.md`).
 ### Deployed Addresses (Base Sepolia — chainId 84532)
 All contracts verified on [Basescan](https://sepolia.basescan.org).
 
