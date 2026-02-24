@@ -49,9 +49,7 @@ const PixelDotMaterial = shaderMaterial(
     pixelColor: new THREE.Color("#ffffff"),
   },
   `
-    varying vec2 vUv;
     void main() {
-      vUv = uv;
       gl_Position = vec4(position.xy, 0.0, 1.0);
     }
   `,
@@ -62,11 +60,16 @@ const PixelDotMaterial = shaderMaterial(
     uniform vec3 pixelColor;
 
     void main() {
-      vec2 screenUv = gl_FragCoord.xy / resolution;
-      vec2 uv = clamp(screenUv, 0.0, 1.0);
-      vec2 gridUvCenter = (floor(uv * gridSize) + 0.5) / gridSize;
+      // Pixel-space grid: cellSize is always square
+      float cellSize = resolution.x / gridSize;
+      vec2 cell = floor(gl_FragCoord.xy / cellSize);
+      vec2 cellCenterPx = (cell + 0.5) * cellSize;
 
-      float trail = texture2D(mouseTrail, gridUvCenter).r;
+      // Map pixel coords → trail texture UV (square, centered)
+      float maxDim = max(resolution.x, resolution.y);
+      vec2 trailUv = (cellCenterPx + (maxDim - resolution) * 0.5) / maxDim;
+
+      float trail = texture2D(mouseTrail, trailUv).r;
       gl_FragColor = vec4(pixelColor, trail);
     }
   `
@@ -131,8 +134,14 @@ function Scene({
       const rect = gl.domElement.getBoundingClientRect();
       if (!rect.width || !rect.height) return;
 
-      const x = (event.clientX - rect.left) / rect.width;
-      const y = 1 - (event.clientY - rect.top) / rect.height;
+      // Pixel position within the canvas element (CSS pixels)
+      const px = event.clientX - rect.left;
+      const py = event.clientY - rect.top;
+
+      // Map to square trail texture UV (centered, matching shader trailUv)
+      const maxDim = Math.max(rect.width, rect.height);
+      const x = (px + (maxDim - rect.width) * 0.5) / maxDim;
+      const y = 1 - (py + (maxDim - rect.height) * 0.5) / maxDim;
 
       if (x < 0 || x > 1 || y < 0 || y > 1) return;
       onMove({ uv: { x, y } });
