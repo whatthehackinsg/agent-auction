@@ -1,10 +1,10 @@
 ---
-name: cre-skills
+name: chainlink-cre
 description: Enable developers to learn and use Chainlink Runtime Environment (CRE) quickly by referencing filtered CRE docs. Trigger when user wants onboarding, CRE workflow generation (in TypeScript or Golang or other supported languages), workflow guidance, CRE CLI and/or SDK help, runtime operations advice, or capability selection
 license: MIT
 compatibility: Designed for Claude Code and AI agents that implement https://agentskills.io/specification
-allowed-tools: Read WebFetch Write Edit Bash
 metadata:
+  allowed-tools: Read, Write, Glob, WebSearch, WebFetch, Task, AskUserQuestion
   purpose: CRE developer onboarding, assistance and reference
   version: "0.1"
 ---
