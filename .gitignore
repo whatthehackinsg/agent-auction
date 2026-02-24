@@ -10,7 +10,8 @@ npm-debug.log*
 .mcp.json
 
 # AI agent local state (per-developer)
-.claude/
+.claude/*
+!.claude/skills/
 .sisyphus/
 
 # OS junk
