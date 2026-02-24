@@ -122,7 +122,7 @@ This replaces the "trust the auctioneer" model with **"trust math + Chainlink"**
 ## Auction Lifecycle
 
 ```
-0. Onboarding     Agent registers (ERC-8004 on-chain identity; secp256k1 runtime keys for on-chain-verifiable actions)
+0. Onboarding     Agent registers (ERC-8004 identity + ZK privacy commitment via packages/crypto onboarding SDK)
 1. Discovery      Agent finds auctions via /auctions API or MCP tool
 2. Join + Bond    Agent deposits USDC bond to AuctionEscrow (EIP-4337 UserOp)
 3. Bid            Agent submits signed bid → Sequencer assigns seq number
@@ -186,6 +186,13 @@ agent-auction/
 │   ├── plans/                           #   Hackathon workstream plans (WS-1/2/3)
 │   ├── solutions/                       #   Documented problem solutions
 │   └── legacy/                          #   Archived Chinese lifecycle docs + old architecture
+├── engine/                              # Cloudflare Workers + Durable Objects auction engine
+├── agent-client/                        # TypeScript agent demo client
+├── packages/crypto/                     # Shared crypto primitives (Poseidon, EIP-712, snarkjs, onboarding)
+│   ├── src/                             #   Core library (poseidon, eip712, onboarding, proof-generator)
+│   ├── scripts/                         #   CLI tools (onboard-agent.ts)
+│   └── test/                            #   Unit + E2E tests
+├── circuits/                            # Circom/snarkjs workspace (WS-1; test harness not wired yet)
 └── .beads/                              # Issue tracking data (bd CLI)
 ```
 
@@ -331,13 +338,13 @@ npm run lint                   # ESLint
 ### MVP Definition of Done
 
 - [x] Architecture design complete
-- [ ] ERC-8004 agents can join rooms, bid, post bonds, and settle
+- [ ] ~80% — ERC-8004 agents can join rooms, bid, post bonds, and settle (engine rooms + agent-client wired; MCP gateway not connected yet)
 - [x] CRE Settlement Workflow verifies and settles auctions on-chain (E2E confirmed with `transmissionSuccess=true`)
 - [x] EIP-4337 smart wallets implemented (AgentAccount + AgentPaymaster) — 117 tests passing
 - [x] AuctionEscrow implemented with bonds + CRE `onReport` settlement
-- [ ] ZK registry membership proof functional
+- [ ] ~60% — ZK registry membership proof (onboarding SDK complete with Poseidon Merkle tree + privacy commitment + on-chain registration; circuit WASM/zkey compilation pending)
 - [x] Contracts deployed to Base Sepolia (v2 with real KeystoneForwarder)
-- [ ] Any third party can replay the event log and arrive at the same winner
+- [ ] Any third party can replay the event log and arrive at the same winner (serialization primitives exist in `packages/crypto`; standalone verifier tool not built yet)
 
 ## Developer Guide
 

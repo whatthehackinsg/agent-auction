@@ -9,6 +9,8 @@ This package contains shared cryptographic primitives used by other modules.
 - Poseidon/event-hash helpers
 - EIP-712 typed-data helpers
 - snarkjs verification/proof helpers
+- Agent onboarding (Poseidon Merkle tree, privacy commitment, on-chain registration)
+- CLI scripts (`scripts/onboard-agent.ts`)
 
 ## Commands
 
@@ -38,3 +40,5 @@ npm run test:watch
 - Typed data: `packages/crypto/src/eip712-typed-data.ts`
 - Replay bundle helpers: `packages/crypto/src/replay-bundle.ts`
 - ZK verification/proof helpers: `packages/crypto/src/snarkjs-verify.ts`, `packages/crypto/src/proof-generator.ts`
+- Agent onboarding: `packages/crypto/src/onboarding.ts`
+- Onboarding CLI: `packages/crypto/scripts/onboard-agent.ts`
