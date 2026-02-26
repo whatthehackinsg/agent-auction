@@ -60,6 +60,7 @@ export interface ActionRequest {
   amount: string;
   nonce: number;
   signature: string;
+  deadline?: number;            // Unix timestamp — signature expiry
   proof?: unknown;
 }
 

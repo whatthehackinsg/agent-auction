@@ -2,17 +2,17 @@
  * Crypto primitives for the auction engine.
  * Delegates to @agent-auction/crypto (real Poseidon, real EIP-712, real nullifiers).
  *
- * Functions that require Node fs (snarkjs vkey loading) are stubbed for
- * Cloudflare Workers compatibility - the sequencer delegates ZK verification
- * to the CRE workflow, not the engine.
+ * EIP-712 signature verification uses viem.verifyTypedData (pure JS, CF Workers compatible).
+ * ZK membership proof verification is stubbed — snarkjs vkey loading requires Node fs.
  */
 import {
   computeEventHash as _computeEventHash,
   computePayloadHash as _computePayloadHash,
   deriveNullifier as _deriveNullifier,
-  isValidEIP712Signature,
   type Groth16Proof,
 } from '@agent-auction/crypto'
+import { verifyTypedData } from 'viem'
+import { EIP712_DOMAIN } from './addresses'
 
 // ---- Re-exports (real implementations) ----
 
@@ -27,13 +27,75 @@ export const computePayloadHash = _computePayloadHash
  */
 export const deriveNullifier = _deriveNullifier
 
-// ---- Stubs (CF Workers incompatible - ZK verify needs fs for vkeys) ----
+// ---- EIP-712 Typed Data (matching packages/crypto/src/eip712-typed-data.ts) ----
+
+export const AUCTION_EIP712_TYPES = {
+  Join: [
+    { name: 'auctionId', type: 'uint256' },
+    { name: 'nullifier', type: 'uint256' },
+    { name: 'depositAmount', type: 'uint256' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'deadline', type: 'uint256' },
+  ],
+  Bid: [
+    { name: 'auctionId', type: 'uint256' },
+    { name: 'amount', type: 'uint256' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'deadline', type: 'uint256' },
+  ],
+  Deliver: [
+    { name: 'auctionId', type: 'uint256' },
+    { name: 'milestoneId', type: 'uint256' },
+    { name: 'deliveryHash', type: 'bytes32' },
+    { name: 'executionLogHash', type: 'bytes32' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'deadline', type: 'uint256' },
+  ],
+} as const
+
+export type AuctionSpeechActType = keyof typeof AUCTION_EIP712_TYPES
+
+// ---- Insecure stub gate (test-only) ----
 
 function allowInsecureStubs(): boolean {
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
     ?.env
   return env?.ENGINE_ALLOW_INSECURE_STUBS === 'true'
 }
+
+// ---- EIP-712 Signature Verification (real implementation) ----
+
+/**
+ * Verify an EIP-712 typed data signature using viem.verifyTypedData.
+ * Recovers the signer from the signature and checks it matches the expected address.
+ *
+ * When ENGINE_ALLOW_INSECURE_STUBS=true (test-only), bypasses verification.
+ */
+export async function verifyActionSignature(params: {
+  address: `0x${string}`
+  primaryType: AuctionSpeechActType
+  message: Record<string, unknown>
+  signature: `0x${string}`
+}): Promise<boolean> {
+  if (allowInsecureStubs()) {
+    return true
+  }
+  try {
+    return await verifyTypedData({
+      address: params.address,
+      domain: EIP712_DOMAIN,
+      types: { [params.primaryType]: AUCTION_EIP712_TYPES[params.primaryType] },
+      primaryType: params.primaryType,
+      message: params.message,
+      signature: params.signature,
+    })
+  } catch {
+    // viem throws on malformed signatures (e.g. r=0, s=0)
+    return false
+  }
+}
+
+// ---- ZK Membership Proof (stub — CF Workers incompatible) ----
 
 /**
  * Verify ZK membership proof.
@@ -49,24 +111,6 @@ export async function verifyMembershipProof(
     return { valid: true, registryRoot: '0x00', nullifier: '0x00' }
   }
   return { valid: false, registryRoot: '0x00', nullifier: '0x00' }
-}
-
-/**
- * Verify EIP-712 typed data signature.
- * STUB: The real implementation in @agent-auction/crypto uses a different API
- * (domain, primaryType, message, sig) vs the engine's (hash, sig, signer).
- * Full integration requires refactoring all callers to pass structured data.
- * For now, keep the stub - sig verification is gated by ENGINE_ALLOW_INSECURE_STUBS.
- */
-export function verifyEIP712Signature(
-  hash: Uint8Array,
-  sig: Uint8Array,
-  signer: string
-): boolean {
-  if (allowInsecureStubs()) {
-    return true
-  }
-  return false
 }
 
 /** Zero hash constant for chain initialization */

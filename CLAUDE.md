@@ -51,6 +51,11 @@ npm run typecheck                    # Type check
 npm run start                        # Run demo
 ```
 
+## Test
+- Use real interactions and state where possible; avoid over-mocking.
+- Write real unit tests for all new logic.
+- Use mocks and stubs judiciously; prefer real interactions where feasible.
+
 ## Architecture Overview
 
 Three-layer hybrid system:

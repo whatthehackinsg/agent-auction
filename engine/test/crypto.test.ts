@@ -1,14 +1,17 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { privateKeyToAccount } from 'viem/accounts'
 import {
   computeEventHash,
   computePayloadHash,
   deriveNullifier,
   verifyMembershipProof,
-  verifyEIP712Signature,
+  verifyActionSignature,
+  AUCTION_EIP712_TYPES,
   ZERO_HASH,
 } from '../src/lib/crypto'
+import { EIP712_DOMAIN } from '../src/lib/addresses'
 
-describe('Crypto Stubs', () => {
+describe('Crypto Primitives', () => {
   describe('computeEventHash', () => {
     it('is deterministic — same inputs produce same output', async () => {
       const hash1 = await computeEventHash(1n, ZERO_HASH, ZERO_HASH)
@@ -53,12 +56,6 @@ describe('Crypto Stubs', () => {
     })
   })
 
-  describe('verifyEIP712Signature (stub)', () => {
-    it('always returns true', () => {
-      expect(verifyEIP712Signature(ZERO_HASH, ZERO_HASH, '0x00')).toBe(true)
-    })
-  })
-
   describe('deriveNullifier', () => {
     it('same inputs produce same nullifier', () => {
       const secret = new Uint8Array(32).fill(1)
@@ -67,5 +64,124 @@ describe('Crypto Stubs', () => {
       const n2 = deriveNullifier(secret, auctionId, 0)
       expect(n1).toEqual(n2)
     })
+  })
+})
+
+describe('EIP-712 Signature Verification', () => {
+  const TEST_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as const
+  const account = privateKeyToAccount(TEST_PRIVATE_KEY)
+  const auctionId = BigInt('0x' + 'aa'.repeat(32))
+
+  beforeEach(() => {
+    // Disable stubs so real verification runs
+    delete process.env.ENGINE_ALLOW_INSECURE_STUBS
+  })
+
+  afterEach(() => {
+    // Re-enable stubs for other tests
+    process.env.ENGINE_ALLOW_INSECURE_STUBS = 'true'
+  })
+
+  it('accepts a valid Bid signature', async () => {
+    const message = {
+      auctionId,
+      amount: 100000000n,
+      nonce: 0n,
+      deadline: BigInt(Math.floor(Date.now() / 1000) + 3600),
+    }
+
+    const signature = await account.signTypedData({
+      domain: EIP712_DOMAIN,
+      types: { Bid: AUCTION_EIP712_TYPES.Bid },
+      primaryType: 'Bid',
+      message,
+    })
+
+    const valid = await verifyActionSignature({
+      address: account.address,
+      primaryType: 'Bid',
+      message,
+      signature,
+    })
+
+    expect(valid).toBe(true)
+  })
+
+  it('rejects a signature from the wrong wallet', async () => {
+    const message = {
+      auctionId,
+      amount: 50000000n,
+      nonce: 1n,
+      deadline: BigInt(Math.floor(Date.now() / 1000) + 3600),
+    }
+
+    const signature = await account.signTypedData({
+      domain: EIP712_DOMAIN,
+      types: { Bid: AUCTION_EIP712_TYPES.Bid },
+      primaryType: 'Bid',
+      message,
+    })
+
+    // Verify against a different address
+    const valid = await verifyActionSignature({
+      address: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
+      primaryType: 'Bid',
+      message,
+      signature,
+    })
+
+    expect(valid).toBe(false)
+  })
+
+  it('rejects a tampered message', async () => {
+    const message = {
+      auctionId,
+      amount: 100000000n,
+      nonce: 0n,
+      deadline: BigInt(Math.floor(Date.now() / 1000) + 3600),
+    }
+
+    const signature = await account.signTypedData({
+      domain: EIP712_DOMAIN,
+      types: { Bid: AUCTION_EIP712_TYPES.Bid },
+      primaryType: 'Bid',
+      message,
+    })
+
+    // Tamper: change amount
+    const valid = await verifyActionSignature({
+      address: account.address,
+      primaryType: 'Bid',
+      message: { ...message, amount: 999999999n },
+      signature,
+    })
+
+    expect(valid).toBe(false)
+  })
+
+  it('accepts a valid Join signature', async () => {
+    const message = {
+      auctionId,
+      nullifier: 12345n,
+      depositAmount: 0n,
+      nonce: 0n,
+      deadline: BigInt(Math.floor(Date.now() / 1000) + 3600),
+    }
+
+    const signature = await account.signTypedData({
+      domain: EIP712_DOMAIN,
+      types: { Join: AUCTION_EIP712_TYPES.Join },
+      primaryType: 'Join',
+      message,
+    })
+
+    const valid = await verifyActionSignature({
+      address: account.address,
+      primaryType: 'Join',
+      message,
+      signature,
+    })
+
+    expect(valid).toBe(true)
   })
 })
