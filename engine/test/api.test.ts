@@ -78,7 +78,7 @@ describe('API routes (Hono)', () => {
     env = {
       AUCTION_DB: db,
       AUCTION_ROOM: rooms,
-      SEQUENCER_PRIVATE_KEY: '0x' + '11'.repeat(32),
+      SEQUENCER_PRIVATE_KEY: (process.env.SEQUENCER_PRIVATE_KEY ?? '0x' + '11'.repeat(32)) as string,
     }
   })
 

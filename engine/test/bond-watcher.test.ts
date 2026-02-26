@@ -80,7 +80,7 @@ describe('Bond watcher (Task 16)', () => {
 
     const confirmed = await pollAndRecordBondTransfers(
       db,
-      ('0x' + '11'.repeat(32)) as `0x${string}`,
+      (process.env.SEQUENCER_PRIVATE_KEY ?? '0x' + '11'.repeat(32)) as `0x${string}`,
       {
         now: 150,
         publicClientLike: mockPublicClient,

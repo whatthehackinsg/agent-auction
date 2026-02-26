@@ -103,7 +103,7 @@ describe('Auction close flow (Task 13)', () => {
     const env = {
       AUCTION_DB: db,
       AUCTION_ROOM: {} as DurableObjectNamespace,
-      SEQUENCER_PRIVATE_KEY: ('0x' + '11'.repeat(32)) as `0x${string}`,
+      SEQUENCER_PRIVATE_KEY: (process.env.SEQUENCER_PRIVATE_KEY ?? '0x' + '11'.repeat(32)) as `0x${string}`,
     }
 
     const room = new AuctionRoom(state, env)
@@ -172,7 +172,7 @@ describe('Auction close flow (Task 13)', () => {
     const env = {
       AUCTION_DB: db,
       AUCTION_ROOM: {} as DurableObjectNamespace,
-      SEQUENCER_PRIVATE_KEY: ('0x' + '11'.repeat(32)) as `0x${string}`,
+      SEQUENCER_PRIVATE_KEY: (process.env.SEQUENCER_PRIVATE_KEY ?? '0x' + '11'.repeat(32)) as `0x${string}`,
     }
 
     const room = new AuctionRoom(state, env)
