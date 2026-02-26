@@ -7,10 +7,10 @@ import type {
 } from './types/engine'
 import { ActionType } from './types/engine'
 import { computeEventHash, computePayloadHash, ZERO_HASH } from './lib/crypto'
-import { toHex, toBytes } from 'viem'
+import { toHex, toBytes, keccak256, encodePacked } from 'viem'
 import { validateAction, commitValidationMutation } from './handlers/actions'
 import type { AuctionSettlementPacket } from './types/contracts'
-import { recordResultOnChain, signSettlementPacket } from './lib/settlement'
+import { ensureAuctionOnChain, recordResultOnChain, signSettlementPacket } from './lib/settlement'
 import { signInclusionReceipt } from './lib/inclusion-receipt'
 import { enforceJoinBondObservation, pollAndRecordBondTransfers } from './lib/bond-watcher'
 import { serializeReplayBundle, computeContentHash } from './lib/replay-bundle'
@@ -60,6 +60,10 @@ export class AuctionRoom implements DurableObject {
 
   /** Mirrors D1 auctions.status (1=open, 2=closed, 3=settled, 4=cancelled) */
   private auctionStatus: number = 1
+  /** Whether on-chain recordResult() has succeeded (separate from auctionStatus for retry) */
+  private onChainSettled: boolean = false
+  /** Number of failed on-chain settlement attempts (caps retries) */
+  private settlementRetries: number = 0
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state
@@ -67,7 +71,7 @@ export class AuctionRoom implements DurableObject {
 
     // Load persisted state before handling any requests
     this.state.blockConcurrencyWhile(async () => {
-      const [seq, head, id, participants, highestBid, highestBidder, startedAt, deadline, status] = await Promise.all([
+      const [seq, head, id, participants, highestBid, highestBidder, startedAt, deadline, status, onChainSettled, settlementRetries] = await Promise.all([
         this.state.storage.get<number>('seqCounter'),
         this.state.storage.get<string>('chainHead'),
         this.state.storage.get<string>('auctionId'),
@@ -77,6 +81,8 @@ export class AuctionRoom implements DurableObject {
         this.state.storage.get<number>('startedAt'),
         this.state.storage.get<number>('deadline'),
         this.state.storage.get<number>('auctionStatus'),
+        this.state.storage.get<boolean>('onChainSettled'),
+        this.state.storage.get<number>('settlementRetries'),
       ])
       this.seqCounter = seq ?? 0
       this.chainHead = head ?? ZERO_HASH_HEX
@@ -87,6 +93,8 @@ export class AuctionRoom implements DurableObject {
       this.startedAt = startedAt ?? 0
       this.deadline = deadline ?? 0
       this.auctionStatus = status ?? 1
+      this.onChainSettled = onChainSettled ?? false
+      this.settlementRetries = settlementRetries ?? 0
     })
   }
 
@@ -406,24 +414,26 @@ export class AuctionRoom implements DurableObject {
       await this.state.storage.put('auctionId', this.auctionId)
     }
 
-    // Idempotent: if already closed/settled/cancelled, do nothing.
-    if (this.auctionStatus >= 2) {
+    // If on-chain settlement already succeeded, nothing to do.
+    if (this.onChainSettled) {
       return
     }
 
-    // Mark closed locally first (prevents race with late bids).
-    this.auctionStatus = 2
-    await this.state.storage.put('auctionStatus', this.auctionStatus)
-    await this.env.AUCTION_DB
-      .prepare('UPDATE auctions SET status = 2 WHERE auction_id = ?')
-      .bind(this.auctionId)
-      .run()
+    // Mark closed locally first (blocks late bids) — idempotent.
+    if (this.auctionStatus < 2) {
+      this.auctionStatus = 2
+      await this.state.storage.put('auctionStatus', this.auctionStatus)
+      await this.env.AUCTION_DB
+        .prepare('UPDATE auctions SET status = 2 WHERE auction_id = ?')
+        .bind(this.auctionId)
+        .run()
+    }
 
-    // Load manifest hash (required for on-chain packet).
+    // Load auction data from D1 (includes fields needed for self-healing createAuction).
     const auctionRow = await this.env.AUCTION_DB
-      .prepare('SELECT manifest_hash FROM auctions WHERE auction_id = ?')
+      .prepare('SELECT manifest_hash, reserve_price, deposit_amount, deadline, auction_type, max_bid FROM auctions WHERE auction_id = ?')
       .bind(this.auctionId)
-      .first<{ manifest_hash: string }>()
+      .first<{ manifest_hash: string; reserve_price: string; deposit_amount: string; deadline: number; auction_type: string | null; max_bid: string | null }>()
 
     if (!auctionRow) {
       throw new Error('auction not found in D1')
@@ -482,17 +492,63 @@ export class AuctionRoom implements DurableObject {
     }
 
     const privateKey = this.env.SEQUENCER_PRIVATE_KEY as `0x${string}`
-    const sequencerSig = await signSettlementPacket(packet, privateKey)
-    await recordResultOnChain(packet, sequencerSig, privateKey)
+
+    try {
+      // Self-healing: if auction was never registered on-chain, create it now.
+      const roomConfigHash = keccak256(
+        encodePacked(
+          ['string', 'string'],
+          [auctionRow.auction_type ?? 'english', auctionRow.max_bid ?? '0'],
+        ),
+      )
+      await ensureAuctionOnChain(
+        this.auctionId as `0x${string}`,
+        {
+          manifestHash: auctionRow.manifest_hash as `0x${string}`,
+          roomConfigHash,
+          reservePrice: BigInt(auctionRow.reserve_price),
+          depositAmount: BigInt(auctionRow.deposit_amount),
+          deadline: BigInt(auctionRow.deadline),
+        },
+        privateKey,
+      )
+
+      const sequencerSig = await signSettlementPacket(packet, privateKey)
+      await recordResultOnChain(packet, sequencerSig, privateKey)
+
+      // Mark on-chain settlement as complete — prevents future retries.
+      this.onChainSettled = true
+      await this.state.storage.put('onChainSettled', true)
+    } catch (err) {
+      this.settlementRetries += 1
+      await this.state.storage.put('settlementRetries', this.settlementRetries)
+
+      const MAX_RETRIES = 5
+      if (this.settlementRetries < MAX_RETRIES) {
+        // Exponential backoff: 30s, 60s, 120s, 240s
+        const delay = Math.min(30_000 * Math.pow(2, this.settlementRetries - 1), 300_000)
+        await this.state.storage.setAlarm(Date.now() + delay)
+        console.error(
+          `[AuctionRoom] on-chain settlement failed for ${this.auctionId} (attempt ${this.settlementRetries}/${MAX_RETRIES}), retrying in ${delay / 1000}s:`,
+          err,
+        )
+      } else {
+        console.error(
+          `[AuctionRoom] on-chain settlement for ${this.auctionId} failed after ${this.settlementRetries} attempts — giving up:`,
+          err,
+        )
+      }
+    }
   }
 
   // ─── Alarm Handler ──────────────────────────────────────────────────
 
-  /** Alarm fires at auction deadline — Task 13 implements close logic */
+  /** Alarm fires at auction deadline or as settlement retry */
   async alarm(): Promise<void> {
     console.log(`[AuctionRoom] alarm fired for auction ${this.auctionId}`)
     if (!this.auctionId) return
-    if (this.auctionStatus >= 2) return
+    // closeAuction is idempotent via onChainSettled — safe to call on retries
+    if (this.onChainSettled) return
     await this.closeAuction(this.auctionId)
   }
 

@@ -10,6 +10,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build, Test, and Lint
 
+- Do not write hardcoded thing in the codebase. If you need to add a new feature, write it in a way that is reusable and configurable.
+- Always find the true parameter passing and function call chain for the feature you are working on. Do not add new parameters or calls without fully understanding the existing flow.
+
 ```bash
 # Smart contracts (Foundry — solc 0.8.24, Cancun EVM, optimizer 200 runs)
 cd contracts
@@ -59,7 +62,6 @@ npm run start                        # Run demo
 ## Architecture Overview
 
 Three-layer hybrid system:
-
 ```
 Agent Layer (MCP / HTTP REST)
     ↓ EIP-712 signed actions + ZK proofs

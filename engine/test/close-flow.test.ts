@@ -3,10 +3,11 @@ import { Miniflare } from 'miniflare'
 import { AuctionRoom } from '../src/auction-room'
 import { ActionType, type ValidatedAction } from '../src/types/engine'
 import { applySchema, createTestMiniflare, randomAuctionId, randomWallet } from './setup'
-import { recordResultOnChain, signSettlementPacket } from '../src/lib/settlement'
+import { ensureAuctionOnChain, recordResultOnChain, signSettlementPacket } from '../src/lib/settlement'
 
 vi.mock('../src/lib/settlement', () => {
   return {
+    ensureAuctionOnChain: vi.fn(async () => {}),
     signSettlementPacket: vi.fn(async () => ('0x' + '11'.repeat(65)) as `0x${string}`),
     recordResultOnChain: vi.fn(async () => ('0x' + '22'.repeat(32)) as `0x${string}`),
   }

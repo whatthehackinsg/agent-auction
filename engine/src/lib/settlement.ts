@@ -1,7 +1,49 @@
 import type { AuctionSettlementPacket } from '../types/contracts'
 import { ADDRESSES, EIP712_DOMAIN } from './addresses'
-import { auctionRegistryAbi, createSequencerClient } from './chain-client'
+import { auctionRegistryAbi, publicClient, createSequencerClient } from './chain-client'
 import { privateKeyToAccount } from 'viem/accounts'
+
+/**
+ * Ensure the auction exists on-chain before recording a result.
+ * If the on-chain state is NONE (0), calls createAuction() to self-heal
+ * from a previously failed best-effort registration.
+ */
+export async function ensureAuctionOnChain(
+  auctionId: `0x${string}`,
+  auctionData: {
+    manifestHash: `0x${string}`
+    roomConfigHash: `0x${string}`
+    reservePrice: bigint
+    depositAmount: bigint
+    deadline: bigint
+  },
+  sequencerPrivateKey: `0x${string}`,
+): Promise<void> {
+  const state = await publicClient.readContract({
+    address: ADDRESSES.auctionRegistry,
+    abi: auctionRegistryAbi,
+    functionName: 'getAuctionState',
+    args: [auctionId],
+  })
+
+  if (Number(state) === 0) {
+    console.log(`[ensureAuctionOnChain] auction ${auctionId} not on-chain, creating...`)
+    const client = createSequencerClient(sequencerPrivateKey)
+    await client.writeContract({
+      address: ADDRESSES.auctionRegistry,
+      abi: auctionRegistryAbi,
+      functionName: 'createAuction',
+      args: [
+        auctionId,
+        auctionData.manifestHash,
+        auctionData.roomConfigHash,
+        auctionData.reservePrice,
+        auctionData.depositAmount,
+        auctionData.deadline,
+      ],
+    })
+  }
+}
 
 const SETTLEMENT_TYPES = {
   AuctionSettlementPacket: [
