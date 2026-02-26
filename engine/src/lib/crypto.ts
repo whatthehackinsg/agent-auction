@@ -1,31 +1,108 @@
 /**
- * Crypto primitives for the auction engine.
- * Delegates to @agent-auction/crypto (real Poseidon, real EIP-712, real nullifiers).
+ * Crypto primitives for the auction engine (CF Workers compatible).
+ *
+ * Uses keccak256 (via viem) for event hash chaining and nullifier derivation.
+ * This differs from @agent-auction/crypto which uses Poseidon for ZK-verifiability.
+ * The engine's hash chain is purely an integrity commitment — ZK verification
+ * happens in the CRE workflow, not in the engine.
  *
  * EIP-712 signature verification uses viem.verifyTypedData (pure JS, CF Workers compatible).
- * ZK membership proof verification is stubbed — snarkjs vkey loading requires Node fs.
+ * ZK membership proof verification is stubbed — snarkjs requires Node fs.
  */
 import {
-  computeEventHash as _computeEventHash,
-  computePayloadHash as _computePayloadHash,
-  deriveNullifier as _deriveNullifier,
-  type Groth16Proof,
-} from '@agent-auction/crypto'
-import { verifyTypedData } from 'viem'
+  keccak256,
+  encodeAbiParameters,
+  toBytes,
+  toHex,
+  verifyTypedData,
+} from 'viem'
 import { EIP712_DOMAIN } from './addresses'
 
-// ---- Re-exports (real implementations) ----
+// ---- Hash Chain (keccak256-based, CF Workers compatible) ----
 
-export const computeEventHash = _computeEventHash
-export const computePayloadHash = _computePayloadHash
+/**
+ * Compute the payload hash for an auction event.
+ * payloadHash = keccak256(abi.encode(uint8 actionType, uint256 agentId, address wallet, uint256 amount))
+ *
+ * Uses identical encoding to @agent-auction/crypto — both use ABI encoding + keccak256.
+ */
+export function computePayloadHash(
+  actionType: number,
+  agentId: bigint,
+  wallet: string,
+  amount: bigint,
+): Uint8Array {
+  const encoded = encodeAbiParameters(
+    [
+      { name: 'actionType', type: 'uint8' },
+      { name: 'agentId', type: 'uint256' },
+      { name: 'wallet', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    [actionType, agentId, wallet as `0x${string}`, amount],
+  )
+  return toBytes(keccak256(encoded))
+}
 
-// ---- Adapted re-exports ----
+/**
+ * Compute the chained event hash.
+ * eventHash = keccak256(abi.encode(uint256 seq, bytes32 prevHash, bytes32 payloadHash))
+ *
+ * Note: @agent-auction/crypto uses Poseidon for this step. The engine uses keccak256
+ * because Poseidon (via circomlibjs/ffjavascript) is incompatible with CF Workers.
+ * This is safe because the finalLogHash is a commitment, not ZK-verified in the engine.
+ */
+export async function computeEventHash(
+  seq: bigint,
+  prevHash: Uint8Array,
+  payloadHash: Uint8Array,
+): Promise<Uint8Array> {
+  const encoded = encodeAbiParameters(
+    [
+      { name: 'seq', type: 'uint256' },
+      { name: 'prevHash', type: 'bytes32' },
+      { name: 'payloadHash', type: 'bytes32' },
+    ],
+    [seq, toHex(prevHash, { size: 32 }) as `0x${string}`, toHex(payloadHash, { size: 32 }) as `0x${string}`],
+  )
+  return toBytes(keccak256(encoded))
+}
+
+// ---- Nullifier Derivation (keccak256-based) ----
 
 /**
  * Derive nullifier for an agent's action in a specific auction.
- * Accepts Uint8Array args (engine convention) - delegates to Poseidon-based nullifier.
+ * nullifier = keccak256(abi.encode(uint256 agentSecret, uint256 auctionId, uint256 actionType))
+ *
+ * Note: @agent-auction/crypto uses Poseidon for nullifiers (matching ZK circuits).
+ * The engine uses keccak256 as a unique deterministic identifier for double-join detection.
  */
-export const deriveNullifier = _deriveNullifier
+export async function deriveNullifier(
+  agentSecret: bigint | Uint8Array,
+  auctionId: bigint | Uint8Array,
+  actionType: number,
+): Promise<Uint8Array> {
+  const secret = typeof agentSecret === 'bigint' ? agentSecret : bytesToBigInt(agentSecret)
+  const auction = typeof auctionId === 'bigint' ? auctionId : bytesToBigInt(auctionId)
+  const encoded = encodeAbiParameters(
+    [
+      { name: 'secret', type: 'uint256' },
+      { name: 'auction', type: 'uint256' },
+      { name: 'actionType', type: 'uint256' },
+    ],
+    [secret, auction, BigInt(actionType)],
+  )
+  return toBytes(keccak256(encoded))
+}
+
+/** Convert big-endian Uint8Array to bigint */
+function bytesToBigInt(bytes: Uint8Array): bigint {
+  let val = 0n
+  for (const b of bytes) {
+    val = (val << 8n) | BigInt(b)
+  }
+  return val
+}
 
 // ---- EIP-712 Typed Data (matching packages/crypto/src/eip712-typed-data.ts) ----
 
@@ -65,12 +142,6 @@ function allowInsecureStubs(): boolean {
 
 // ---- EIP-712 Signature Verification (real implementation) ----
 
-/**
- * Verify an EIP-712 typed data signature using viem.verifyTypedData.
- * Recovers the signer from the signature and checks it matches the expected address.
- *
- * When ENGINE_ALLOW_INSECURE_STUBS=true (test-only), bypasses verification.
- */
 export async function verifyActionSignature(params: {
   address: `0x${string}`
   primaryType: AuctionSpeechActType
@@ -90,19 +161,12 @@ export async function verifyActionSignature(params: {
       signature: params.signature,
     })
   } catch {
-    // viem throws on malformed signatures (e.g. r=0, s=0)
     return false
   }
 }
 
 // ---- ZK Membership Proof (stub — CF Workers incompatible) ----
 
-/**
- * Verify ZK membership proof.
- * STUB: snarkjs vkey loading requires Node fs, not available in CF Workers.
- * The CRE workflow handles ZK verification for settlement; the engine
- * only needs this for optional pre-ingestion checks.
- */
 export async function verifyMembershipProof(
   proof: unknown,
   signals: unknown

@@ -254,7 +254,7 @@ app.get('/auctions/:id/replay', async (c) => {
   }))
 
   const replayBytes = serializeReplayBundle(auctionId, events)
-  const replayHash = computeContentHash(replayBytes)
+  const replayHash = await computeContentHash(replayBytes)
 
   let replayCid: string | null = null
   const cidRow = await c.env.AUCTION_DB

@@ -4,7 +4,7 @@ import { computeContentHash, serializeReplayBundle } from '../src/lib/replay-bun
 import { toHex } from 'viem'
 
 describe('ReplayBundleV1 serialization', () => {
-  it('matches canonical format and known SHA-256 vector A', () => {
+  it('matches canonical format and known SHA-256 vector A', async () => {
     const events: AuctionEvent[] = [
       {
         seq: 1,
@@ -30,7 +30,7 @@ describe('ReplayBundleV1 serialization', () => {
       ].join('\n'),
     )
 
-    const hash = computeContentHash(bytes)
+    const hash = await computeContentHash(bytes)
     expect(toHex(hash)).toBe('0xab8971d7ea24703e893bde6d94080df82dd1906e43fae580f5857ee8d93a62df')
   })
 

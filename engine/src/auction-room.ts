@@ -475,7 +475,7 @@ export class AuctionRoom implements DurableObject {
     let replayContentHashHex: `0x${string}` = ZERO_HASH_HEX as `0x${string}`
     if (replayEvents.length > 0) {
       const replayBytes = serializeReplayBundle(this.auctionId, replayEvents)
-      const replayHash = computeContentHash(replayBytes)
+      const replayHash = await computeContentHash(replayBytes)
       replayContentHashHex = toHex(replayHash) as `0x${string}`
     }
 

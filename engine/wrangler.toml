@@ -5,8 +5,8 @@ compatibility_flags = ["nodejs_compat"]
 
 [[d1_databases]]
 binding = "AUCTION_DB"
-database_name = "auction-db"
-database_id = "local-dev-id"
+database_name = "auction-engine-db"
+database_id = "931d6378-238f-4849-919b-f76d083485b7"
 
 [[durable_objects.bindings]]
 name = "AUCTION_ROOM"
@@ -14,4 +14,4 @@ class_name = "AuctionRoom"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["AuctionRoom"]
+new_sqlite_classes = ["AuctionRoom"]
