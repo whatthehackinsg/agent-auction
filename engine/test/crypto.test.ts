@@ -10,20 +10,20 @@ import {
 
 describe('Crypto Stubs', () => {
   describe('computeEventHash', () => {
-    it('is deterministic — same inputs produce same output', () => {
-      const hash1 = computeEventHash(1n, ZERO_HASH, ZERO_HASH)
-      const hash2 = computeEventHash(1n, ZERO_HASH, ZERO_HASH)
+    it('is deterministic — same inputs produce same output', async () => {
+      const hash1 = await computeEventHash(1n, ZERO_HASH, ZERO_HASH)
+      const hash2 = await computeEventHash(1n, ZERO_HASH, ZERO_HASH)
       expect(hash1).toEqual(hash2)
     })
 
-    it('different inputs produce different outputs', () => {
-      const hash1 = computeEventHash(1n, ZERO_HASH, ZERO_HASH)
-      const hash2 = computeEventHash(2n, ZERO_HASH, ZERO_HASH)
+    it('different inputs produce different outputs', async () => {
+      const hash1 = await computeEventHash(1n, ZERO_HASH, ZERO_HASH)
+      const hash2 = await computeEventHash(2n, ZERO_HASH, ZERO_HASH)
       expect(hash1).not.toEqual(hash2)
     })
 
-    it('returns 32 bytes', () => {
-      const hash = computeEventHash(1n, ZERO_HASH, ZERO_HASH)
+    it('returns 32 bytes', async () => {
+      const hash = await computeEventHash(1n, ZERO_HASH, ZERO_HASH)
       expect(hash.length).toBe(32)
     })
   })

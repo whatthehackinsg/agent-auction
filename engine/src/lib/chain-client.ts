@@ -29,6 +29,27 @@ const erc20Abi = [
   { name: 'Transfer', type: 'event', inputs: [{ name: 'from', type: 'address', indexed: true }, { name: 'to', type: 'address', indexed: true }, { name: 'value', type: 'uint256', indexed: false }] },
 ] as const
 
+// ── Onboarding ABIs ──────────────────────────────────────────────────
+
+const agentAccountFactoryAbi = [
+  { name: 'createAccount', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'runtimeSigner', type: 'address' }, { name: 'salt', type: 'uint256' }], outputs: [{ name: '', type: 'address' }] },
+  { name: 'getAddress', type: 'function', stateMutability: 'view', inputs: [{ name: 'runtimeSigner', type: 'address' }, { name: 'salt', type: 'uint256' }], outputs: [{ name: '', type: 'address' }] },
+] as const
+
+const mockIdentityRegistryAbi = [
+  { name: 'register', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ name: 'agentId', type: 'uint256' }] },
+  { name: 'ownerOf', type: 'function', stateMutability: 'view', inputs: [{ name: 'agentId', type: 'uint256' }], outputs: [{ name: '', type: 'address' }] },
+] as const
+
+const agentPaymasterAbi = [
+  { name: 'registerAgent', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'account', type: 'address' }, { name: 'agentId', type: 'uint256' }], outputs: [] },
+] as const
+
+const mockUsdcMintAbi = [
+  ...erc20Abi,
+  { name: 'mint', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [] },
+] as const
+
 // Public client for read operations
 export const publicClient = createPublicClient({
   chain: baseSepolia,
@@ -64,5 +85,26 @@ export const mockUSDC = getContract({
   client: publicClient,
 })
 
+// Onboarding contract instances (read-only via publicClient)
+export const agentAccountFactory = getContract({
+  address: ADDRESSES.agentAccountFactory,
+  abi: agentAccountFactoryAbi,
+  client: publicClient,
+})
+
+export const mockIdentityRegistry = getContract({
+  address: ADDRESSES.mockIdentityRegistry,
+  abi: mockIdentityRegistryAbi,
+  client: publicClient,
+})
+
 // Export ABIs for use in walletClient write operations
-export { auctionRegistryAbi, auctionEscrowAbi, erc20Abi }
+export {
+  auctionRegistryAbi,
+  auctionEscrowAbi,
+  erc20Abi,
+  agentAccountFactoryAbi,
+  mockIdentityRegistryAbi,
+  agentPaymasterAbi,
+  mockUsdcMintAbi,
+}

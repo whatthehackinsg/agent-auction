@@ -14,7 +14,15 @@ import { type AuctionEvent } from '../types/engine'
  * Adapts engine's AuctionEvent (seq: number) to crypto's (seq: bigint).
  */
 export function serializeReplayBundle(auctionId: string, events: AuctionEvent[]): Uint8Array {
-  const adapted: CryptoAuctionEvent[] = events.map((e) => ({
+  // Sort by seq and validate contiguity before serialization
+  const sorted = [...events].sort((a, b) => a.seq - b.seq)
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].seq !== sorted[i - 1].seq + 1) {
+      throw new Error(`Events must have contiguous seq values: gap between ${sorted[i - 1].seq} and ${sorted[i].seq}`)
+    }
+  }
+
+  const adapted: CryptoAuctionEvent[] = sorted.map((e) => ({
     seq: BigInt(e.seq),
     actionType: e.actionType as string,
     agentId: BigInt(e.agentId),

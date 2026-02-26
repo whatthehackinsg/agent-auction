@@ -7,6 +7,7 @@ import { type AuctionEvent, ActionType } from './types/engine'
 import { getBondStatus, pollAndRecordBondTransfers } from './lib/bond-watcher'
 import { requireX402 } from './middleware/x402'
 import { pinReplayBundleToIpfs } from './lib/ipfs'
+import { onboardAgent } from './lib/onboard'
 
 export interface Env {
   AUCTION_DB: D1Database
@@ -258,6 +259,35 @@ app.get('/auctions/:id/bonds/:agentId', async (c) => {
 
   const status = await getBondStatus(c.env.AUCTION_DB, auctionId, agentId)
   return c.json(status)
+})
+
+// ── Agent onboarding ──────────────────────────────────────────────────
+
+type OnboardRequest = {
+  runtimeSigner: string      // EOA address that will sign for this agent
+  salt?: string              // optional uint256 salt for deterministic wallet address (default: 0)
+  mintAmount?: string        // optional USDC amount to mint in base units (default: 10_000_000 = 10 USDC)
+}
+
+app.post('/onboard', async (c) => {
+  const body = (await c.req.json()) as OnboardRequest
+
+  if (!body.runtimeSigner || !/^0x[0-9a-fA-F]{40}$/.test(body.runtimeSigner)) {
+    return c.json({ error: 'runtimeSigner must be a valid 0x address' }, 400)
+  }
+
+  try {
+    const result = await onboardAgent({
+      runtimeSigner: body.runtimeSigner as `0x${string}`,
+      salt: BigInt(body.salt ?? '0'),
+      mintAmount: BigInt(body.mintAmount ?? '10000000'), // 10 USDC (6 decimals)
+      sequencerPrivateKey: c.env.SEQUENCER_PRIVATE_KEY as `0x${string}`,
+    })
+    return c.json(result, 201)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'onboarding failed'
+    return c.json({ error: message }, 500)
+  }
 })
 
 app.get('/auctions/:id/stream', async (c) => {
