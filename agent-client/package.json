@@ -9,8 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "auction-design": "file:..",
-    "permissionless": "^0.2.39",
+    "permissionless": "^0.3.4",
     "viem": "^2.46.2"
   },
   "devDependencies": {

@@ -36,3 +36,5 @@ circuits/build/
 circuits/ptau/
 circuits/keys/*.zkey
 circuits/**/.DS_Store
+
+my-video/

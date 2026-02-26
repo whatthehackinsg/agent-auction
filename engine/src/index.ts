@@ -57,6 +57,12 @@ type CreateAuctionRequest = {
   depositAmount?: string
   deposit_amount?: string
   deadline: number
+  title?: string
+  description?: string
+  auctionType?: string
+  auction_type?: string
+  maxBid?: string
+  max_bid?: string
 }
 
 app.get('/auctions', async (c) => {
@@ -74,6 +80,10 @@ app.post('/auctions', async (c) => {
   const reservePrice = body.reservePrice ?? body.reserve_price
   const depositAmount = body.depositAmount ?? body.deposit_amount ?? '0'
   const deadline = body.deadline
+  const title = body.title ?? null
+  const description = body.description ?? null
+  const auctionType = body.auctionType ?? body.auction_type ?? 'english'
+  const maxBid = body.maxBid ?? body.max_bid ?? null
 
   if (!manifestHash || !reservePrice || typeof deadline !== 'number') {
     return c.json({ error: 'missing required fields' }, 400)
@@ -90,14 +100,21 @@ app.post('/auctions', async (c) => {
   if (!uintRe.test(reservePrice) || !uintRe.test(depositAmount)) {
     return c.json({ error: 'reservePrice/depositAmount must be uint strings' }, 400)
   }
+  if (maxBid !== null && !uintRe.test(maxBid)) {
+    return c.json({ error: 'maxBid must be a uint string' }, 400)
+  }
+  const validTypes = ['english', 'sealed-bid']
+  if (!validTypes.includes(auctionType)) {
+    return c.json({ error: `auctionType must be one of: ${validTypes.join(', ')}` }, 400)
+  }
 
   const createdAt = Math.floor(Date.now() / 1000)
 
   const insert = await c.env.AUCTION_DB
     .prepare(
-      'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline, title, description, auction_type, max_bid, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     )
-    .bind(auctionId, manifestHash, 1, reservePrice, depositAmount, deadline, createdAt)
+    .bind(auctionId, manifestHash, 1, reservePrice, depositAmount, deadline, title, description, auctionType, maxBid, createdAt)
     .run()
 
   if (!insert.success) {
