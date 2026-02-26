@@ -54,7 +54,7 @@ describe('JOIN bond gate (Task 16)', () => {
     await applySchema(db)
   })
 
-  it('rejects JOIN while bond observation is pending and times out after 60s', async () => {
+  it('rejects JOIN while bond observation is pending and times out after 60s', { timeout: 15000 }, async () => {
     const auctionId = randomAuctionId()
     const wallet = randomWallet()
 

@@ -13,6 +13,7 @@ import type { AuctionSettlementPacket } from './types/contracts'
 import { recordResultOnChain, signSettlementPacket } from './lib/settlement'
 import { signInclusionReceipt } from './lib/inclusion-receipt'
 import { enforceJoinBondObservation, pollAndRecordBondTransfers } from './lib/bond-watcher'
+import { serializeReplayBundle, computeContentHash } from './lib/replay-bundle'
 
 /** Zero hash as 0x-prefixed hex string (32 zero bytes) */
 const ZERO_HASH_HEX = '0x' + '00'.repeat(32)
@@ -428,17 +429,29 @@ export class AuctionRoom implements DurableObject {
       throw new Error('auction not found in D1')
     }
 
-    // Determine winner from the event log.
+    // Determine winner from the event log and compute replay content hash.
     const events = await this.env.AUCTION_DB
-      .prepare('SELECT action_type, agent_id, wallet, amount FROM events WHERE auction_id = ? ORDER BY seq')
+      .prepare('SELECT seq, prev_hash, event_hash, payload_hash, action_type, agent_id, wallet, amount, created_at FROM events WHERE auction_id = ? ORDER BY seq')
       .bind(this.auctionId)
-      .all<{ action_type: string; agent_id: string; wallet: string; amount: string }>()
+      .all<{ seq: number; prev_hash: string; event_hash: string; payload_hash: string; action_type: string; agent_id: string; wallet: string; amount: string; created_at: number }>()
 
     let winnerAgentId = 0n
     let winnerWallet: `0x${string}` = ('0x' + '00'.repeat(20)) as `0x${string}`
     let winningBidAmount = 0n
 
+    const replayEvents: AuctionEvent[] = []
     for (const e of events.results ?? []) {
+      replayEvents.push({
+        seq: Number(e.seq),
+        prevHash: e.prev_hash,
+        eventHash: e.event_hash,
+        payloadHash: e.payload_hash,
+        actionType: e.action_type as ActionType,
+        agentId: e.agent_id,
+        wallet: e.wallet,
+        amount: e.amount,
+        createdAt: Number(e.created_at ?? 0),
+      })
       if (e.action_type !== ActionType.BID) continue
       const amount = BigInt(e.amount)
       if (amount > winningBidAmount) {
@@ -448,11 +461,20 @@ export class AuctionRoom implements DurableObject {
       }
     }
 
+    // Compute replay content hash (SHA-256 of canonical replay bundle)
+    let replayContentHashHex: `0x${string}` = ZERO_HASH_HEX as `0x${string}`
+    if (replayEvents.length > 0) {
+      const replayBytes = serializeReplayBundle(this.auctionId, replayEvents)
+      const replayHash = computeContentHash(replayBytes)
+      replayContentHashHex = toHex(replayHash) as `0x${string}`
+    }
+
     const closeTimestamp = BigInt(Math.floor(Date.now() / 1000))
     const packet: AuctionSettlementPacket = {
       auctionId: this.auctionId as `0x${string}`,
       manifestHash: auctionRow.manifest_hash as `0x${string}`,
       finalLogHash: this.chainHead as `0x${string}`,
+      replayContentHash: replayContentHashHex,
       winnerAgentId,
       winnerWallet,
       winningBidAmount,

@@ -1,13 +1,15 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { AuctionRoom } from './auction-room'
-import { toHex } from 'viem'
+import { toHex, keccak256, encodePacked } from 'viem'
 import { serializeReplayBundle, computeContentHash } from './lib/replay-bundle'
 import { type AuctionEvent, ActionType } from './types/engine'
 import { getBondStatus, pollAndRecordBondTransfers } from './lib/bond-watcher'
 import { requireX402 } from './middleware/x402'
 import { pinReplayBundleToIpfs } from './lib/ipfs'
 import { onboardAgent } from './lib/onboard'
+import { createSequencerClient, auctionRegistryAbi } from './lib/chain-client'
+import { ADDRESSES } from './lib/addresses'
 
 export interface Env {
   AUCTION_DB: D1Database
@@ -131,7 +133,35 @@ app.post('/auctions', async (c) => {
     }),
   )
 
-  return c.json({ auctionId, createdAt }, 201)
+  // Register auction on-chain via AuctionRegistry.createAuction()
+  let txHash: string | null = null
+  try {
+    const roomConfigHash = keccak256(
+      encodePacked(['string', 'string'], [auctionType, maxBid ?? '0']),
+    )
+    const sequencerClient = createSequencerClient(
+      c.env.SEQUENCER_PRIVATE_KEY as `0x${string}`,
+    )
+    txHash = await sequencerClient.writeContract({
+      address: ADDRESSES.auctionRegistry,
+      abi: auctionRegistryAbi,
+      functionName: 'createAuction',
+      args: [
+        auctionId as `0x${string}`,
+        manifestHash as `0x${string}`,
+        roomConfigHash,
+        BigInt(reservePrice),
+        BigInt(depositAmount),
+        BigInt(deadline),
+      ],
+    })
+  } catch (err) {
+    // On-chain registration is best-effort — auction still usable off-chain.
+    // Common failure: auction already exists on-chain (idempotent retry).
+    console.error('[createAuction] on-chain registration failed:', err)
+  }
+
+  return c.json({ auctionId, createdAt, txHash }, 201)
 })
 
 app.get('/auctions/:id', async (c) => {
