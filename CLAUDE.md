@@ -4,52 +4,125 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repository Is
 
-This repo is for the **Chainlink 2026 Hackathon**: https://chain.link/hackathon
+**Chainlink 2026 Hackathon** project: an **agent-native auction platform** where AI agents autonomously discover, join, bid in, and settle auctions — with on-chain USDC escrow, verifiable event ordering, and CRE-based trustless settlement.
 
-An **agent-native auction platform** where AI agents autonomously discover, join, bid in, and settle auctions — with on-chain USDC escrow, verifiable event ordering, and CRE-based trustless settlement.
-
-**Current stage**: Architecture designed → smart contracts implemented & tested (113 tests passing) → security audit complete (9 findings fixed) → deployed to Base Sepolia → **CRE E2E settlement confirmed on-chain** (`transmissionSuccess=true`).
+**Current stage**: Contracts deployed & tested (117 tests) → security audit complete (9 findings fixed) → deployed to Base Sepolia → CRE E2E settlement confirmed on-chain (`transmissionSuccess=true`) → engine + frontend integration in progress.
 
 ## Build, Test, and Lint
 
 ```bash
-# Smart contracts (Foundry)
+# Smart contracts (Foundry — solc 0.8.24, Cancun EVM, optimizer 200 runs)
 cd contracts
-forge build                    # Compile (solc 0.8.24, Cancun EVM)
-forge test                     # Run all 113 tests
-forge test -vvv                # Verbose with traces
-forge fmt                      # Format Solidity code
+forge build                          # Compile all contracts
+forge test                           # Run all 117 tests
+forge test --match-contract Escrow   # Run a specific test suite
+forge test --match-test testDeposit  # Run a single test
+forge test -vvv                      # Verbose with stack traces
+forge fmt                            # Format Solidity code
+forge snapshot                       # Gas snapshots
 
-# Frontend (Next.js)
+# CRE settlement workflow (Bun runtime)
+cd cre
+bun test                             # Run 9 unit tests
+bun build ./workflows/settlement.ts --outdir ./dist  # Build workflow
+
+# Engine (Cloudflare Workers + Durable Objects)
+cd engine
+npm run typecheck                    # TypeScript type check
+npm run test                         # Run all tests (Vitest + Miniflare)
+npm run test:watch                   # Watch mode
+npm run dev                          # Local dev server (wrangler)
+npm run deploy                       # Deploy to Cloudflare
+
+# Frontend (Next.js 16 + React 19 + Tailwind v4)
 cd frontend
-npm run dev                    # Dev server
-npm run build && npm run lint  # Build + lint
+npm run dev                          # Dev server
+npm run build                        # Production build
+npm run lint                         # ESLint
 
-# Chainlink MCP server
-npm run mcp:start              # Needs .mcp.json configured
+# Shared crypto library
+cd packages/crypto
+npm run build                        # Compile TypeScript
+npm test                             # Run 56 tests (requires --experimental-vm-modules)
+
+# Agent client
+cd agent-client
+npm run typecheck                    # Type check
+npm run start                        # Run demo
 ```
 
-## Key Architecture
+## Architecture Overview
+
+Three-layer hybrid system:
+
+```
+Agent Layer (MCP / HTTP REST)
+    ↓ EIP-712 signed actions + ZK proofs
+Auction Engine (Cloudflare Workers + Durable Objects)
+    ↓ recordResult TX → AuctionEnded event
+Blockchain (Base Sepolia)
+    ↓ AuctionEnded event triggers CRE
+CRE Workflow (Chainlink Runtime Environment)
+    ↓ verify → sign → writeReport
+AuctionEscrow.onReport() → settlement
+```
+
+**Settlement is always CRE-mediated** — the engine records results on-chain, but only CRE's `onReport()` via KeystoneForwarder can release escrow funds.
+
+## Module Map
+
+| Directory | Runtime | Purpose |
+|---|---|---|
+| `contracts/` | Foundry/Solidity | 7 contracts: identity (EIP-4337), auctions, escrow, privacy |
+| `cre/` | Bun + CRE SDK | Settlement workflow triggered by `AuctionEnded` log event |
+| `engine/` | Cloudflare Workers | Durable Object sequencer, event log, API (Hono), D1 database |
+| `frontend/` | Next.js 16 | Spectator UI (read-only auction state, replay, 3D/GSAP animations) |
+| `agent-client/` | Node/tsx | TypeScript demo client for agent interactions |
+| `packages/crypto/` | Node (ESM) | Poseidon hash chain, EIP-712, ZK proof gen/verify, nullifiers |
+| `circuits/` | Circom 2.2.3 | Two Groth16 circuits: RegistryMembership (~12K), BidRange (~5K) |
+
+## Smart Contracts (`contracts/src/`)
+
+| Contract | Role |
+|---|---|
+| `AgentAccount.sol` | EIP-4337 smart wallet (secp256k1 runtime signer) |
+| `AgentAccountFactory.sol` | CREATE2 deterministic deployment factory |
+| `AgentPaymaster.sol` | Gas sponsorship (bond-deposit + non-bond modes) |
+| `AuctionRegistry.sol` | Lifecycle state machine: OPEN → CLOSED → SETTLED/CANCELLED |
+| `AuctionEscrow.sol` | USDC bonds + CRE settlement via `IReceiver.onReport()` |
+| `AgentPrivacyRegistry.sol` | ZK membership Merkle root + nullifier tracking |
+| `MockKeystoneForwarder.sol` | Test helper simulating Chainlink KeystoneForwarder |
+
+Target chain: **Base Sepolia** (chainId 84532). EntryPoint v0.7 (`0x0000000071727De22E5E9d8BAf0edAc6f37da032`).
+
+## Engine Internals
+
+- **Durable Object** (`AuctionRoom`): core sequencer assigning monotonic `seq` numbers, maintains Poseidon hash chain event log
+- **Hono** HTTP framework for API routes
+- **D1** (SQLite) for persistent auction metadata
+- **Crypto delegation**: real Poseidon hashing from `@agent-auction/crypto`; snarkjs verification stubbed in Workers (set `ENGINE_ALLOW_INSECURE_STUBS=true` for local dev only — stubs fail-closed by default)
+- **EIP-4337 bundler**: Pimlico (`api.pimlico.io/v2/84532/rpc`)
+
+## CRE Settlement Flow
+
+Trigger: `AuctionEnded` event → Phase A: verify CLOSED on-chain (finalized read) → Phase B: cross-check winner (agentId, wallet, finalPrice) → Phase C: fetch replay bundle → Phase D: DON signs report → Phase E: `writeReport` → `KeystoneForwarder` → `AuctionEscrow.onReport()`.
+
+Report encoding: `abi.encode(bytes32 auctionId, uint256 winnerAgentId, address winnerWallet, uint256 amount)`.
+
+Config: `cre/workflows/settlement/config.json`, `cre/project.yaml`.
+
+## Key Documentation
 
 - **Source of truth**: `docs/full_contract_arch(amended).md`
 - **Deep specs**: `docs/research/agent-auction-architecture/01–06`
-- **Legacy** (historical only): `docs/legacy/`
+- **Developer guide**: `docs/developer-guide.md` (cast examples, TypeScript integration, CRE setup)
+- **Per-contract API**: `contracts/docs/` (AgentAccount, AgentPaymaster, AuctionRegistry, AuctionEscrow)
+- **Solutions/troubleshooting**: `docs/solutions/`
+- **Legacy** (historical, Mandarin): `docs/legacy/`
 
-6 Solidity contracts in `contracts/src/`:
-- `AgentAccount.sol` — EIP-4337 smart wallet (secp256k1 runtime signer)
-- `AgentAccountFactory.sol` — CREATE2 factory for deterministic deployment
-- `AgentPaymaster.sol` — Gas sponsorship paymaster
-- `AuctionRegistry.sol` — Auction lifecycle (OPEN → CLOSED → SETTLED/CANCELLED)
-- `AuctionEscrow.sol` — USDC bonds + CRE settlement via `onReport()`
-- `MockKeystoneForwarder.sol` — Test helper simulating Chainlink KeystoneForwarder
+Each module has its own `AGENTS.md` with local constraints. Apply root `AGENTS.md` first, then the child.
 
-Target chain: **Base Sepolia** (chainId 84532).
-
-Deployment scripts: `contracts/script/Deploy.s.sol`, `contracts/script/HelperConfig.s.sol`
-Development docs: `contracts/docs/` (AgentAccount, AgentPaymaster, AuctionRegistry, AuctionEscrow)
-Security: 2-round audit complete, 9 vulnerabilities fixed (see `contracts/docs/`).
-
-### Deployed Addresses (Base Sepolia)
+## Deployed Addresses (Base Sepolia)
 
 | Contract | Address |
 |---|---|
@@ -58,20 +131,29 @@ Security: 2-round audit complete, 9 vulnerabilities fixed (see `contracts/docs/`
 | AuctionRegistry (v2) | `0xFEc7a05707AF85C6b248314E20FF8EfF590c3639` |
 | AuctionEscrow (v2) | `0x20944f46AB83F7eA40923D7543AF742Da829743c` |
 | KeystoneForwarder (real) | `0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5` |
+| AgentPrivacyRegistry | `0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff` |
 | MockUSDC | `0xfEE786495d165b16dc8e68B6F8281193e041737d` |
-| MockIdentityRegistry | `0x68E06c33D4957102362ACffC2BFF9E6b38199318` |
-| MockKeystoneForwarder | `0x846ae85403D1BBd3B343F1b214D297969b39Ce23` |
 
-AgentPaymaster (`0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d`) funded: 0.01 ETH staked + 0.05 ETH deposited for gas sponsorship.
+Deployer/Sequencer: `0x633ec0e633AA4d8BbCCEa280331A935747416737`. Paymaster funded: 0.01 ETH staked + 0.05 ETH deposited.
+
+## Architecture Invariants (Must Preserve)
+
+1. **Identity**: 3-layer model — Root Controller / Runtime Key / Session Token
+2. **Bond path**: EIP-4337 primary; x402 fallback
+3. **Settlement**: Always via CRE `onReport()`, never direct payout
+4. **Sequencer**: `seq` values monotonic and gap-free per room
+5. **Off-chain agents**: Can observe but cannot bid or bond
+6. **Runtime signing**: secp256k1, verifiable via EIP-712/ecrecover
 
 ## Conventions
 
 - **Design docs** (legacy): Mandarin Chinese
-- **Deep specs, README, AGENTS.md, code comments**: English
+- **All new content** (specs, README, code, AGENTS.md): English
 - Protocol names always English: `ERC-8004`, `x402`, `EIP-4337`, `MCP`, `CRE`
 - Priority: **P0** = MVP/hackathon, **P1** = advanced, **P2** = production
-- Commits: `feat(contracts): add auction escrow settlement`
-- Issue tracking: **bd (beads)** CLI, never markdown TODOs
+- Commits: `feat(contracts): add auction escrow settlement` — scopes: `contracts`, `cre`, `engine`, `frontend`, `docs`, `infra`, `research`
+- Issue tracking: **bd (beads)** CLI — never markdown TODOs
+- Vendor/generated trees are read-only: `contracts/lib/`, `node_modules/`, `contracts/out/`, `contracts/cache/`
 
 ## Chainlink References
 
@@ -79,5 +161,3 @@ AgentPaymaster (`0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d`) funded: 0.01 ETH s
 - Use Cases: https://blog.chain.link/5-ways-to-build-with-cre/
 - MCP Server: https://www.npmjs.com/package/@chainlink/mcp-server
 - Demos: https://credemos.com/cdf
-
-For detailed guidelines, see `AGENTS.md`.

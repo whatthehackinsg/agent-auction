@@ -314,7 +314,7 @@ All contracts verified on [Basescan](https://sepolia.basescan.org).
 | AuctionRegistry (v2) | [`0xFEc7a05707AF85C6b248314E20FF8EfF590c3639`](https://sepolia.basescan.org/address/0xFEc7a05707AF85C6b248314E20FF8EfF590c3639) |
 | AuctionEscrow (v2) | [`0x20944f46AB83F7eA40923D7543AF742Da829743c`](https://sepolia.basescan.org/address/0x20944f46AB83F7eA40923D7543AF742Da829743c) |
 | KeystoneForwarder (real Chainlink) | [`0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5`](https://sepolia.basescan.org/address/0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5) |
-| AgentPrivacyRegistry | _Not yet deployed_ | Added to `Deploy.s.sol` (Step 6b) — no constructor args, deploy when ready |
+| AgentPrivacyRegistry | [`0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff`](https://sepolia.basescan.org/address/0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff) |
 
 #### Outdated Contracts (v1 — no longer in use)
 

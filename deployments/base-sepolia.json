@@ -48,7 +48,11 @@
       "address": "0x20944f46AB83F7eA40923D7543AF742Da829743c",
       "abi": "../contracts/out/AuctionEscrow.sol/AuctionEscrow.json",
       "note": "USDC bond escrow + CRE settlement via IReceiver.onReport(). V2 — uses real KeystoneForwarder."
-    }
+    },
+    "AgentPrivacyRegistry": {
+      "address": "0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff",
+      "abi": "../contracts/out/AgentPrivacyRegistry.sol/AgentPrivacyRegistry.json",
+      "note": "ZK privacy commitment sidecar — stores registration commitments and Merkle root for membership proofs. NOT identity authority."
     },
     "AgentAccount (demo)": {
       "address": "0x04c505a1543965e2BB29c56EE26Eb6F2c907c6C7",
