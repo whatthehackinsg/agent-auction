@@ -35,6 +35,9 @@ skills-lock.json
 circuits/build/
 circuits/ptau/
 circuits/keys/*.zkey
+circuits/*.r1cs
+circuits/*.sym
+circuits/*.ptau
 circuits/**/.DS_Store
 
 my-video/
