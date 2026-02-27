@@ -3,10 +3,10 @@ import { cors } from 'hono/cors'
 import { AuctionRoom } from './auction-room'
 import { toHex, keccak256, encodePacked } from 'viem'
 import { serializeReplayBundle, computeContentHash } from './lib/replay-bundle'
-import { type AuctionEvent, ActionType } from './types/engine'
+import { type AuctionEvent, type ItemMetadata, ActionType } from './types/engine'
 import { getBondStatus, verifyBondFromReceipt } from './lib/bond-watcher'
 import { createX402Middleware } from './middleware/x402'
-import { pinReplayBundleToIpfs } from './lib/ipfs'
+import { pinToIpfs } from './lib/ipfs'
 import { onboardAgent } from './lib/onboard'
 import { createSequencerClient, auctionRegistryAbi } from './lib/chain-client'
 import { ADDRESSES } from './lib/addresses'
@@ -99,6 +99,10 @@ type CreateAuctionRequest = {
   max_extensions?: number
   roomConfig?: Record<string, unknown>
   room_config?: Record<string, unknown>
+  itemImageCid?: string
+  nftContract?: string
+  nftTokenId?: string
+  nftChainId?: number
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -207,11 +211,28 @@ app.post('/auctions', async (c) => {
     return c.json({ error: `auctionType must be one of: ${validTypes.join(', ')}` }, 400)
   }
 
+  // ── NFT item metadata (all optional) ─────────────────────────────
+  const itemImageCid = body.itemImageCid ?? null
+  const nftContract = body.nftContract ?? null
+  const nftTokenId = body.nftTokenId ?? null
+  const nftChainId = body.nftChainId ?? null
+
+  const addressRe = /^0x[0-9a-fA-F]{40}$/
+  if (nftContract !== null && !addressRe.test(nftContract)) {
+    return c.json({ error: 'nftContract must be 0x + 40 hex chars' }, 400)
+  }
+  if (nftTokenId !== null && !/^\d+$/.test(nftTokenId)) {
+    return c.json({ error: 'nftTokenId must be a uint string' }, 400)
+  }
+  if (nftChainId !== null && (!Number.isInteger(nftChainId) || nftChainId <= 0)) {
+    return c.json({ error: 'nftChainId must be a positive integer' }, 400)
+  }
+
   const createdAt = Math.floor(Date.now() / 1000)
 
   const insert = await c.env.AUCTION_DB
     .prepare(
-      'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline, title, description, auction_type, max_bid, snipe_window_sec, extension_sec, max_extensions, room_config_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline, title, description, auction_type, max_bid, snipe_window_sec, extension_sec, max_extensions, room_config_json, item_image_cid, nft_contract, nft_token_id, nft_chain_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     )
     .bind(
       auctionId,
@@ -228,6 +249,10 @@ app.post('/auctions', async (c) => {
       extensionSec,
       maxExtensions,
       JSON.stringify(mergedRoomConfig),
+      itemImageCid,
+      nftContract,
+      nftTokenId,
+      nftChainId,
       createdAt,
     )
     .run()
@@ -281,7 +306,14 @@ app.post('/auctions', async (c) => {
     console.error('[createAuction] on-chain registration failed:', err)
   }
 
-  return c.json({ auctionId, createdAt, txHash }, 201)
+  const item: ItemMetadata = {
+    imageCid: itemImageCid,
+    nftContract,
+    nftTokenId,
+    nftChainId,
+  }
+
+  return c.json({ auctionId, createdAt, txHash, item }, 201)
 })
 
 app.get('/auctions/:id', async (c) => {
@@ -357,15 +389,82 @@ app.post('/auctions/:id/action', async (c) => {
 app.get('/auctions/:id/manifest', async (c) => {
   const auctionId = c.req.param('id')
   const row = await c.env.AUCTION_DB
-    .prepare('SELECT auction_id, manifest_hash FROM auctions WHERE auction_id = ?')
+    .prepare('SELECT auction_id, manifest_hash, title, description, item_image_cid, nft_contract, nft_token_id, nft_chain_id FROM auctions WHERE auction_id = ?')
     .bind(auctionId)
-    .first<{ auction_id: string; manifest_hash: string }>()
+    .first<{ auction_id: string; manifest_hash: string; title: string | null; description: string | null; item_image_cid: string | null; nft_contract: string | null; nft_token_id: string | null; nft_chain_id: number | null }>()
 
   if (!row) {
     return c.json({ error: 'auction not found' }, 404)
   }
 
-  return c.json({ auctionId: row.auction_id, manifestHash: row.manifest_hash })
+  const item: ItemMetadata = {
+    imageCid: row.item_image_cid,
+    nftContract: row.nft_contract,
+    nftTokenId: row.nft_token_id,
+    nftChainId: row.nft_chain_id,
+  }
+
+  return c.json({
+    auctionId: row.auction_id,
+    manifestHash: row.manifest_hash,
+    title: row.title,
+    description: row.description,
+    item,
+  })
+})
+
+const IMAGE_MAX_BYTES = 10 * 1024 * 1024 // 10 MB
+
+app.post('/auctions/:id/image', async (c) => {
+  const auctionId = c.req.param('id')
+
+  const auction = await c.env.AUCTION_DB
+    .prepare('SELECT auction_id FROM auctions WHERE auction_id = ?')
+    .bind(auctionId)
+    .first()
+  if (!auction) {
+    return c.json({ error: 'auction not found' }, 404)
+  }
+
+  let imageBytes: Uint8Array
+
+  const contentType = c.req.header('Content-Type') ?? ''
+  if (contentType.includes('multipart/form-data')) {
+    const formData = await c.req.formData()
+    const file = formData.get('image') as unknown as File | null
+    if (!file || typeof file === 'string' || typeof file.arrayBuffer !== 'function') {
+      return c.json({ error: 'missing image field in multipart form' }, 400)
+    }
+    if (file.size > IMAGE_MAX_BYTES) {
+      return c.json({ error: `image exceeds ${IMAGE_MAX_BYTES} byte limit` }, 400)
+    }
+    imageBytes = new Uint8Array(await file.arrayBuffer())
+  } else {
+    const buf = await c.req.arrayBuffer()
+    if (buf.byteLength === 0) {
+      return c.json({ error: 'empty request body' }, 400)
+    }
+    if (buf.byteLength > IMAGE_MAX_BYTES) {
+      return c.json({ error: `image exceeds ${IMAGE_MAX_BYTES} byte limit` }, 400)
+    }
+    imageBytes = new Uint8Array(buf)
+  }
+
+  const pin = await pinToIpfs(imageBytes, {
+    pinataJwt: c.env.PINATA_API_KEY,
+    fileName: `${auctionId}.item-image`,
+  })
+
+  if (!pin.cid) {
+    return c.json({ error: pin.error ?? 'IPFS pinning failed' }, 502)
+  }
+
+  await c.env.AUCTION_DB
+    .prepare('UPDATE auctions SET item_image_cid = ? WHERE auction_id = ?')
+    .bind(pin.cid, auctionId)
+    .run()
+
+  return c.json({ auctionId, imageCid: pin.cid }, 201)
 })
 
 app.get('/auctions/:id/events', async (c) => {
@@ -418,7 +517,7 @@ app.get('/auctions/:id/replay', async (c) => {
   replayCid = cidRow?.replay_cid ?? null
 
   if (!replayCid) {
-    const pin = await pinReplayBundleToIpfs(replayBytes, {
+    const pin = await pinToIpfs(replayBytes, {
       pinataJwt: c.env.PINATA_API_KEY,
       fileName: `${auctionId}.replay.bin`,
     })

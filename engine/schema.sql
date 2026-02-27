@@ -12,7 +12,15 @@ CREATE TABLE IF NOT EXISTS auctions (
   description TEXT,
   auction_type TEXT NOT NULL DEFAULT 'english',
   max_bid TEXT,
+  snipe_window_sec INTEGER NOT NULL DEFAULT 60,
+  extension_sec INTEGER NOT NULL DEFAULT 30,
+  max_extensions INTEGER NOT NULL DEFAULT 5,
+  room_config_json TEXT NOT NULL DEFAULT '{}',
   replay_cid TEXT,
+  item_image_cid TEXT,
+  nft_contract TEXT,
+  nft_token_id TEXT,
+  nft_chain_id INTEGER,
   created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 

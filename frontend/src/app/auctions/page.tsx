@@ -9,6 +9,7 @@ import { PixelPanel } from '@/components/landing/PixelPanel'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { useAuctions } from '@/hooks/useAuctions'
 import { formatCountdown, formatUsdc, statusLabel, truncateHex } from '@/lib/format'
+import { resolveImageUrl } from '@/lib/ipfs'
 
 export default function AuctionsPage() {
   const { auctions, isLoading, error } = useAuctions()
@@ -79,6 +80,23 @@ export default function AuctionsPage() {
                   title="auction.room"
                   className="min-h-[220px] border-[#2b3a56] transition-transform duration-200 group-hover:-translate-y-[2px] group-hover:border-[#6EE7B7]"
                 >
+                  {(() => {
+                    const imgUrl = resolveImageUrl(auction.item_image_cid)
+                    return imgUrl ? (
+                      <div className="relative -mx-4 -mt-4 mb-3">
+                        <img
+                          src={imgUrl}
+                          alt={auction.title ?? 'Auction item'}
+                          className="h-32 w-full rounded-t object-cover"
+                        />
+                        {auction.nft_contract ? (
+                          <span className="absolute right-2 top-2 rounded bg-[#F5C46E]/90 px-2 py-0.5 font-mono text-[10px] font-bold text-[#0a0f1a]">
+                            NFT
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null
+                  })()}
                   <div className="flex flex-col gap-3 font-mono text-xs text-[#9B9BB8]">
                     <div className="flex items-center justify-between">
                       <StatusPill status={state} />
@@ -89,7 +107,9 @@ export default function AuctionsPage() {
 
                     <div>
                       <p className="text-[10px] uppercase tracking-[0.1em] text-[#5E5E7A]">auction id</p>
-                      <p className="mt-1 text-[#EEEEF5]">{truncateHex(auction.auction_id, 12, 8)}</p>
+                      <p className="mt-1 text-[#EEEEF5]">
+                        {auction.title ?? truncateHex(auction.auction_id, 12, 8)}
+                      </p>
                     </div>
 
                     <div>

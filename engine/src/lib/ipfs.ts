@@ -32,13 +32,13 @@ function parseCid(json: unknown): string | null {
 }
 
 /**
- * Best-effort replay bundle pinning to IPFS via Pinata.
+ * Best-effort pinning to IPFS via Pinata.
  *
  * Fallback behavior:
  * - Missing PINATA_API_KEY => returns { cid: null }
  * - Network/API failure => returns { cid: null, error }
  */
-export async function pinReplayBundleToIpfs(
+export async function pinToIpfs(
   payload: Uint8Array,
   options: {
     pinataJwt?: string
@@ -89,3 +89,6 @@ export async function pinReplayBundleToIpfs(
     return { cid: null, error: `Pinata request failed: ${message}` }
   }
 }
+
+/** @deprecated Use `pinToIpfs` instead */
+export const pinReplayBundleToIpfs = pinToIpfs

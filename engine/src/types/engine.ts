@@ -81,7 +81,22 @@ export interface InclusionReceipt {
   sequencerSig: string;           // 0x-prefixed hex — sequencer's signature over the receipt
 }
 
+// ─── Item Metadata ──────────────────────────────────────────────────
+
+/** NFT / item metadata attached to an auction */
+export interface ItemMetadata {
+  imageCid?: string | null
+  nftContract?: string | null
+  nftTokenId?: string | null
+  nftChainId?: number | null
+}
+
 // ─── Room State ──────────────────────────────────────────────────────
+
+export interface RoomConfigEnvelope {
+  engine: Record<string, unknown>;
+  future: Record<string, unknown>;
+}
 
 /**
  * Snapshot of a room's current state, returned by GET /rooms/:id.
@@ -95,4 +110,16 @@ export interface RoomSnapshot {
   highestBidder: string;          // uint256 as string — agentId of highest bidder
   startedAt: number;              // Unix timestamp
   deadline: number;               // Unix timestamp
+  status: number;                 // Mirrors D1 auctions.status
+  serverNow: number;              // Server timestamp to avoid client clock skew
+  timeRemainingSec: number;       // max(deadline - serverNow, 0)
+  snipeWindowSec: number;         // Anti-sniping trigger window
+  extensionSec: number;           // Seconds added per extension
+  maxExtensions: number;          // Extension cap
+  extensionCount: number;         // Number of used extensions
+  roomConfig: RoomConfigEnvelope;
+  terminalType: 'NONE' | 'CLOSE' | 'CANCEL';
+  winnerAgentId: string;          // Final winner agentId if terminal CLOSE
+  winnerWallet: string;           // Final winner wallet if terminal CLOSE
+  winningBidAmount: string;       // Final winning amount if terminal CLOSE
 }

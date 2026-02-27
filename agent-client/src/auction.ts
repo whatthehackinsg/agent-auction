@@ -82,22 +82,52 @@ export async function createAuction(params: {
   reservePrice: bigint
   depositAmount: bigint
   deadlineSecFromNow: number
+  title?: string
+  description?: string
+  itemImageCid?: string
+  nftContract?: string
+  nftTokenId?: string
+  nftChainId?: number
 }): Promise<CreateAuctionResponse> {
   const auctionId = randomBytes32Hex()
   const manifestHash = randomBytes32Hex()
   const deadline = Math.floor(Date.now() / 1000) + params.deadlineSecFromNow
 
+  const body: Record<string, unknown> = {
+    auctionId,
+    manifestHash,
+    reservePrice: params.reservePrice.toString(),
+    depositAmount: params.depositAmount.toString(),
+    deadline,
+  }
+  if (params.title !== undefined) body.title = params.title
+  if (params.description !== undefined) body.description = params.description
+  if (params.itemImageCid !== undefined) body.itemImageCid = params.itemImageCid
+  if (params.nftContract !== undefined) body.nftContract = params.nftContract
+  if (params.nftTokenId !== undefined) body.nftTokenId = params.nftTokenId
+  if (params.nftChainId !== undefined) body.nftChainId = params.nftChainId
+
   logStep('auction', `creating auction ${auctionId}`)
   return engineFetch<CreateAuctionResponse>('/auctions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      auctionId,
-      manifestHash,
-      reservePrice: params.reservePrice.toString(),
-      depositAmount: params.depositAmount.toString(),
-      deadline,
-    }),
+    body: JSON.stringify(body),
+  })
+}
+
+export async function uploadAuctionImage(params: {
+  auctionId: string
+  imageBuffer: Uint8Array
+  fileName?: string
+}): Promise<{ cid: string }> {
+  const formData = new FormData()
+  const blob = new Blob([params.imageBuffer as BlobPart])
+  formData.append('image', blob, params.fileName ?? 'image.png')
+
+  logStep('upload', `uploading image for auction ${params.auctionId}`)
+  return engineFetch<{ cid: string }>(`/auctions/${params.auctionId}/image`, {
+    method: 'POST',
+    body: formData,
   })
 }
 

@@ -10,6 +10,12 @@ export interface AuctionSummary {
   deadline: number
   created_at: number
   participant_count?: number
+  title?: string | null
+  description?: string | null
+  item_image_cid?: string | null
+  nft_contract?: string | null
+  nft_token_id?: string | null
+  nft_chain_id?: number | null
 }
 
 export function useAuctions() {

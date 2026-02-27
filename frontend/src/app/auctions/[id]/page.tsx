@@ -10,7 +10,8 @@ import { PixelPanel } from '@/components/landing/PixelPanel'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { useAuctionDetail, useAuctionRoom, useAuctionState } from '@/hooks'
-import { formatCountdown, formatUsdc, statusLabel, truncateHex } from '@/lib/format'
+import { formatCountdown, formatUsdc, nftExplorerUrl, statusLabel, truncateHex } from '@/lib/format'
+import { resolveImageUrl } from '@/lib/ipfs'
 
 export default function AuctionRoomPage() {
   const params = useParams<{ id: string }>()
@@ -86,6 +87,46 @@ export default function AuctionRoomPage() {
         <PixelPanel accent="rose" headerLabel="errors.room" className="min-h-[140px]">
           <p className="font-mono text-xs text-[#FCA5A5]">[x] failed to load auction room</p>
           <p className="mt-2 font-mono text-xs text-[#B497A3]">{'// verify auction id and engine availability'}</p>
+        </PixelPanel>
+      ) : null}
+
+      {!isLoading && !error && detail?.auction.item_image_cid ? (
+        <PixelPanel accent="gold" headerLabel="item.details" className="mb-4">
+          {(() => {
+            const imgUrl = resolveImageUrl(detail.auction.item_image_cid)
+            const explorerUrl = nftExplorerUrl(
+              detail.auction.nft_chain_id,
+              detail.auction.nft_contract,
+              detail.auction.nft_token_id,
+            )
+            return (
+              <>
+                {imgUrl ? (
+                  <img
+                    src={imgUrl}
+                    alt={detail.auction.title ?? 'Auction item'}
+                    className="h-64 w-full rounded object-contain"
+                  />
+                ) : null}
+                {detail.auction.title ? (
+                  <p className="mt-3 font-mono text-lg font-bold text-[#EEEEF5]">{detail.auction.title}</p>
+                ) : null}
+                {detail.auction.description ? (
+                  <p className="mt-1 font-mono text-xs text-[#9B9BB8]">{detail.auction.description}</p>
+                ) : null}
+                {explorerUrl ? (
+                  <a
+                    href={explorerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 inline-block font-mono text-xs text-[#A78BFA] hover:underline"
+                  >
+                    {truncateHex(detail.auction.nft_contract!, 10, 6)} / #{detail.auction.nft_token_id}
+                  </a>
+                ) : null}
+              </>
+            )
+          })()}
         </PixelPanel>
       ) : null}
 

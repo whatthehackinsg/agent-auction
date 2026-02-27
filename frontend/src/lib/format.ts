@@ -41,3 +41,19 @@ export function statusLabel(status: number): 'NONE' | 'OPEN' | 'CLOSED' | 'SETTL
       return 'NONE'
   }
 }
+
+export function nftExplorerUrl(
+  chainId: number | null | undefined,
+  contract: string | null | undefined,
+  tokenId: string | null | undefined,
+): string | null {
+  if (!contract || !tokenId) return null
+  const explorers: Record<number, string> = {
+    84532: 'https://sepolia.basescan.org',
+    8453: 'https://basescan.org',
+    1: 'https://etherscan.io',
+    11155111: 'https://sepolia.etherscan.io',
+  }
+  const base = explorers[chainId ?? 84532] ?? explorers[84532]
+  return `${base}/token/${contract}?a=${tokenId}`
+}

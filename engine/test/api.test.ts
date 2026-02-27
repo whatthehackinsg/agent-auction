@@ -462,4 +462,254 @@ describe('API routes (Hono)', () => {
     expect(res.status).toBe(200)
     expect(rooms._calls.some((c) => c.url.includes('/stream'))).toBe(true)
   })
+
+  // ── NFT Item Metadata ───────────────────────────────────────────────
+
+  it('POST /auctions accepts NFT item metadata', async () => {
+    const auctionId = randomAuctionId()
+    const deadline = Math.floor(Date.now() / 1000) + 60
+
+    const res = await app.request(
+      'http://localhost/auctions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          auctionId,
+          manifestHash: '0x' + 'cc'.repeat(32),
+          reservePrice: '1000000',
+          deadline,
+          itemImageCid: 'QmTestImageCid123',
+          nftContract: '0x' + 'ab'.repeat(20),
+          nftTokenId: '42',
+          nftChainId: 84532,
+        }),
+      },
+      env,
+    )
+
+    expect(res.status).toBe(201)
+    const json = await res.json()
+    expect(json.auctionId).toBe(auctionId)
+    expect(json.item).toBeTruthy()
+    expect(json.item.imageCid).toBe('QmTestImageCid123')
+    expect(json.item.nftContract).toBe('0x' + 'ab'.repeat(20))
+    expect(json.item.nftTokenId).toBe('42')
+    expect(json.item.nftChainId).toBe(84532)
+
+    const row = await db
+      .prepare('SELECT item_image_cid, nft_contract, nft_token_id, nft_chain_id FROM auctions WHERE auction_id = ?')
+      .bind(auctionId)
+      .first<Record<string, unknown>>()
+    expect(row).not.toBeNull()
+    expect(row!.item_image_cid).toBe('QmTestImageCid123')
+    expect(row!.nft_contract).toBe('0x' + 'ab'.repeat(20))
+    expect(row!.nft_token_id).toBe('42')
+    expect(row!.nft_chain_id).toBe(84532)
+  })
+
+  it('POST /auctions works without NFT fields (backward compatible)', async () => {
+    const auctionId = randomAuctionId()
+    const deadline = Math.floor(Date.now() / 1000) + 60
+
+    const res = await app.request(
+      'http://localhost/auctions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          auctionId,
+          manifestHash: '0x' + 'dd'.repeat(32),
+          reservePrice: '1000000',
+          deadline,
+        }),
+      },
+      env,
+    )
+
+    expect(res.status).toBe(201)
+    const json = await res.json()
+    expect(json.item).toBeTruthy()
+    expect(json.item.imageCid).toBeNull()
+    expect(json.item.nftContract).toBeNull()
+    expect(json.item.nftTokenId).toBeNull()
+    expect(json.item.nftChainId).toBeNull()
+
+    const row = await db
+      .prepare('SELECT item_image_cid, nft_contract, nft_token_id, nft_chain_id FROM auctions WHERE auction_id = ?')
+      .bind(auctionId)
+      .first<Record<string, unknown>>()
+    expect(row).not.toBeNull()
+    expect(row!.item_image_cid).toBeNull()
+    expect(row!.nft_contract).toBeNull()
+    expect(row!.nft_token_id).toBeNull()
+    expect(row!.nft_chain_id).toBeNull()
+  })
+
+  it('POST /auctions rejects invalid nftContract address', async () => {
+    const auctionId = randomAuctionId()
+    const deadline = Math.floor(Date.now() / 1000) + 60
+
+    const res = await app.request(
+      'http://localhost/auctions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          auctionId,
+          manifestHash: '0x' + 'ee'.repeat(32),
+          reservePrice: '1000000',
+          deadline,
+          nftContract: 'not-an-address',
+        }),
+      },
+      env,
+    )
+
+    expect(res.status).toBe(400)
+    const json = await res.json()
+    expect(json.error).toContain('nftContract')
+  })
+
+  it('POST /auctions rejects invalid nftTokenId', async () => {
+    const auctionId = randomAuctionId()
+    const deadline = Math.floor(Date.now() / 1000) + 60
+
+    const res = await app.request(
+      'http://localhost/auctions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          auctionId,
+          manifestHash: '0x' + 'ef'.repeat(32),
+          reservePrice: '1000000',
+          deadline,
+          nftTokenId: '-1',
+        }),
+      },
+      env,
+    )
+
+    expect(res.status).toBe(400)
+    const json = await res.json()
+    expect(json.error).toContain('nftTokenId')
+  })
+
+  it('POST /auctions rejects invalid nftChainId', async () => {
+    const auctionId = randomAuctionId()
+    const deadline = Math.floor(Date.now() / 1000) + 60
+
+    const res = await app.request(
+      'http://localhost/auctions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          auctionId,
+          manifestHash: '0x' + 'fa'.repeat(32),
+          reservePrice: '1000000',
+          deadline,
+          nftChainId: -5,
+        }),
+      },
+      env,
+    )
+
+    expect(res.status).toBe(400)
+    const json = await res.json()
+    expect(json.error).toContain('nftChainId')
+  })
+
+  it('GET /auctions/:id/manifest returns item metadata', async () => {
+    const auctionId = randomAuctionId()
+    await db
+      .prepare(
+        'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline, title, description, item_image_cid, nft_contract, nft_token_id, nft_chain_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(
+        auctionId,
+        '0x' + 'ff'.repeat(32),
+        1,
+        '1000000',
+        '0',
+        Math.floor(Date.now() / 1000) + 60,
+        'Rare NFT Auction',
+        'A very rare item',
+        'QmManifestImageCid',
+        '0x' + 'ab'.repeat(20),
+        '99',
+        84532,
+      )
+      .run()
+
+    const res = await app.request(`http://localhost/auctions/${auctionId}/manifest`, {}, env)
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.auctionId).toBe(auctionId)
+    expect(json.manifestHash).toBe('0x' + 'ff'.repeat(32))
+    expect(json.title).toBe('Rare NFT Auction')
+    expect(json.description).toBe('A very rare item')
+    expect(json.item).toBeTruthy()
+    expect(json.item.imageCid).toBe('QmManifestImageCid')
+    expect(json.item.nftContract).toBe('0x' + 'ab'.repeat(20))
+    expect(json.item.nftTokenId).toBe('99')
+    expect(json.item.nftChainId).toBe(84532)
+  })
+
+  it('GET /auctions/:id/manifest returns null item fields when not set', async () => {
+    const auctionId = randomAuctionId()
+    await db
+      .prepare(
+        'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .bind(auctionId, '0x' + 'ab'.repeat(32), 1, '1', '0', Math.floor(Date.now() / 1000) + 60)
+      .run()
+
+    const res = await app.request(`http://localhost/auctions/${auctionId}/manifest`, {}, env)
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.item).toBeTruthy()
+    expect(json.item.imageCid).toBeNull()
+    expect(json.item.nftContract).toBeNull()
+    expect(json.item.nftTokenId).toBeNull()
+    expect(json.item.nftChainId).toBeNull()
+  })
+
+  it('POST /auctions/:id/image returns 404 for non-existent auction', async () => {
+    const auctionId = randomAuctionId()
+    const res = await app.request(
+      `http://localhost/auctions/${auctionId}/image`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: new Uint8Array([1, 2, 3]),
+      },
+      env,
+    )
+    expect(res.status).toBe(404)
+  })
+
+  it('POST /auctions/:id/image returns 400 for empty body', async () => {
+    const auctionId = randomAuctionId()
+    await db
+      .prepare(
+        'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .bind(auctionId, '0x' + 'ab'.repeat(32), 1, '1', '0', Math.floor(Date.now() / 1000) + 60)
+      .run()
+
+    const res = await app.request(
+      `http://localhost/auctions/${auctionId}/image`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: new Uint8Array(0),
+      },
+      env,
+    )
+    expect(res.status).toBe(400)
+    const json = await res.json()
+    expect(json.error).toContain('empty')
+  })
 })
