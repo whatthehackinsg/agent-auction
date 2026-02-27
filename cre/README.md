@@ -35,11 +35,40 @@ abi.encode(bytes32 auctionId, uint256 winnerAgentId, address winnerWallet, uint2
 npm install @chainlink/cre-sdk viem zod
 ```
 
-## Simulate
+## Configuration
+
+Two config files in `workflows/settlement/`:
+
+| File | Purpose | `useFinalized` | When to use |
+|---|---|---|---|
+| `config.json` | Local simulation | `false` | `cre workflow simulate` — avoids L2 finality lag in simulator |
+| `config.production.json` | Deployed DON | `true` | `cre workflow deploy` — DON nodes need deterministic reads at finalized block |
+
+Key config fields:
+
+| Field | Description |
+|---|---|
+| `isTestnet` | `"true"` for testnet, `"false"` for mainnet (controls `getNetwork()`) |
+| `useFinalized` | `"true"` → reads at `LAST_FINALIZED_BLOCK_NUMBER` (DON consensus); `"false"` → reads at latest block (simulation) |
+| `skipReplayVerification` | `"true"` to skip Phase C replay bundle fetch; `"false"` to enable |
+| `replayBundleBaseUrl` | Engine base URL — Phase C fetches `${baseUrl}/auctions/${auctionId}/replay` |
+
+**Why two configs?** In simulation mode, `LAST_FINALIZED_BLOCK_NUMBER` on L2 (Base Sepolia) resolves to a block far behind latest — the state change from `recordResult` isn't visible yet, causing `"not in CLOSED state (got 0)"`. On a deployed DON, the trigger's `CONFIDENCE_LEVEL_FINALIZED` guarantees the event block is finalized, so `LAST_FINALIZED_BLOCK_NUMBER` correctly includes the state change.
+
+## Simulate (Local)
 
 ```bash
-cre workflow simulate settlement --target base-sepolia
+# One-shot simulation with a specific TX
+cre workflow simulate workflows/settlement \
+  --target base-sepolia --broadcast \
+  --evm-tx-hash 0x... --evm-event-index 0 \
+  --trigger-index 0 --non-interactive
+
+# Or use the settlement watcher for automatic detection
+bun run scripts/settlement-watcher.ts
 ```
+
+The settlement watcher polls for `AuctionEnded` events and automatically triggers `cre workflow simulate --broadcast` for each one. Uses `config.json` (default).
 
 ## Environment Policy (Important)
 
@@ -47,11 +76,16 @@ cre workflow simulate settlement --target base-sepolia
 - **Local contracts testing with this repo's `MockKeystoneForwarder`**: configure expected values to match mock metadata.
 - **Any real KeystoneForwarder path (testnet or production)**: `configureCRE(...)` is **mandatory** before settlement. `AuctionEscrow.onReport()` is fail-closed and reverts when CRE is not configured.
 
-## Deploy
+## Deploy (DON)
 
 ```bash
-cre workflow deploy settlement --target base-sepolia
-cre workflow activate settlement --target base-sepolia
+# Deploy with production config (useFinalized=true)
+cre workflow deploy workflows/settlement \
+  --target base-sepolia \
+  --config workflows/settlement/config.production.json
+
+# Activate on DON
+cre workflow activate workflows/settlement --target base-sepolia
 ```
 
 ## Post-Deploy: Configure AuctionEscrow
@@ -80,9 +114,8 @@ cast send $ESCROW "configureCRE(bytes32,bytes10,address)" \
 
 - Replay bundle verification is presence-only (fetches and checks non-empty)
 - Full Poseidon hash chain replay and winner re-derivation is P1 scope
-- `replayContentHash` sha256 comparison not yet implemented
 - `identityRegistryAddress` removed from config — identity verification is not part of the CRE workflow (handled by contracts directly)
-- All `callContract` reads use `LAST_FINALIZED_BLOCK_NUMBER` for production safety (protects against chain reorgs)
+- `callContract` block number policy is config-driven: `useFinalized=true` for deployed DON, `false` for simulation (see Configuration section above)
 
 ## E2E Settlement — Confirmed
 

@@ -27,7 +27,7 @@ forge snapshot                       # Gas snapshots
 # CRE settlement workflow (Bun runtime)
 cd cre
 bun test                             # Run 9 unit tests
-bun build ./workflows/settlement.ts --outdir ./dist  # Build workflow
+bun run scripts/settlement-watcher.ts  # Auto-detect AuctionEnded & trigger CRE simulate
 
 # Engine (Cloudflare Workers + Durable Objects)
 cd engine
@@ -112,11 +112,24 @@ Target chain: **Base Sepolia** (chainId 84532). EntryPoint v0.7 (`0x000000007172
 
 ## CRE Settlement Flow
 
-Trigger: `AuctionEnded` event → Phase A: verify CLOSED on-chain (finalized read) → Phase B: cross-check winner (agentId, wallet, finalPrice) → Phase C: fetch replay bundle → Phase D: DON signs report → Phase E: `writeReport` → `KeystoneForwarder` → `AuctionEscrow.onReport()`.
+Trigger: `AuctionEnded` event → Phase A: verify CLOSED on-chain → Phase B: cross-check winner (agentId, wallet, finalPrice) → Phase C: fetch replay bundle from engine → Phase D: DON signs report → Phase E: `writeReport` → `KeystoneForwarder` → `AuctionEscrow.onReport()`.
 
 Report encoding: `abi.encode(bytes32 auctionId, uint256 winnerAgentId, address winnerWallet, uint256 amount)`.
 
-Config: `cre/workflows/settlement/config.json`, `cre/project.yaml`.
+### CRE Config
+
+Two configs in `cre/workflows/settlement/`:
+
+| File | Mode | `useFinalized` | Use |
+|---|---|---|---|
+| `config.json` | Simulation | `false` | `cre workflow simulate` / settlement watcher |
+| `config.production.json` | Deployed DON | `true` | `cre workflow deploy` |
+
+`useFinalized=true` reads at `LAST_FINALIZED_BLOCK_NUMBER` (required for DON consensus). `useFinalized=false` reads at latest block (avoids L2 finality lag in simulator). `isTestnet` controls `getNetwork()` — set `"false"` for mainnet.
+
+Settlement watcher (local auto-trigger): `cd cre && bun run scripts/settlement-watcher.ts`
+
+Project-level RPC config: `cre/project.yaml`.
 
 ## Key Documentation
 
@@ -172,7 +185,7 @@ Deployer/Sequencer: `0x633ec0e633AA4d8BbCCEa280331A935747416737`. Paymaster fund
 <!-- gitnexus:start -->
 # GitNexus MCP
 
-This project is indexed by GitNexus as **auction-design** (43260 symbols, 137470 relationships, 300 execution flows).
+This project is indexed by GitNexus as **auction-design** (43284 symbols, 137501 relationships, 300 execution flows).
 
 GitNexus provides a knowledge graph over this codebase — call chains, blast radius, execution flows, and semantic search.
 

@@ -8,6 +8,7 @@ import {
   TxStatus,
   getNetwork,
   encodeCallMsg,
+  LAST_FINALIZED_BLOCK_NUMBER,
 } from "@chainlink/cre-sdk";
 import {
   encodeAbiParameters,
@@ -46,6 +47,11 @@ export type Config = {
   replayBundleBaseUrl: string;
   gasLimit: string;
   skipReplayVerification?: string;
+  /** "true" for testnet chains, "false" for mainnet. Default: "true" */
+  isTestnet?: string;
+  /** "true" to use LAST_FINALIZED_BLOCK_NUMBER for callContract reads (production DON).
+   *  "false" to omit blockNumber (simulation mode — avoids L2 finality lag). Default: "false" */
+  useFinalized?: string;
 };
 
 function toHexLogField(value: LogField | undefined, field: string): Hex {
@@ -114,15 +120,19 @@ export const onAuctionEnded = (
 ): string => {
   runtime.log("[SETTLEMENT] AuctionEnded event received");
 
+  const isTestnet = runtime.config.isTestnet !== "false";
+  const useFinalized = runtime.config.useFinalized === "true";
+
   const network = getNetwork({
     chainFamily: "evm",
     chainSelectorName: runtime.config.chainSelectorName,
-    isTestnet: true,
+    isTestnet,
   });
   if (!network) throw new Error("Network not found for chain selector");
 
   const evmClient = new EVMClient(network.chainSelector.selector);
   const httpClient = new HTTPClient();
+  const readOpts = useFinalized ? { blockNumber: LAST_FINALIZED_BLOCK_NUMBER } : {};
 
   const event = decodeAuctionEndedLog(log);
   runtime.log(
@@ -141,6 +151,7 @@ export const onAuctionEnded = (
         to: runtime.config.auctionRegistryAddress as Hex,
         data: stateCallData,
       }),
+      ...readOpts,
     })
     .result();
 
@@ -169,6 +180,7 @@ export const onAuctionEnded = (
         to: runtime.config.auctionRegistryAddress as Hex,
         data: winnerCallData,
       }),
+      ...readOpts,
     })
     .result();
 

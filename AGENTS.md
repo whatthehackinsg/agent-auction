@@ -57,6 +57,7 @@ forge fmt
 # CRE workflow
 cd cre
 bun test
+bun run scripts/settlement-watcher.ts   # Auto-detect & settle auctions
 
 # Engine
 cd engine
@@ -112,7 +113,7 @@ When finishing implementation work:
 <!-- gitnexus:start -->
 # GitNexus MCP
 
-This project is indexed by GitNexus as **auction-design** (43260 symbols, 137470 relationships, 300 execution flows).
+This project is indexed by GitNexus as **auction-design** (43284 symbols, 137501 relationships, 300 execution flows).
 
 GitNexus provides a knowledge graph over this codebase — call chains, blast radius, execution flows, and semantic search.
 

@@ -9,12 +9,15 @@ const configSchema = z.object({
   replayBundleBaseUrl: z.string(),
   gasLimit: z.string(),
   skipReplayVerification: z.string().optional(),
+  isTestnet: z.string().optional(),
+  useFinalized: z.string().optional(),
 });
 const initWorkflow = (config: Config) => {
+  const isTestnet = config.isTestnet !== "false";
   const network = getNetwork({
     chainFamily: "evm",
     chainSelectorName: config.chainSelectorName,
-    isTestnet: true,
+    isTestnet,
   });
   if (!network) throw new Error("Network not found");
   const evmClient = new EVMClient(network.chainSelector.selector);
