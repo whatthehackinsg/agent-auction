@@ -60,8 +60,8 @@ Uses real testnet USDC on Base Sepolia (`0x036CbD53842c5426634e7929541eC2318f3dC
 As of Feb 2026, `src/lib/crypto.ts` and `src/lib/replay-bundle.ts` delegate to `@agent-auction/crypto` (local dependency at `packages/crypto`).
 
 - **Real implementations**: `computeEventHash` (Poseidon), `computePayloadHash`, `deriveNullifier` — all async.
-- **Stubs kept** (CF Workers incompatible): `verifyMembershipProof` (needs `node:fs` for snarkjs vkey loading), `verifyEIP712Signature` (API mismatch — engine passes `(hash, sig, signer)`, package expects structured EIP-712 typed data).
-- Stubs are fail-closed by default; set `ENGINE_ALLOW_INSECURE_STUBS=true` for local dev only.
+- **De-stubbed**: `verifyMembershipProof` — real `snarkjs.groth16.verify()` with inlined vkey (no `node:fs` needed). If no proof is provided, accepts (backward compatible — ZK proofs are P1/optional). If a proof is provided, it is cryptographically verified.
+- **Stub kept**: `verifyActionSignature` still uses `ENGINE_ALLOW_INSECURE_STUBS` bypass for tests with dummy signatures.
 - Build `packages/crypto` (`npm run build`) before running engine typecheck or tests.
 
 ## EIP-4337 Bundler (Pimlico)

@@ -49,10 +49,38 @@ describe('Crypto Primitives', () => {
     })
   })
 
-  describe('verifyMembershipProof (stub)', () => {
-    it('always returns valid', async () => {
-      const result = await verifyMembershipProof(null, null)
+  describe('verifyMembershipProof', () => {
+    it('returns valid when no proof is provided (backward compatible)', async () => {
+      const result = await verifyMembershipProof(null)
       expect(result.valid).toBe(true)
+      expect(result.registryRoot).toBe('0x00')
+    })
+
+    it('returns invalid for malformed proof payload', async () => {
+      const result = await verifyMembershipProof({ garbage: true })
+      expect(result.valid).toBe(false)
+    })
+
+    it('returns invalid for a proof with wrong number of public signals', async () => {
+      const result = await verifyMembershipProof({
+        proof: { pi_a: [], pi_b: [], pi_c: [], protocol: 'groth16', curve: 'bn128' },
+        publicSignals: ['1', '2'], // needs 3
+      })
+      expect(result.valid).toBe(false)
+    })
+
+    it('returns invalid for a structurally valid but cryptographically wrong proof', async () => {
+      const result = await verifyMembershipProof({
+        proof: {
+          pi_a: ['1', '2', '1'],
+          pi_b: [['1', '2'], ['3', '4'], ['1', '0']],
+          pi_c: ['1', '2', '1'],
+          protocol: 'groth16',
+          curve: 'bn128',
+        },
+        publicSignals: ['111', '222', '333'],
+      })
+      expect(result.valid).toBe(false)
     })
   })
 
