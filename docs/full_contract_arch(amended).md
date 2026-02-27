@@ -12,7 +12,7 @@
 >
 > Key architectural shifts from the original full-on-chain design:
 > - `validateUserOp()` does **not** call ZK verifiers (moved to DO sequencer via snarkjs)
-> - `ingestEventBatch()` is **removed** — Poseidon chain lives in DO transactional storage
+> - `ingestEventBatch()` is **removed** — hash chain lives in DO transactional storage (MVP engine uses keccak256 for CF Workers compatibility)
 > - `anchorHash()` is **removed** — one `finalLogHash` written at close via `recordResult()`
 > - EIP-712 `verifyingContract` = `AuctionRegistry.address` (not AuctionFactory — removed)
 > - ZK proof verification: off-chain via `snarkjs.groth16.verify()` in Durable Object
@@ -43,7 +43,7 @@ Before any contract, understand the three problems we are solving simultaneously
 
 **Problem 1 — Financial Privacy.** When an agent joins an auction, it should not reveal its financial profile. A naive implementation leaks: the size of its deposit (reveals wallet depth), the bid amount (reveals valuation), and its registry entry (reveals capability set → bid power can be inferred). We solve bid amounts and agent identities with ZK proofs (Groth16 membership + range proofs). **MVP caveat:** deposit sizes are NOT hidden — `bondRecords` is a public mapping and `BondRecorded` events emit amounts on-chain. Deposit privacy (ZK deposit proofs or shielded pool) is a P1 extension.
 
-**Problem 2 — Verifiable Sequencer Ordering.** Someone has to decide which bid wins. In a centralized system that someone is the auctioneer — who can front-run, reorder, or simply lie. We solve this with a trusted sequencer model (same as Vertex Protocol / dYdX v3): the DO sequencer orders bids with a Poseidon hash chain, agents receive signed inclusion receipts for every accepted action, and the final chain head (`finalLogHash`) is anchored on-chain at close. Any third party can download the IPFS replay bundle, replay the Poseidon chain, and verify the final hash matches the on-chain anchor. CRE independently verifies the bundle and winner before releasing escrow — a compromised sequencer cannot fabricate a winner from included bids (CRE catches it), and cannot secretly drop bids without agents detecting via their inclusion receipts.
+**Problem 2 — Verifiable Sequencer Ordering.** Someone has to decide which bid wins. In a centralized system that someone is the auctioneer — who can front-run, reorder, or simply lie. We solve this with a trusted sequencer model (same as Vertex Protocol / dYdX v3): the DO sequencer orders bids with an append-only hash chain (MVP engine currently uses keccak256 for CF Workers compatibility), agents receive signed inclusion receipts for every accepted action, and the final chain head (`finalLogHash`) is anchored on-chain at close. Any third party can download the IPFS replay bundle, replay the same hash chain, and verify the final hash matches the on-chain anchor. CRE independently verifies the bundle and winner before releasing escrow — a compromised sequencer cannot fabricate a winner from included bids (CRE catches it), and cannot secretly drop bids without agents detecting via their inclusion receipts.
 
 **Trust model:** The sequencer is trusted for event ordering and inclusion during the auction. The operator CANNOT: rewrite history after close (finalLogHash on-chain), fabricate a CRE result, or redirect escrow funds (CRE verifies winner independently from ERC-8004 registry). The operator CAN: censor bids before inclusion — mitigated by signed inclusion receipts (P1: on-chain challenge contract).
 
@@ -95,7 +95,7 @@ L2 (Base Sepolia — chainId 84532)
      └── EscrowMilestone.sol     (P1: replaces AuctionEscrow with milestones + slashing)
 
 REMOVED FROM ON-CHAIN (moved off-chain or eliminated):
-  ✗ NullifierSet.sol         → DO transactional storage: nullifier:{poseidonHash}
+  ✗ NullifierSet.sol         → DO transactional storage: nullifier:{nullifierHash}
   ✗ BidCommitVerifier.sol    → snarkjs.groth16.verify(bidRangeVKey, ...) in DO
   ✗ RegistryMemberVerifier.sol → snarkjs.groth16.verify(registryMemberVKey, ...) in DO
   ✗ DepositRangeVerifier.sol → P1 optional, not deployed
@@ -118,7 +118,7 @@ OFF-CHAIN (cryptographically bound to on-chain state)
 │    └── DepositRange.circom (P1 optional)
 │
 ├─── NULLIFIER STORE (DO transactional storage — strongly consistent)
-│    └── nullifier:{poseidonHash}                          (replaces NullifierSet.sol)
+│    └── nullifier:{nullifierHash}                         (replaces NullifierSet.sol)
 │
 ├─── x402 RECEIPT STORE (Workers KV — eventually consistent, acceptable for micropayments)
 │    └── x402receipt:{chainId}:{txHash}:{logIndex}         (replaces X402PaymentGate.sol)
@@ -328,7 +328,7 @@ async function checkSpendNullifier(nullifier: string, state: DurableObjectState)
 
 **Durability model:** DO transactional storage is replicated and durable across DO restarts/hibernation. It does NOT provide Ethereum-level consensus guarantees — durability is backed by Cloudflare's infrastructure SLA, not proof-of-stake. This is an acceptable tradeoff given the sequencer is already the single ordering trust point for the off-chain auction engine. For settlement-critical state, the `finalLogHash` anchored on-chain via `recordResult()` is the ultimate source of truth.
 
-**Nullifier derivation (unchanged from original design):** `nullifier = Poseidon(agentSecret, auctionId, action_type)`. Same agent + same auction + same action type = same nullifier. Deterministic, one-way, context-separated.
+**Nullifier derivation (current MVP engine):** `nullifier = keccak256(agentSecret, auctionId, action_type)`. Same agent + same auction + same action type = same nullifier. Deterministic, one-way, context-separated.
 
 ---
 
@@ -495,7 +495,7 @@ Per-auction `AuctionRoom.sol` contract deployment is eliminated. The Durable Obj
 **Status:** `AuctionRoom.sol` as a deployed Solidity contract is **NOT used**. The Durable Object is the auction room.
 
 **What moved where:**
-- `ingestEventBatch()` → DO method (appends to Poseidon chain in DO transactional storage, no gas)
+- `ingestEventBatch()` → DO method (appends to hash chain in DO transactional storage, current MVP engine uses keccak256, no gas)
 - `chainHead` on-chain state → DO transactional storage: `chainHead:{auctionId}` (survives hibernation)
 - Phase state machine (OPEN/COMMIT/REVEAL/CLOSED) → DO in-memory state
 - `anchorHash()` periodic writes → **eliminated** (one `finalLogHash` written at close via `recordResult()`)
@@ -507,7 +507,7 @@ async ingestAction(action: ValidatedAction): Promise<InclusionReceipt> {
   const seq = ++this.seqCounter;
   const prevHash = this.chainHead;
   const payloadHash = keccak256(encodeActionPayloadV1(action));
-  const eventHash = poseidon([BigInt(seq), toBigInt(prevHash), toBigInt(payloadHash)]);
+  const eventHash = keccak256(abi.encode(seq, prevHash, payloadHash));
   this.chainHead = toBytes32(eventHash);
 
   // Persist to DO transactional storage (strongly consistent, survives hibernation)
@@ -583,7 +583,7 @@ struct AuctionSettlementPacket {
     bytes32 auctionId;
     bytes32 manifestHash;        // hash of AuctionManifest (from createAuction)
     bytes32 roomConfigHash;      // binds off-chain DO room config to on-chain entry
-    bytes32 finalLogHash;        // Poseidon chain head (computed in DO transactional storage)
+    bytes32 finalLogHash;        // hash chain head (computed in DO transactional storage; current MVP engine uses keccak256)
     bytes32 replayContentHash;   // SHA-256 of ReplayBundleV1 pinned to IPFS/Arweave
     uint64  eventCount;          // total events in the log
     uint64  closeSeq;            // seq of the final event
@@ -881,7 +881,7 @@ Step 9:  DO Sequencer deploy + ZK vkey configuration
 Step 10: CRE Workflow registration (Chainlink Runtime Environment)
           ACTION: register CRE Workflow with:
             - Trigger: EVM Log Trigger on AuctionRegistry.AuctionEnded event
-            - Compute: fetch ReplayBundleV1, sha256 verify, Poseidon chain replay, rule replay
+            - Compute: fetch ReplayBundleV1, sha256 verify, event hash-chain replay (current MVP engine uses keccak256), rule replay
             - Write: EVMClient → KeystoneForwarder → AuctionEscrow.onReport()
           ACTION: record workflowId, workflowName ("auctSettle"), workflowOwner
           ACTION: call AuctionEscrow.configureCRE(workflowId, workflowNameBytes10, workflowOwnerAddress)
@@ -952,7 +952,7 @@ Savings on auction-fixed costs (ZK + events + anchors): ~11M gas (~78% of origin
 
 **Bond race condition:** If join arrives before bond is observed, the sequencer enforces PENDING_BOND state with 60-second timeout. An agent cannot join without a confirmed bond — prevents bond-less auction participation.
 
-**CRE settlement integrity:** CRE independently fetches the IPFS replay bundle, verifies `sha256(bundle) == replayContentHash` (on-chain), replays the Poseidon chain to verify `computed root == finalLogHash` (on-chain), and independently replays auction rules to derive the winner. A sequencer that declares a false winner will be caught by CRE — but only if the winner derivation contradicts the event log. A sequencer that fabricated the event log AND controls the IPFS pin could theoretically serve a consistent-but-false bundle — P1 mitigation: CRE fetches from multiple IPFS gateways, periodic anchors at open + close bound the rewrite window.
+**CRE settlement integrity:** CRE independently fetches the IPFS replay bundle, verifies `sha256(bundle) == replayContentHash` (on-chain), replays the event hash chain (current MVP engine: keccak256) to verify `computed root == finalLogHash` (on-chain), and independently replays auction rules to derive the winner. A sequencer that declares a false winner will be caught by CRE — but only if the winner derivation contradicts the event log. A sequencer that fabricated the event log AND controls the IPFS pin could theoretically serve a consistent-but-false bundle — P1 mitigation: CRE fetches from multiple IPFS gateways, periodic anchors at open + close bound the rewrite window.
 
 ---
 
@@ -962,7 +962,7 @@ Savings on auction-fixed costs (ZK + events + anchors): ~11M gas (~78% of origin
 
 **DO Sequencer (Cloudflare Durable Objects) — primary off-chain component:**
 - Validates all auction speech acts (ecrecover + snarkjs ZK verification)
-- Maintains Poseidon hash chain in DO transactional storage (`chainHead:{auctionId}`)
+- Maintains keccak256 hash chain in DO transactional storage (`chainHead:{auctionId}`)
 - Persists events to Postgres (authoritative archive)
 - Broadcasts events to WebSocket/SSE subscribers
 - Returns signed inclusion receipts for every accepted action
@@ -975,8 +975,8 @@ Savings on auction-fixed costs (ZK + events + anchors): ~11M gas (~78% of origin
 
 **Postgres (authoritative event log):** Append-only event log. Source for ReplayBundleV1 generation at auction close. DO transactional storage stores the hot-state chainHead cursor; Postgres stores the full event history. Postgres WAL provides an internal audit trail even without on-chain mid-auction anchors.
 
-**IPFS/Arweave (replay bundle):** `ReplayBundleV1` pinned at auction close. Contains all events in order with their Poseidon hashes. `replayContentHash = sha256(bundleBytes)` is written on-chain via `recordResult()`. Anyone can verify: download bundle → replay Poseidon chain → compare to `finalLogHash` on-chain.
+**IPFS/Arweave (replay bundle):** `ReplayBundleV1` pinned at auction close. Contains all events in order with their event hashes (current MVP engine: keccak256 chain). `replayContentHash = sha256(bundleBytes)` is written on-chain via `recordResult()`. Anyone can verify: download bundle → replay the chain → compare to `finalLogHash` on-chain.
 
 **x402 middleware:** `@x402/express` (or `@x402/hono`) middleware that intercepts HTTP requests, decodes `PAYMENT-SIGNATURE` header, verifies payment via facilitator, and calls the Workers KV dedup before forwarding to the resource handler. Runs in the same Worker process or behind a private network.
 
-**CRE Workflow (Chainlink Runtime Environment):** EVM Log Trigger on `AuctionEnded` event → CRE Compute fetches ReplayBundleV1 from configured base URL → `sha256` verify against `replayContentHash` → replay Poseidon chain → verify `finalLogHash` → replay auction rules → derive winner → verify against declared winner → CRE EVMClient Write calls `AuctionEscrow.onReport()` via `KeystoneForwarder` → funds released. This is the **only settlement path**. No `release()` function exists on AuctionEscrow — settlement MUST go through CRE `onReport`. This is a repo invariant (see AGENTS.md). For local development, deploy a `MockKeystoneForwarder` that calls `onReport()` directly with test metadata.
+**CRE Workflow (Chainlink Runtime Environment):** EVM Log Trigger on `AuctionEnded` event → CRE Compute fetches ReplayBundleV1 from configured base URL → `sha256` verify against `replayContentHash` → replay event hash chain (current MVP engine: keccak256) → verify `finalLogHash` → replay auction rules → derive winner → verify against declared winner → CRE EVMClient Write calls `AuctionEscrow.onReport()` via `KeystoneForwarder` → funds released. This is the **only settlement path**. No `release()` function exists on AuctionEscrow — settlement MUST go through CRE `onReport`. This is a repo invariant (see AGENTS.md). For local development, deploy a `MockKeystoneForwarder` that calls `onReport()` directly with test metadata.

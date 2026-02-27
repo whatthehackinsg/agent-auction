@@ -1,6 +1,7 @@
 import type { Env } from './index'
 import type {
   RoomSnapshot,
+  RoomConfigEnvelope,
   ValidatedAction,
   AuctionEvent,
   ActionRequest,
@@ -17,6 +18,43 @@ import { serializeReplayBundle, computeContentHash } from './lib/replay-bundle'
 
 /** Zero hash as 0x-prefixed hex string (32 zero bytes) */
 const ZERO_HASH_HEX = '0x' + '00'.repeat(32)
+const ZERO_WALLET = ('0x' + '00'.repeat(20)) as `0x${string}`
+const CANCEL_TIMEOUT_SEC = 72 * 60 * 60
+const DEFAULT_SNIPE_WINDOW_SEC = 60
+const DEFAULT_EXTENSION_SEC = 30
+const DEFAULT_MAX_EXTENSIONS = 5
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function normalizeRoomConfig(raw: unknown): RoomConfigEnvelope {
+  if (!isRecord(raw)) {
+    return { engine: {}, future: {} }
+  }
+
+  const hasNamespaced = 'engine' in raw || 'future' in raw
+  if (hasNamespaced) {
+    const engine = isRecord(raw.engine) ? { ...raw.engine } : {}
+    const future = isRecord(raw.future) ? { ...raw.future } : {}
+    for (const [key, value] of Object.entries(raw)) {
+      if (key === 'engine' || key === 'future') continue
+      future[key] = value
+    }
+    return { engine, future }
+  }
+
+  const engine: Record<string, unknown> = {}
+  const future: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (key === 'snipeWindowSec' || key === 'extensionSec' || key === 'maxExtensions') {
+      engine[key] = value
+    } else {
+      future[key] = value
+    }
+  }
+  return { engine, future }
+}
 
 
 /** Map ActionType enum to numeric value matching Solidity enum order */
@@ -57,6 +95,18 @@ export class AuctionRoom implements DurableObject {
   private highestBidder: string = '0'
   private startedAt: number = 0
   private deadline: number = 0
+  private snipeWindowSec: number = DEFAULT_SNIPE_WINDOW_SEC
+  private extensionSec: number = DEFAULT_EXTENSION_SEC
+  private maxExtensions: number = DEFAULT_MAX_EXTENSIONS
+  private extensionCount: number = 0
+  private roomConfig: RoomConfigEnvelope = {
+    engine: {
+      snipeWindowSec: DEFAULT_SNIPE_WINDOW_SEC,
+      extensionSec: DEFAULT_EXTENSION_SEC,
+      maxExtensions: DEFAULT_MAX_EXTENSIONS,
+    },
+    future: {},
+  }
 
   /** Mirrors D1 auctions.status (1=open, 2=closed, 3=settled, 4=cancelled) */
   private auctionStatus: number = 1
@@ -64,6 +114,10 @@ export class AuctionRoom implements DurableObject {
   private onChainSettled: boolean = false
   /** Number of failed on-chain settlement attempts (caps retries) */
   private settlementRetries: number = 0
+  private terminalType: 'NONE' | 'CLOSE' | 'CANCEL' = 'NONE'
+  private winnerAgentId: string = '0'
+  private winnerWallet: string = ZERO_WALLET
+  private winningBidAmount: string = '0'
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state
@@ -71,7 +125,28 @@ export class AuctionRoom implements DurableObject {
 
     // Load persisted state before handling any requests
     this.state.blockConcurrencyWhile(async () => {
-      const [seq, head, id, participants, highestBid, highestBidder, startedAt, deadline, status, onChainSettled, settlementRetries] = await Promise.all([
+      const [
+        seq,
+        head,
+        id,
+        participants,
+        highestBid,
+        highestBidder,
+        startedAt,
+        deadline,
+        snipeWindowSec,
+        extensionSec,
+        maxExtensions,
+        extensionCount,
+        roomConfig,
+        status,
+        onChainSettled,
+        settlementRetries,
+        terminalType,
+        winnerAgentId,
+        winnerWallet,
+        winningBidAmount,
+      ] = await Promise.all([
         this.state.storage.get<number>('seqCounter'),
         this.state.storage.get<string>('chainHead'),
         this.state.storage.get<string>('auctionId'),
@@ -80,9 +155,18 @@ export class AuctionRoom implements DurableObject {
         this.state.storage.get<string>('highestBidder'),
         this.state.storage.get<number>('startedAt'),
         this.state.storage.get<number>('deadline'),
+        this.state.storage.get<number>('snipeWindowSec'),
+        this.state.storage.get<number>('extensionSec'),
+        this.state.storage.get<number>('maxExtensions'),
+        this.state.storage.get<number>('extensionCount'),
+        this.state.storage.get<Record<string, unknown>>('roomConfig'),
         this.state.storage.get<number>('auctionStatus'),
         this.state.storage.get<boolean>('onChainSettled'),
         this.state.storage.get<number>('settlementRetries'),
+        this.state.storage.get<'NONE' | 'CLOSE' | 'CANCEL'>('terminalType'),
+        this.state.storage.get<string>('winnerAgentId'),
+        this.state.storage.get<string>('winnerWallet'),
+        this.state.storage.get<string>('winningBidAmount'),
       ])
       this.seqCounter = seq ?? 0
       this.chainHead = head ?? ZERO_HASH_HEX
@@ -92,9 +176,39 @@ export class AuctionRoom implements DurableObject {
       this.highestBidder = highestBidder ?? '0'
       this.startedAt = startedAt ?? 0
       this.deadline = deadline ?? 0
+      const normalizedRoomConfig = normalizeRoomConfig(roomConfig)
+      const configSnipe = typeof normalizedRoomConfig.engine.snipeWindowSec === 'number'
+        ? normalizedRoomConfig.engine.snipeWindowSec
+        : undefined
+      const configExtension = typeof normalizedRoomConfig.engine.extensionSec === 'number'
+        ? normalizedRoomConfig.engine.extensionSec
+        : undefined
+      const configMaxExtensions = typeof normalizedRoomConfig.engine.maxExtensions === 'number'
+        ? normalizedRoomConfig.engine.maxExtensions
+        : undefined
+
+      this.snipeWindowSec = snipeWindowSec ?? configSnipe ?? DEFAULT_SNIPE_WINDOW_SEC
+      this.extensionSec = extensionSec ?? configExtension ?? DEFAULT_EXTENSION_SEC
+      this.maxExtensions = maxExtensions ?? configMaxExtensions ?? DEFAULT_MAX_EXTENSIONS
+      this.extensionCount = extensionCount ?? 0
+      this.roomConfig = {
+        engine: {
+          ...normalizedRoomConfig.engine,
+          snipeWindowSec: this.snipeWindowSec,
+          extensionSec: this.extensionSec,
+          maxExtensions: this.maxExtensions,
+        },
+        future: {
+          ...normalizedRoomConfig.future,
+        },
+      }
       this.auctionStatus = status ?? 1
       this.onChainSettled = onChainSettled ?? false
       this.settlementRetries = settlementRetries ?? 0
+      this.terminalType = terminalType ?? 'NONE'
+      this.winnerAgentId = winnerAgentId ?? '0'
+      this.winnerWallet = (winnerWallet ?? ZERO_WALLET) as `0x${string}`
+      this.winningBidAmount = winningBidAmount ?? '0'
     })
   }
 
@@ -125,7 +239,9 @@ export class AuctionRoom implements DurableObject {
       case '/snapshot':
         return this.handleSnapshot()
       case '/close':
-        return this.handleClose()
+        return this.handleClose(request)
+      case '/cancel':
+        return this.handleCancel(request)
       default:
         return new Response(JSON.stringify({ error: 'not found' }), {
           status: 404,
@@ -149,6 +265,10 @@ export class AuctionRoom implements DurableObject {
       const body = (await request.json()) as {
         startedAt?: number
         deadline?: number
+        snipeWindowSec?: number
+        extensionSec?: number
+        maxExtensions?: number
+        roomConfig?: unknown
       }
 
       if (typeof body.startedAt === 'number') {
@@ -164,6 +284,53 @@ export class AuctionRoom implements DurableObject {
           await this.state.storage.setAlarm(this.deadline * 1000)
         }
       }
+      if (body.roomConfig !== undefined) {
+        this.roomConfig = normalizeRoomConfig(body.roomConfig)
+      } else {
+        this.roomConfig = normalizeRoomConfig(this.roomConfig)
+      }
+
+      const configSnipe = typeof this.roomConfig.engine.snipeWindowSec === 'number'
+        ? this.roomConfig.engine.snipeWindowSec
+        : undefined
+      const configExtension = typeof this.roomConfig.engine.extensionSec === 'number'
+        ? this.roomConfig.engine.extensionSec
+        : undefined
+      const configMaxExtensions = typeof this.roomConfig.engine.maxExtensions === 'number'
+        ? this.roomConfig.engine.maxExtensions
+        : undefined
+
+      if (configSnipe !== undefined) {
+        this.snipeWindowSec = configSnipe
+      }
+      if (configExtension !== undefined) {
+        this.extensionSec = configExtension
+      }
+      if (configMaxExtensions !== undefined) {
+        this.maxExtensions = configMaxExtensions
+      }
+
+      if (typeof body.snipeWindowSec === 'number' && Number.isInteger(body.snipeWindowSec) && body.snipeWindowSec >= 0) {
+        this.snipeWindowSec = body.snipeWindowSec
+      }
+      if (typeof body.extensionSec === 'number' && Number.isInteger(body.extensionSec) && body.extensionSec >= 0) {
+        this.extensionSec = body.extensionSec
+      }
+      if (typeof body.maxExtensions === 'number' && Number.isInteger(body.maxExtensions) && body.maxExtensions >= 0) {
+        this.maxExtensions = body.maxExtensions
+      }
+
+      await this.state.storage.put('snipeWindowSec', this.snipeWindowSec)
+      await this.state.storage.put('extensionSec', this.extensionSec)
+      await this.state.storage.put('maxExtensions', this.maxExtensions)
+
+      this.roomConfig.engine = {
+        ...this.roomConfig.engine,
+        snipeWindowSec: this.snipeWindowSec,
+        extensionSec: this.extensionSec,
+        maxExtensions: this.maxExtensions,
+      }
+      await this.state.storage.put('roomConfig', this.roomConfig)
 
       // Ensure status is OPEN after init.
       if (this.auctionStatus !== 1) {
@@ -199,6 +366,13 @@ export class AuctionRoom implements DurableObject {
       if (this.auctionStatus >= 2 && action.type === ActionType.BID) {
         throw new Error('auction is closed')
       }
+      if (
+        action.type === ActionType.BID
+        && this.deadline > 0
+        && Math.floor(Date.now() / 1000) > this.deadline
+      ) {
+        throw new Error('auction deadline has passed')
+      }
 
       if (action.type === ActionType.JOIN) {
         const row = await this.env.AUCTION_DB
@@ -218,11 +392,21 @@ export class AuctionRoom implements DurableObject {
         }
       }
 
+      let maxBid = '0'
+      if (action.type === ActionType.BID) {
+        const row = await this.env.AUCTION_DB
+          .prepare('SELECT max_bid FROM auctions WHERE auction_id = ?')
+          .bind(this.auctionId)
+          .first<{ max_bid: string | null }>()
+        maxBid = row?.max_bid ?? '0'
+      }
+
       const validation = await validateAction(
         action,
         this.state.storage,
         this.auctionId,
         this.highestBid,
+        maxBid,
       )
       const result = await this.ingestAction(validation.action)
       await commitValidationMutation(validation.mutation, this.state.storage)
@@ -266,6 +450,7 @@ export class AuctionRoom implements DurableObject {
 
   /** GET /snapshot — return current room state */
   private handleSnapshot(): Response {
+    const serverNow = Math.floor(Date.now() / 1000)
     const snapshot: RoomSnapshot = {
       auctionId: this.auctionId,
       currentSeq: this.seqCounter,
@@ -275,6 +460,18 @@ export class AuctionRoom implements DurableObject {
       highestBidder: this.highestBidder,
       startedAt: this.startedAt,
       deadline: this.deadline,
+      status: this.auctionStatus,
+      serverNow,
+      timeRemainingSec: this.deadline > 0 ? Math.max(this.deadline - serverNow, 0) : 0,
+      snipeWindowSec: this.snipeWindowSec,
+      extensionSec: this.extensionSec,
+      maxExtensions: this.maxExtensions,
+      extensionCount: this.extensionCount,
+      roomConfig: this.roomConfig,
+      terminalType: this.terminalType,
+      winnerAgentId: this.winnerAgentId,
+      winnerWallet: this.winnerWallet,
+      winningBidAmount: this.winningBidAmount,
     }
     return Response.json(snapshot)
   }
@@ -383,90 +580,87 @@ export class AuctionRoom implements DurableObject {
       agentId: action.agentId,
       amount: action.amount,
       timestamp: receivedAt,
+      wallet: action.wallet,
     })
+    if (action.type === ActionType.BID) {
+      await this.maybeExtendDeadlineOnBid(receivedAt)
+    }
     return { seq, eventHash: eventHashHex, prevHash, sequencerSig: receipt.sequencerSig }
   }
 
+  private async maybeExtendDeadlineOnBid(nowSec: number): Promise<void> {
+    if (this.deadline <= 0) return
+    if (this.auctionStatus !== 1) return
+    if (this.snipeWindowSec <= 0 || this.extensionSec <= 0 || this.maxExtensions <= 0) return
+    if (this.extensionCount >= this.maxExtensions) return
+
+    const remaining = this.deadline - nowSec
+    if (remaining < 0 || remaining > this.snipeWindowSec) return
+
+    const oldDeadline = this.deadline
+    this.deadline += this.extensionSec
+    this.extensionCount += 1
+
+    await this.state.storage.put('deadline', this.deadline)
+    await this.state.storage.put('extensionCount', this.extensionCount)
+    this.roomConfig.engine = {
+      ...this.roomConfig.engine,
+      snipeWindowSec: this.snipeWindowSec,
+      extensionSec: this.extensionSec,
+      maxExtensions: this.maxExtensions,
+    }
+    await this.state.storage.put('roomConfig', this.roomConfig)
+    await this.state.storage.setAlarm(this.deadline * 1000)
+
+    this.broadcastEvent({
+      actionType: 'DEADLINE_EXTENDED',
+      agentId: '0',
+      amount: '0',
+      wallet: ZERO_WALLET,
+      timestamp: nowSec,
+      deadline: this.deadline,
+      oldDeadline,
+      extensionCount: this.extensionCount,
+      maxExtensions: this.maxExtensions,
+      extensionsRemaining: Math.max(this.maxExtensions - this.extensionCount, 0),
+    })
+  }
+
+  private async setTerminalState(state: {
+    terminalType: 'CLOSE' | 'CANCEL'
+    status: number
+    winnerAgentId: string
+    winnerWallet: `0x${string}`
+    winningBidAmount: string
+  }): Promise<void> {
+    this.terminalType = state.terminalType
+    this.auctionStatus = state.status
+    this.winnerAgentId = state.winnerAgentId
+    this.winnerWallet = state.winnerWallet
+    this.winningBidAmount = state.winningBidAmount
+
+    await this.state.storage.put('terminalType', this.terminalType)
+    await this.state.storage.put('auctionStatus', this.auctionStatus)
+    await this.state.storage.put('winnerAgentId', this.winnerAgentId)
+    await this.state.storage.put('winnerWallet', this.winnerWallet)
+    await this.state.storage.put('winningBidAmount', this.winningBidAmount)
+    await this.env.AUCTION_DB
+      .prepare('UPDATE auctions SET status = ? WHERE auction_id = ?')
+      .bind(this.auctionStatus, this.auctionId)
+      .run()
+  }
+
   /** POST /close — manually trigger auction close with visible errors */
-  private async handleClose(): Promise<Response> {
+  private async handleClose(request: Request): Promise<Response> {
+    if (request.method !== 'POST') {
+      return Response.json({ error: 'method not allowed' }, { status: 405 })
+    }
     if (!this.auctionId) {
       return Response.json({ error: 'auctionId not set' }, { status: 400 })
     }
-
-    if (this.onChainSettled) {
-      return Response.json({ ok: true, already: 'onChainSettled' })
-    }
-
-    // Mark closed locally (idempotent)
-    if (this.auctionStatus < 2) {
-      this.auctionStatus = 2
-      await this.state.storage.put('auctionStatus', this.auctionStatus)
-      await this.env.AUCTION_DB
-        .prepare('UPDATE auctions SET status = 2 WHERE auction_id = ?')
-        .bind(this.auctionId)
-        .run()
-    }
-
-    // Inline settlement logic WITHOUT the catch, so errors propagate
     try {
-      const auctionRow = await this.env.AUCTION_DB
-        .prepare('SELECT manifest_hash, reserve_price, deposit_amount, deadline, auction_type, max_bid FROM auctions WHERE auction_id = ?')
-        .bind(this.auctionId)
-        .first<{ manifest_hash: string; reserve_price: string; deposit_amount: string; deadline: number; auction_type: string | null; max_bid: string | null }>()
-
-      if (!auctionRow) throw new Error('auction not found in D1')
-
-      const events = await this.env.AUCTION_DB
-        .prepare('SELECT action_type, agent_id, wallet, amount FROM events WHERE auction_id = ? ORDER BY seq')
-        .bind(this.auctionId)
-        .all<{ action_type: string; agent_id: string; wallet: string; amount: string }>()
-
-      let winnerAgentId = 0n
-      let winnerWallet: `0x${string}` = ('0x' + '00'.repeat(20)) as `0x${string}`
-      let winningBidAmount = 0n
-      for (const e of events.results ?? []) {
-        if (e.action_type !== ActionType.BID) continue
-        const amount = BigInt(e.amount)
-        if (amount > winningBidAmount) {
-          winningBidAmount = amount
-          winnerAgentId = BigInt(e.agent_id)
-          winnerWallet = e.wallet as `0x${string}`
-        }
-      }
-
-      const privateKey = this.env.SEQUENCER_PRIVATE_KEY as `0x${string}`
-      const roomConfigHash = keccak256(
-        encodePacked(['string', 'string'], [auctionRow.auction_type ?? 'english', auctionRow.max_bid ?? '0']),
-      )
-      await ensureAuctionOnChain(
-        this.auctionId as `0x${string}`,
-        {
-          manifestHash: auctionRow.manifest_hash as `0x${string}`,
-          roomConfigHash,
-          reservePrice: BigInt(auctionRow.reserve_price),
-          depositAmount: BigInt(auctionRow.deposit_amount),
-          deadline: BigInt(auctionRow.deadline),
-        },
-        privateKey,
-      )
-
-      const packet: AuctionSettlementPacket = {
-        auctionId: this.auctionId as `0x${string}`,
-        manifestHash: auctionRow.manifest_hash as `0x${string}`,
-        finalLogHash: this.chainHead as `0x${string}`,
-        winnerAgentId,
-        winnerWallet,
-        winningBidAmount,
-        closeTimestamp: BigInt(Math.floor(Date.now() / 1000)),
-      }
-
-      const sequencerSig = await signSettlementPacket(packet, privateKey)
-      const txHash = await recordResultOnChain(packet, sequencerSig, privateKey)
-
-      this.onChainSettled = true
-      await this.state.storage.put('onChainSettled', true)
-
-      return Response.json({ ok: true, txHash, onChainSettled: true })
+      const result = await this.closeAuction(this.auctionId)
+      return Response.json({ ok: true, ...result })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return Response.json({
@@ -474,6 +668,69 @@ export class AuctionRoom implements DurableObject {
         settlementRetries: this.settlementRetries,
       }, { status: 500 })
     }
+  }
+
+  private async handleCancel(request: Request): Promise<Response> {
+    if (request.method !== 'POST') {
+      return Response.json({ error: 'method not allowed' }, { status: 405 })
+    }
+    if (!this.auctionId) {
+      return Response.json({ error: 'auctionId not set' }, { status: 400 })
+    }
+
+    const auctionRow = await this.env.AUCTION_DB
+      .prepare('SELECT deadline, status FROM auctions WHERE auction_id = ?')
+      .bind(this.auctionId)
+      .first<{ deadline: number; status: number }>()
+    if (!auctionRow) {
+      return Response.json({ error: 'auction not found' }, { status: 404 })
+    }
+
+    if (auctionRow.status === 4) {
+      return Response.json({ ok: true, already: 'cancelled' })
+    }
+    if (auctionRow.status === 3) {
+      return Response.json({ error: 'auction already settled on-chain' }, { status: 400 })
+    }
+
+    const now = Math.floor(Date.now() / 1000)
+    const earliest = auctionRow.deadline + CANCEL_TIMEOUT_SEC
+    if (now < earliest) {
+      return Response.json(
+        {
+          error: 'cancel not allowed before timeout',
+          earliestCancelAt: earliest,
+          waitSeconds: earliest - now,
+        },
+        { status: 400 },
+      )
+    }
+
+    if (this.terminalType !== 'CANCEL') {
+      await this.setTerminalState({
+        terminalType: 'CANCEL',
+        status: 4,
+        winnerAgentId: '0',
+        winnerWallet: ZERO_WALLET,
+        winningBidAmount: '0',
+      })
+      this.broadcastEvent({
+        actionType: 'CANCEL',
+        agentId: '0',
+        amount: '0',
+        wallet: ZERO_WALLET,
+        timestamp: now,
+        reason: 'TIMEOUT',
+      })
+    }
+    return Response.json({
+      ok: true,
+      terminalType: this.terminalType,
+      status: this.auctionStatus,
+      winnerAgentId: this.winnerAgentId,
+      winnerWallet: this.winnerWallet,
+      winningBidAmount: this.winningBidAmount,
+    })
   }
 
   // ─── Auction Close Flow ─────────────────────────────────────────────
@@ -485,7 +742,14 @@ export class AuctionRoom implements DurableObject {
    * append-only event log in D1, signs the EIP-712 settlement packet, and calls
    * `AuctionRegistry.recordResult(packet, sequencerSig)`.
    */
-  async closeAuction(auctionId: string): Promise<void> {
+  async closeAuction(auctionId: string): Promise<{
+    terminalType: 'CLOSE' | 'CANCEL'
+    status: number
+    winnerAgentId: string
+    winnerWallet: string
+    winningBidAmount: string
+    onChainSettled: boolean
+  }> {
     if (!auctionId) {
       throw new Error('auctionId required')
     }
@@ -497,19 +761,27 @@ export class AuctionRoom implements DurableObject {
       await this.state.storage.put('auctionId', this.auctionId)
     }
 
-    // If on-chain settlement already succeeded, nothing to do.
-    if (this.onChainSettled) {
-      return
+    if (this.auctionStatus === 4) {
+      return {
+        terminalType: 'CANCEL',
+        status: this.auctionStatus,
+        winnerAgentId: this.winnerAgentId,
+        winnerWallet: this.winnerWallet,
+        winningBidAmount: this.winningBidAmount,
+        onChainSettled: this.onChainSettled,
+      }
     }
 
-    // Mark closed locally first (blocks late bids) — idempotent.
-    if (this.auctionStatus < 2) {
-      this.auctionStatus = 2
-      await this.state.storage.put('auctionStatus', this.auctionStatus)
-      await this.env.AUCTION_DB
-        .prepare('UPDATE auctions SET status = 2 WHERE auction_id = ?')
-        .bind(this.auctionId)
-        .run()
+    // If on-chain settlement already succeeded, nothing to do.
+    if (this.onChainSettled) {
+      return {
+        terminalType: this.terminalType === 'NONE' ? 'CLOSE' : this.terminalType,
+        status: this.auctionStatus,
+        winnerAgentId: this.winnerAgentId,
+        winnerWallet: this.winnerWallet,
+        winningBidAmount: this.winningBidAmount,
+        onChainSettled: this.onChainSettled,
+      }
     }
 
     // Load auction data from D1 (includes fields needed for self-healing createAuction).
@@ -529,8 +801,9 @@ export class AuctionRoom implements DurableObject {
       .all<{ seq: number; prev_hash: string; event_hash: string; payload_hash: string; action_type: string; agent_id: string; wallet: string; amount: string; created_at: number }>()
 
     let winnerAgentId = 0n
-    let winnerWallet: `0x${string}` = ('0x' + '00'.repeat(20)) as `0x${string}`
+    let winnerWallet: `0x${string}` = ZERO_WALLET
     let winningBidAmount = 0n
+    let hasBids = false
 
     const replayEvents: AuctionEvent[] = []
     for (const e of events.results ?? []) {
@@ -546,12 +819,68 @@ export class AuctionRoom implements DurableObject {
         createdAt: Number(e.created_at ?? 0),
       })
       if (e.action_type !== ActionType.BID) continue
+      hasBids = true
       const amount = BigInt(e.amount)
       if (amount > winningBidAmount) {
         winningBidAmount = amount
         winnerAgentId = BigInt(e.agent_id)
         winnerWallet = e.wallet as `0x${string}`
       }
+    }
+
+    if (!hasBids) {
+      if (this.terminalType !== 'CANCEL') {
+        await this.setTerminalState({
+          terminalType: 'CANCEL',
+          status: 4,
+          winnerAgentId: '0',
+          winnerWallet: ZERO_WALLET,
+          winningBidAmount: '0',
+        })
+        this.broadcastEvent({
+          actionType: 'CANCEL',
+          agentId: '0',
+          amount: '0',
+          wallet: ZERO_WALLET,
+          timestamp: Math.floor(Date.now() / 1000),
+          reason: 'NO_BIDS',
+        })
+      }
+
+      return {
+        terminalType: 'CANCEL',
+        status: this.auctionStatus,
+        winnerAgentId: this.winnerAgentId,
+        winnerWallet: this.winnerWallet,
+        winningBidAmount: this.winningBidAmount,
+        onChainSettled: this.onChainSettled,
+      }
+    }
+
+    if (this.auctionStatus < 2) {
+      this.auctionStatus = 2
+      await this.state.storage.put('auctionStatus', this.auctionStatus)
+      await this.env.AUCTION_DB
+        .prepare('UPDATE auctions SET status = 2 WHERE auction_id = ?')
+        .bind(this.auctionId)
+        .run()
+    }
+
+    if (this.terminalType !== 'CLOSE') {
+      await this.setTerminalState({
+        terminalType: 'CLOSE',
+        status: 2,
+        winnerAgentId: winnerAgentId.toString(),
+        winnerWallet,
+        winningBidAmount: winningBidAmount.toString(),
+      })
+      this.broadcastEvent({
+        actionType: 'CLOSE',
+        agentId: winnerAgentId.toString(),
+        amount: winningBidAmount.toString(),
+        wallet: winnerWallet,
+        timestamp: Math.floor(Date.now() / 1000),
+      })
     }
 
     const closeTimestamp = BigInt(Math.floor(Date.now() / 1000))
@@ -613,6 +942,15 @@ export class AuctionRoom implements DurableObject {
         )
       }
     }
+
+    return {
+      terminalType: this.terminalType === 'NONE' ? 'CLOSE' : this.terminalType,
+      status: this.auctionStatus,
+      winnerAgentId: this.winnerAgentId,
+      winnerWallet: this.winnerWallet,
+      winningBidAmount: this.winningBidAmount,
+      onChainSettled: this.onChainSettled,
+    }
   }
 
   // ─── Alarm Handler ──────────────────────────────────────────────────
@@ -622,6 +960,7 @@ export class AuctionRoom implements DurableObject {
     console.log(`[AuctionRoom] alarm fired for auction ${this.auctionId}`)
     if (!this.auctionId) return
     // closeAuction is idempotent via onChainSettled — safe to call on retries
+    if (this.auctionStatus === 4) return
     if (this.onChainSettled) return
     await this.closeAuction(this.auctionId)
   }
@@ -659,14 +998,26 @@ export class AuctionRoom implements DurableObject {
 
   /** Broadcast an event to all connected WebSocket clients */
   private broadcastEvent(event: {
-    seq: number
-    eventHash: string
+    seq?: number
+    eventHash?: string
     actionType: string
     agentId: string
     amount: string
+    wallet?: string
     timestamp: number
+    deadline?: number
+    oldDeadline?: number
+    extensionCount?: number
+    maxExtensions?: number
+    extensionsRemaining?: number
+    reason?: string
   }): void {
-    const message = JSON.stringify({ type: 'event', ...event })
+    const message = JSON.stringify({
+      type: 'event',
+      seq: event.seq ?? this.seqCounter,
+      eventHash: event.eventHash ?? this.chainHead,
+      ...event,
+    })
     const sockets = this.state.getWebSockets()
     for (const ws of sockets) {
       try {

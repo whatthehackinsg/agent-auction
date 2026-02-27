@@ -255,6 +255,7 @@ export async function handleBid(
   storage: DurableObjectStorage,
   auctionId: string,
   highestBid: string,
+  maxBid: string,
 ): Promise<ValidationResult> {
   await verifySignature(action, auctionId)
 
@@ -269,6 +270,11 @@ export async function handleBid(
   if (amount <= BigInt(highestBid)) {
     throw new Error(
       `Bid amount ${action.amount} must exceed current highest bid ${highestBid}`,
+    )
+  }
+  if (BigInt(maxBid) > 0n && amount > BigInt(maxBid)) {
+    throw new Error(
+      `Bid amount ${action.amount} exceeds max bid cap ${maxBid}`,
     )
   }
 
@@ -332,12 +338,13 @@ export async function validateAction(
   storage: DurableObjectStorage,
   auctionId: string,
   highestBid: string,
+  maxBid: string,
 ): Promise<ValidationResult> {
   switch (action.type) {
     case ActionType.JOIN:
       return handleJoin(action, storage, auctionId)
     case ActionType.BID:
-      return handleBid(action, storage, auctionId, highestBid)
+      return handleBid(action, storage, auctionId, highestBid, maxBid)
     case ActionType.DELIVER:
       return handleDeliver(action, storage, auctionId)
     default:

@@ -20,6 +20,8 @@ The engine acts as a trusted sequencer: it assigns monotonic `seq` numbers to ro
 | GET | `/auctions` | List all auctions (D1 query) |
 | POST | `/auctions` | Create auction (`auctionId`, `manifestHash`, `reservePrice`, `depositAmount`, `deadline`) |
 | GET | `/auctions/:id` | Get auction + room snapshot |
+| POST | `/auctions/:id/close` | Manually close auction (sequencer-only via `X-ENGINE-ADMIN-KEY`) |
+| POST | `/auctions/:id/cancel` | Cancel expired auction after 72h timeout path |
 | POST | `/auctions/:id/action` | Submit action to room DO (join, bid, etc.) |
 | GET | `/auctions/:id/manifest` | Get auction manifest (x402-gated, 0.001 USDC) |
 | GET | `/auctions/:id/events` | Get ordered events (x402-gated, 0.0001 USDC) |
@@ -84,6 +86,7 @@ npm run dev
 | `SEQUENCER_PRIVATE_KEY` | string | Sequencer signing key |
 | `PINATA_API_KEY` | string (optional) | IPFS pinning via Pinata |
 | `X402_MODE` | string (optional) | x402 payment mode |
+| `ENGINE_ADMIN_KEY` | string (optional, required for `/close`) | Shared secret for sequencer-only close route |
 
 ### Demo scripts (.env)
 
@@ -123,17 +126,16 @@ Pimlico on Base Sepolia. The demo scripts prove the full UserOp flow:
 
 Bond path priority: EIP-4337 direct transfer to escrow (primary), x402 as fallback.
 
-## Crypto Delegation
+## Crypto Implementation
 
-`src/lib/crypto.ts` delegates to `@agent-auction/crypto`. Three real implementations:
+`src/lib/crypto.ts` is CF Workers-compatible and does not rely on `node:fs`/Node-only runtime APIs.
 
-- `computeEventHash` (Poseidon)
-- `computePayloadHash`
-- `deriveNullifier`
+Current behavior:
 
-Two stubs (CF Workers runtime incompatible):
+- `computeEventHash` uses keccak256 chaining
+- `computePayloadHash` uses keccak256 over ABI-encoded payload
+- `deriveNullifier` uses keccak256 (deterministic per secret/auction/action)
+- `verifyMembershipProof` uses real `snarkjs.groth16.verify` with inlined membership vkey
+- `verifyActionSignature` uses real `viem.verifyTypedData`
 
-- `verifyMembershipProof`
-- `verifyEIP712Signature`
-
-Stubs are **fail-closed** by default. Set `ENGINE_ALLOW_INSECURE_STUBS=true` for local dev only.
+`ENGINE_ALLOW_INSECURE_STUBS=true` only bypasses signature verification for local tests/dev flows.

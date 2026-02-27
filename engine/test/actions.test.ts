@@ -212,7 +212,7 @@ describe('handleBid', () => {
       nonce: 0,
       amount: '2000000',
     })
-    const result = await handleBid(action, storage, TEST_AUCTION_ID, '1000000')
+    const result = await handleBid(action, storage, TEST_AUCTION_ID, '1000000', '0')
 
     expect(result.action.type).toBe(ActionType.BID)
     expect(result.action.amount).toBe('2000000')
@@ -226,7 +226,7 @@ describe('handleBid', () => {
       amount: '500000',
     })
     await expect(
-      handleBid(action, storage, TEST_AUCTION_ID, '1000000'),
+      handleBid(action, storage, TEST_AUCTION_ID, '1000000', '0'),
     ).rejects.toThrow('must exceed current highest bid')
   })
 
@@ -237,7 +237,7 @@ describe('handleBid', () => {
       amount: '1000000',
     })
     await expect(
-      handleBid(action, storage, TEST_AUCTION_ID, '1000000'),
+      handleBid(action, storage, TEST_AUCTION_ID, '1000000', '0'),
     ).rejects.toThrow('must exceed current highest bid')
   })
 
@@ -248,8 +248,19 @@ describe('handleBid', () => {
       amount: '0',
     })
     await expect(
-      handleBid(action, storage, TEST_AUCTION_ID, '0'),
+      handleBid(action, storage, TEST_AUCTION_ID, '0', '0'),
     ).rejects.toThrow('must be greater than 0')
+  })
+
+  it('bid with amount > maxBid fails when cap is set', async () => {
+    const action = makeAction({
+      type: ActionType.BID,
+      nonce: 0,
+      amount: '3000001',
+    })
+    await expect(
+      handleBid(action, storage, TEST_AUCTION_ID, '1000000', '3000000'),
+    ).rejects.toThrow('exceeds max bid cap')
   })
 })
 
@@ -292,7 +303,7 @@ describe('validateAction (dispatcher)', () => {
 
   it('routes JOIN to handleJoin', async () => {
     const action = makeAction({ type: ActionType.JOIN, nonce: 0 })
-    const result = await validateAction(action, storage, TEST_AUCTION_ID, '0')
+    const result = await validateAction(action, storage, TEST_AUCTION_ID, '0', '0')
     expect(result.action.type).toBe(ActionType.JOIN)
   })
 
@@ -302,21 +313,21 @@ describe('validateAction (dispatcher)', () => {
       nonce: 0,
       amount: '1000000',
     })
-    const result = await validateAction(action, storage, TEST_AUCTION_ID, '0')
+    const result = await validateAction(action, storage, TEST_AUCTION_ID, '0', '0')
     expect(result.action.type).toBe(ActionType.BID)
     expect(result.action.amount).toBe('1000000')
   })
 
   it('routes DELIVER to handleDeliver', async () => {
     const action = makeAction({ type: ActionType.DELIVER, nonce: 0 })
-    const result = await validateAction(action, storage, TEST_AUCTION_ID, '0')
+    const result = await validateAction(action, storage, TEST_AUCTION_ID, '0', '0')
     expect(result.action.type).toBe(ActionType.DELIVER)
   })
 
   it('rejects unsupported action type', async () => {
     const action = makeAction({ type: 'INVALID' as ActionType, nonce: 0 })
     await expect(
-      validateAction(action, storage, TEST_AUCTION_ID, '0'),
+      validateAction(action, storage, TEST_AUCTION_ID, '0', '0'),
     ).rejects.toThrow('Unsupported action type')
   })
 })
