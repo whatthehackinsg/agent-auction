@@ -213,7 +213,7 @@ export const onAuctionEnded = (
         "replayBundleBaseUrl is not configured \u2014 set a real URL or enable skipReplayVerification"
       );
     }
-    const bundleUrl = `${baseUrl}/replay/${event.auctionId}`;
+    const bundleUrl = `${baseUrl}/auctions/${event.auctionId}/replay`;
     const bundleResponse = httpClient
       .sendRequest(runtime as unknown as NodeRuntime<Config>, {
         url: bundleUrl,
