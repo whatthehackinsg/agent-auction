@@ -31,6 +31,23 @@ npm run deploy
 - Shared setup utilities live in `engine/test/setup.ts`.
 - Durable Object flow is exercised by `engine/test/auction-room.test.ts` and related integration tests.
 
+## x402 Micropayments
+
+The engine supports real x402 (HTTP 402) micropayments via `@x402/hono` for rate-limiting manifest and event endpoints.
+
+**Environment variables:**
+- `X402_MODE` — `'off'` (default, endpoints free) or `'on'` (payment required)
+- `X402_RECEIVER_ADDRESS` — wallet address to receive payments (required when `X402_MODE=on`)
+- `X402_FACILITATOR_URL` — facilitator service URL (default: `https://www.x402.org/facilitator`)
+
+Set `X402_RECEIVER_ADDRESS` and `X402_FACILITATOR_URL` via `wrangler secret` or `.dev.vars`. `X402_MODE` defaults to `off` in `wrangler.toml`.
+
+Gated endpoints when `X402_MODE=on`:
+- `GET /auctions/:id/manifest` — $0.001 per request
+- `GET /auctions/:id/events` — $0.0001 per request
+
+Uses real testnet USDC on Base Sepolia (`0x036CbD53842c5426634e7929541eC2318f3dCF7e`), NOT MockUSDC.
+
 ## Pointers
 
 - Worker entry/router: `engine/src/index.ts`

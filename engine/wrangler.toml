@@ -12,6 +12,9 @@ database_id = "931d6378-238f-4849-919b-f76d083485b7"
 name = "AUCTION_ROOM"
 class_name = "AuctionRoom"
 
+[vars]
+X402_MODE = "off"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["AuctionRoom"]

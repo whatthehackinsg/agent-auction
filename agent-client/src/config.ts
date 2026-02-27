@@ -10,6 +10,7 @@ import { privateKeyToAccount } from 'viem/accounts'
 
 export const RPC_URL = process.env.BASE_SEPOLIA_RPC ?? 'https://sepolia.base.org'
 export const ENGINE_URL = process.env.ENGINE_URL ?? 'http://localhost:8787'
+export const X402_ENABLED = process.env.X402_ENABLED !== 'false' // on by default
 
 export const ADDRESSES = {
   entryPoint: '0x0000000071727De22E5E9d8BAf0edAc6f37da032',

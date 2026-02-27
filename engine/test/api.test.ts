@@ -48,6 +48,14 @@ function createMockRoomNamespace() {
             return new Response(null, { status: 200 })
           }
 
+          if (u.pathname === '/close') {
+            return Response.json({ ok: true, closed: true })
+          }
+
+          if (u.pathname === '/cancel') {
+            return Response.json({ ok: true, cancelled: true })
+          }
+
           if (u.pathname === '/init') {
             return Response.json({ ok: true })
           }
@@ -129,6 +137,95 @@ describe('API routes (Hono)', () => {
     expect(rooms._calls.some((c) => c.url.includes('/init'))).toBe(true)
   })
 
+  it('POST /auctions supports extensible roomConfig payload', async () => {
+    const auctionId = randomAuctionId()
+    const deadline = Math.floor(Date.now() / 1000) + 60
+
+    const res = await app.request(
+      'http://localhost/auctions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          auctionId,
+          manifestHash: '0x' + 'bb'.repeat(32),
+          reservePrice: '2000000',
+          depositAmount: '1000000',
+          deadline,
+          roomConfig: {
+            engine: {
+              snipeWindowSec: 45,
+              extensionSec: 15,
+              maxExtensions: 3,
+            },
+            future: {
+              customField: 'future-proof',
+            },
+          },
+        }),
+      },
+      env,
+    )
+    expect(res.status).toBe(201)
+
+    const row = await db
+      .prepare('SELECT snipe_window_sec, extension_sec, max_extensions, room_config_json FROM auctions WHERE auction_id = ?')
+      .bind(auctionId)
+      .first<Record<string, unknown>>()
+    expect(row).not.toBeNull()
+    expect(row!.snipe_window_sec).toBe(45)
+    expect(row!.extension_sec).toBe(15)
+    expect(row!.max_extensions).toBe(3)
+    expect(typeof row!.room_config_json).toBe('string')
+    const parsed = JSON.parse(String(row!.room_config_json)) as Record<string, unknown>
+    expect((parsed.engine as Record<string, unknown>).snipeWindowSec).toBe(45)
+    expect((parsed.engine as Record<string, unknown>).extensionSec).toBe(15)
+    expect((parsed.engine as Record<string, unknown>).maxExtensions).toBe(3)
+    expect((parsed.future as Record<string, unknown>).customField).toBe('future-proof')
+  })
+
+  it('POST /auctions coerces flat roomConfig payload into namespaced format', async () => {
+    const auctionId = randomAuctionId()
+    const deadline = Math.floor(Date.now() / 1000) + 60
+
+    const res = await app.request(
+      'http://localhost/auctions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          auctionId,
+          manifestHash: '0x' + 'bc'.repeat(32),
+          reservePrice: '3000000',
+          depositAmount: '1000000',
+          deadline,
+          roomConfig: {
+            snipeWindowSec: 55,
+            extensionSec: 11,
+            maxExtensions: 4,
+            experimentalFoo: 'bar',
+          },
+        }),
+      },
+      env,
+    )
+    expect(res.status).toBe(201)
+
+    const row = await db
+      .prepare('SELECT snipe_window_sec, extension_sec, max_extensions, room_config_json FROM auctions WHERE auction_id = ?')
+      .bind(auctionId)
+      .first<Record<string, unknown>>()
+    expect(row).not.toBeNull()
+    expect(row!.snipe_window_sec).toBe(55)
+    expect(row!.extension_sec).toBe(11)
+    expect(row!.max_extensions).toBe(4)
+    const parsed = JSON.parse(String(row!.room_config_json)) as Record<string, unknown>
+    expect((parsed.engine as Record<string, unknown>).snipeWindowSec).toBe(55)
+    expect((parsed.engine as Record<string, unknown>).extensionSec).toBe(11)
+    expect((parsed.engine as Record<string, unknown>).maxExtensions).toBe(4)
+    expect((parsed.future as Record<string, unknown>).experimentalFoo).toBe('bar')
+  })
+
   it('GET /auctions returns list', async () => {
     const res = await app.request('http://localhost/auctions', {}, env)
     expect(res.status).toBe(200)
@@ -171,6 +268,43 @@ describe('API routes (Hono)', () => {
     expect(rooms._calls.some((c) => c.url.includes('/action'))).toBe(true)
   })
 
+  it('POST /auctions/:id/close requires sequencer admin key', async () => {
+    env.ENGINE_ADMIN_KEY = 'top-secret'
+    const auctionId = randomAuctionId()
+
+    const unauthorized = await app.request(
+      `http://localhost/auctions/${auctionId}/close`,
+      { method: 'POST' },
+      env,
+    )
+    expect(unauthorized.status).toBe(401)
+
+    const authorized = await app.request(
+      `http://localhost/auctions/${auctionId}/close`,
+      {
+        method: 'POST',
+        headers: {
+          'X-ENGINE-ADMIN-KEY': 'top-secret',
+        },
+      },
+      env,
+    )
+    expect(authorized.status).toBe(200)
+    expect(rooms._calls.some((c) => c.url.includes('/close'))).toBe(true)
+  })
+
+  it('POST /auctions/:id/cancel proxies to room /cancel without admin auth', async () => {
+    env.ENGINE_ADMIN_KEY = 'top-secret'
+    const auctionId = randomAuctionId()
+    const res = await app.request(
+      `http://localhost/auctions/${auctionId}/cancel`,
+      { method: 'POST' },
+      env,
+    )
+    expect(res.status).toBe(200)
+    expect(rooms._calls.some((c) => c.url.includes('/cancel'))).toBe(true)
+  })
+
   it('GET /auctions/:id/events returns ordered events from D1', async () => {
     const auctionId = randomAuctionId()
 
@@ -190,7 +324,7 @@ describe('API routes (Hono)', () => {
 
     const res = await app.request(
       `http://localhost/auctions/${auctionId}/events`,
-      { headers: { 'x402-receipt': 'receipt-events-1' } },
+      {},
       env,
     )
     expect(res.status).toBe(200)
@@ -216,53 +350,19 @@ describe('API routes (Hono)', () => {
     expect(manifestRes.status).toBe(200)
   })
 
-  it('rejects duplicate x402 receipt hash with 409 in insecure header-hash mode', async () => {
+  it('manifest/events endpoints return 402 when x402 mode is on and no payment provided', async () => {
     const auctionId = randomAuctionId()
-    env.X402_MODE = 'insecure_header_hash'
-    await db
-      .prepare(
-        'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)',
-      )
-      .bind(auctionId, '0x' + 'ab'.repeat(32), 1, '1', '0', Math.floor(Date.now() / 1000) + 60)
-      .run()
+    env.X402_MODE = 'on'
+    env.X402_RECEIVER_ADDRESS = '0x' + '11'.repeat(20)
 
-    const first = await app.request(
-      `http://localhost/auctions/${auctionId}/manifest`,
-      { headers: { 'x402-receipt': 'same-receipt' } },
-      env,
-    )
-    expect(first.status).toBe(200)
+    const manifestRes = await app.request(`http://localhost/auctions/${auctionId}/manifest`, {}, env)
+    expect(manifestRes.status).toBe(402)
 
-    const second = await app.request(
-      `http://localhost/auctions/${auctionId}/manifest`,
-      { headers: { 'x402-receipt': 'same-receipt' } },
-      env,
-    )
-    expect(second.status).toBe(409)
+    const eventsRes = await app.request(`http://localhost/auctions/${auctionId}/events`, {}, env)
+    expect(eventsRes.status).toBe(402)
+
     delete env.X402_MODE
-  })
-
-  it('GET /auctions/:id/manifest succeeds with valid x402 receipt in insecure header-hash mode', async () => {
-    const auctionId = randomAuctionId()
-    env.X402_MODE = 'insecure_header_hash'
-    const manifestHash = '0x' + 'cd'.repeat(32)
-    await db
-      .prepare(
-        'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)',
-      )
-      .bind(auctionId, manifestHash, 1, '1', '0', Math.floor(Date.now() / 1000) + 60)
-      .run()
-
-    const res = await app.request(
-      `http://localhost/auctions/${auctionId}/manifest`,
-      { headers: { 'x402-receipt': 'manifest-receipt-1' } },
-      env,
-    )
-    expect(res.status).toBe(200)
-    const body = await res.json()
-    expect(body.auctionId).toBe(auctionId)
-    expect(body.manifestHash).toBe(manifestHash)
-    delete env.X402_MODE
+    delete env.X402_RECEIVER_ADDRESS
   })
 
   it('GET /auctions/:id/replay returns canonical replay bytes', async () => {

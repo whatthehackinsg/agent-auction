@@ -5,6 +5,9 @@ import {
   getAgentPrivateKeys,
 } from './config'
 import {
+  engineFetch,
+} from './utils'
+import {
   claimRefund,
   createAuction,
   getWinner,
@@ -16,7 +19,7 @@ import {
 } from './auction'
 import { fundWithUSDC, getUsdcBalance, registerIdentity } from './identity'
 import { deployWallet } from './wallet'
-import { logStep, sleep } from './utils'
+import { initX402, logStep, sleep } from './utils'
 
 type AgentRun = {
   name: string
@@ -35,6 +38,9 @@ async function main() {
 
   const deployer = createDeployerClients()
   const privateKeys = getAgentPrivateKeys().slice(0, 3)
+
+  // Initialize x402 auto-payment using first agent key
+  initX402(privateKeys[0])
 
   const agentIds = [BigInt(1001), BigInt(1002), BigInt(1003)]
   const labels = ['Agent-A', 'Agent-B', 'Agent-C'] as const
@@ -132,6 +138,12 @@ async function main() {
     privateKey: runs[2].privateKey,
   })
   logStep('bid', 'Agent-C bid 200 USDC')
+
+  // Demonstrate x402 micropayment (transparent if server has X402_MODE=on)
+  const manifest = await engineFetch<{ auctionId: string; manifestHash: string }>(
+    `/auctions/${auction.auctionId}/manifest`,
+  )
+  logStep('x402', `fetched manifest via x402: auctionId=${manifest.auctionId}`)
 
   if (process.env.SKIP_SETTLEMENT_WAIT === '1') {
     logStep('settlement', 'SKIP_SETTLEMENT_WAIT=1 set, skipping settlement verification')

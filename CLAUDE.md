@@ -82,9 +82,9 @@ AuctionEscrow.onReport() → settlement
 |---|---|---|
 | `contracts/` | Foundry/Solidity | 7 contracts: identity (EIP-4337), auctions, escrow, privacy |
 | `cre/` | Bun + CRE SDK | Settlement workflow triggered by `AuctionEnded` log event |
-| `engine/` | Cloudflare Workers | Durable Object sequencer, event log, API (Hono), D1 database |
+| `engine/` | Cloudflare Workers | Durable Object sequencer, event log, API (Hono), D1, x402 micropayments |
 | `frontend/` | Next.js 16 | Spectator UI (read-only auction state, replay, 3D/GSAP animations) |
-| `agent-client/` | Node/tsx | TypeScript demo client for agent interactions |
+| `agent-client/` | Node/tsx | TypeScript demo client with x402 auto-payment (`@x402/fetch`) |
 | `packages/crypto/` | Node (ESM) | Poseidon hash chain, EIP-712, ZK proof gen/verify, nullifiers |
 | `circuits/` | Circom 2.2.3 | Two Groth16 circuits: RegistryMembership (~12K), BidRange (~5K) |
 

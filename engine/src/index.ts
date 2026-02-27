@@ -5,7 +5,7 @@ import { toHex, keccak256, encodePacked } from 'viem'
 import { serializeReplayBundle, computeContentHash } from './lib/replay-bundle'
 import { type AuctionEvent, ActionType } from './types/engine'
 import { getBondStatus, verifyBondFromReceipt } from './lib/bond-watcher'
-import { requireX402 } from './middleware/x402'
+import { createX402Middleware } from './middleware/x402'
 import { pinReplayBundleToIpfs } from './lib/ipfs'
 import { onboardAgent } from './lib/onboard'
 import { createSequencerClient, auctionRegistryAbi } from './lib/chain-client'
@@ -16,7 +16,10 @@ export interface Env {
   AUCTION_ROOM: DurableObjectNamespace
   SEQUENCER_PRIVATE_KEY: string
   PINATA_API_KEY?: string
-  X402_MODE?: string
+  X402_MODE?: string                // 'off' (default) | 'on'
+  X402_RECEIVER_ADDRESS?: string    // wallet to receive x402 payments
+  X402_FACILITATOR_URL?: string     // default: https://www.x402.org/facilitator
+  ENGINE_ADMIN_KEY?: string
 }
 
 const app = new Hono<{ Bindings: Env }>()
@@ -24,8 +27,31 @@ const app = new Hono<{ Bindings: Env }>()
 app.use('/*', cors())
 
 // x402-gated resources (micropayments)
-app.use('/auctions/:id/manifest', requireX402({ resource: 'auction-manifest', priceUsdc: '0.001' }))
-app.use('/auctions/:id/events', requireX402({ resource: 'auction-events', priceUsdc: '0.0001' }))
+// Middleware is created lazily per-request so env vars are available at runtime.
+// When X402_MODE !== 'on', all requests pass through without payment.
+let x402Handler: ReturnType<typeof createX402Middleware> | null = null
+
+app.use('/auctions/:id/manifest', async (c, next) => {
+  if (c.env.X402_MODE !== 'on') return next()
+  if (!x402Handler) {
+    x402Handler = createX402Middleware({
+      receiverAddress: (c.env.X402_RECEIVER_ADDRESS ?? '0x0000000000000000000000000000000000000000') as `0x${string}`,
+      facilitatorUrl: c.env.X402_FACILITATOR_URL ?? 'https://www.x402.org/facilitator',
+    })
+  }
+  return x402Handler(c, next)
+})
+
+app.use('/auctions/:id/events', async (c, next) => {
+  if (c.env.X402_MODE !== 'on') return next()
+  if (!x402Handler) {
+    x402Handler = createX402Middleware({
+      receiverAddress: (c.env.X402_RECEIVER_ADDRESS ?? '0x0000000000000000000000000000000000000000') as `0x${string}`,
+      facilitatorUrl: c.env.X402_FACILITATOR_URL ?? 'https://www.x402.org/facilitator',
+    })
+  }
+  return x402Handler(c, next)
+})
 
 app.get('/health', (c) => {
   return c.json({ status: 'ok' })
@@ -65,6 +91,46 @@ type CreateAuctionRequest = {
   auction_type?: string
   maxBid?: string
   max_bid?: string
+  snipeWindowSec?: number
+  snipe_window_sec?: number
+  extensionSec?: number
+  extension_sec?: number
+  maxExtensions?: number
+  max_extensions?: number
+  roomConfig?: Record<string, unknown>
+  room_config?: Record<string, unknown>
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function normalizeRoomConfig(raw: unknown): { engine: Record<string, unknown>; future: Record<string, unknown> } {
+  if (!isRecord(raw)) {
+    return { engine: {}, future: {} }
+  }
+
+  const hasNamespaced = 'engine' in raw || 'future' in raw
+  if (hasNamespaced) {
+    const engine = isRecord(raw.engine) ? { ...raw.engine } : {}
+    const future = isRecord(raw.future) ? { ...raw.future } : {}
+    for (const [key, value] of Object.entries(raw)) {
+      if (key === 'engine' || key === 'future') continue
+      future[key] = value
+    }
+    return { engine, future }
+  }
+
+  const engine: Record<string, unknown> = {}
+  const future: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (key === 'snipeWindowSec' || key === 'extensionSec' || key === 'maxExtensions') {
+      engine[key] = value
+    } else {
+      future[key] = value
+    }
+  }
+  return { engine, future }
 }
 
 app.get('/auctions', async (c) => {
@@ -86,6 +152,28 @@ app.post('/auctions', async (c) => {
   const description = body.description ?? null
   const auctionType = body.auctionType ?? body.auction_type ?? 'english'
   const maxBid = body.maxBid ?? body.max_bid ?? null
+  const rawRoomConfig = body.roomConfig ?? body.room_config ?? {}
+  if (!isRecord(rawRoomConfig)) {
+    return c.json({ error: 'roomConfig must be an object' }, 400)
+  }
+  const roomConfig = normalizeRoomConfig(rawRoomConfig)
+  const roomSnipeWindow = typeof roomConfig.engine.snipeWindowSec === 'number' ? roomConfig.engine.snipeWindowSec : undefined
+  const roomExtension = typeof roomConfig.engine.extensionSec === 'number' ? roomConfig.engine.extensionSec : undefined
+  const roomMaxExtensions = typeof roomConfig.engine.maxExtensions === 'number' ? roomConfig.engine.maxExtensions : undefined
+  const snipeWindowSec = body.snipeWindowSec ?? body.snipe_window_sec ?? roomSnipeWindow ?? 60
+  const extensionSec = body.extensionSec ?? body.extension_sec ?? roomExtension ?? 30
+  const maxExtensions = body.maxExtensions ?? body.max_extensions ?? roomMaxExtensions ?? 5
+  const mergedRoomConfig = {
+    engine: {
+      ...roomConfig.engine,
+      snipeWindowSec,
+      extensionSec,
+      maxExtensions,
+    },
+    future: {
+      ...roomConfig.future,
+    },
+  }
 
   if (!manifestHash || !reservePrice || typeof deadline !== 'number') {
     return c.json({ error: 'missing required fields' }, 400)
@@ -105,6 +193,15 @@ app.post('/auctions', async (c) => {
   if (maxBid !== null && !uintRe.test(maxBid)) {
     return c.json({ error: 'maxBid must be a uint string' }, 400)
   }
+  if (!Number.isInteger(snipeWindowSec) || snipeWindowSec < 0) {
+    return c.json({ error: 'snipeWindowSec must be a non-negative integer' }, 400)
+  }
+  if (!Number.isInteger(extensionSec) || extensionSec < 0) {
+    return c.json({ error: 'extensionSec must be a non-negative integer' }, 400)
+  }
+  if (!Number.isInteger(maxExtensions) || maxExtensions < 0) {
+    return c.json({ error: 'maxExtensions must be a non-negative integer' }, 400)
+  }
   const validTypes = ['english', 'sealed-bid']
   if (!validTypes.includes(auctionType)) {
     return c.json({ error: `auctionType must be one of: ${validTypes.join(', ')}` }, 400)
@@ -114,9 +211,25 @@ app.post('/auctions', async (c) => {
 
   const insert = await c.env.AUCTION_DB
     .prepare(
-      'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline, title, description, auction_type, max_bid, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline, title, description, auction_type, max_bid, snipe_window_sec, extension_sec, max_extensions, room_config_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     )
-    .bind(auctionId, manifestHash, 1, reservePrice, depositAmount, deadline, title, description, auctionType, maxBid, createdAt)
+    .bind(
+      auctionId,
+      manifestHash,
+      1,
+      reservePrice,
+      depositAmount,
+      deadline,
+      title,
+      description,
+      auctionType,
+      maxBid,
+      snipeWindowSec,
+      extensionSec,
+      maxExtensions,
+      JSON.stringify(mergedRoomConfig),
+      createdAt,
+    )
     .run()
 
   if (!insert.success) {
@@ -129,7 +242,14 @@ app.post('/auctions', async (c) => {
     makeRoomRequest('/init', auctionId, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ startedAt: createdAt, deadline }),
+      body: JSON.stringify({
+        startedAt: createdAt,
+        deadline,
+        snipeWindowSec,
+        extensionSec,
+        maxExtensions,
+        roomConfig: mergedRoomConfig,
+      }),
     }),
   )
 
@@ -183,10 +303,31 @@ app.get('/auctions/:id', async (c) => {
 })
 
 app.post('/auctions/:id/close', async (c) => {
+  const expected = c.env.ENGINE_ADMIN_KEY
+  if (!expected) {
+    return c.json({ error: 'ENGINE_ADMIN_KEY not configured' }, 500)
+  }
+  const provided = c.req.header('X-ENGINE-ADMIN-KEY') ?? ''
+  if (provided !== expected) {
+    return c.json({ error: 'unauthorized' }, 401)
+  }
+
   const auctionId = c.req.param('id')
   const room = roomStub(c.env, auctionId)
   const res = await room.fetch(
     makeRoomRequest('/close', auctionId, { method: 'POST' }),
+  )
+  return new Response(await res.text(), {
+    status: res.status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+})
+
+app.post('/auctions/:id/cancel', async (c) => {
+  const auctionId = c.req.param('id')
+  const room = roomStub(c.env, auctionId)
+  const res = await room.fetch(
+    makeRoomRequest('/cancel', auctionId, { method: 'POST' }),
   )
   return new Response(await res.text(), {
     status: res.status,
