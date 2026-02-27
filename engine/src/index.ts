@@ -4,7 +4,7 @@ import { AuctionRoom } from './auction-room'
 import { toHex, keccak256, encodePacked } from 'viem'
 import { serializeReplayBundle, computeContentHash } from './lib/replay-bundle'
 import { type AuctionEvent, ActionType } from './types/engine'
-import { getBondStatus, pollAndRecordBondTransfers } from './lib/bond-watcher'
+import { getBondStatus, verifyBondFromReceipt } from './lib/bond-watcher'
 import { requireX402 } from './middleware/x402'
 import { pinReplayBundleToIpfs } from './lib/ipfs'
 import { onboardAgent } from './lib/onboard'
@@ -182,6 +182,18 @@ app.get('/auctions/:id', async (c) => {
   return c.json({ auction, snapshot })
 })
 
+app.post('/auctions/:id/close', async (c) => {
+  const auctionId = c.req.param('id')
+  const room = roomStub(c.env, auctionId)
+  const res = await room.fetch(
+    makeRoomRequest('/close', auctionId, { method: 'POST' }),
+  )
+  return new Response(await res.text(), {
+    status: res.status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+})
+
 app.post('/auctions/:id/action', async (c) => {
   const auctionId = c.req.param('id')
   const body = await c.req.json()
@@ -290,20 +302,40 @@ app.get('/auctions/:id/replay', async (c) => {
   })
 })
 
+app.post('/auctions/:id/bonds', async (c) => {
+  const auctionId = c.req.param('id')
+  const body = (await c.req.json()) as { agentId: string; depositor: string; amount: string; txHash: string }
+
+  if (!body.txHash || !body.agentId || !body.depositor || !body.amount) {
+    return c.json({ error: 'missing required fields: agentId, depositor, amount, txHash' }, 400)
+  }
+
+  try {
+    const confirmed = await verifyBondFromReceipt(
+      c.env.AUCTION_DB,
+      c.env.SEQUENCER_PRIVATE_KEY as `0x${string}`,
+      {
+        auctionId,
+        agentId: body.agentId,
+        depositor: body.depositor,
+        amount: body.amount,
+        txHash: body.txHash as `0x${string}`,
+      },
+    )
+
+    if (!confirmed) {
+      return c.json({ error: 'bond transfer not found in TX receipt' }, 400)
+    }
+    return c.json({ status: 'CONFIRMED', txHash: body.txHash })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return c.json({ error: `bond verification failed: ${msg}` }, 500)
+  }
+})
+
 app.get('/auctions/:id/bonds/:agentId', async (c) => {
   const auctionId = c.req.param('id')
   const agentId = c.req.param('agentId')
-
-  // Best effort refresh from chain logs.
-  try {
-    await pollAndRecordBondTransfers(
-      c.env.AUCTION_DB,
-      c.env.SEQUENCER_PRIVATE_KEY as `0x${string}`,
-    )
-  } catch {
-    // Fallback to current D1 status if chain polling fails.
-  }
-
   const status = await getBondStatus(c.env.AUCTION_DB, auctionId, agentId)
   return c.json(status)
 })

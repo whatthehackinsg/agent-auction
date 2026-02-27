@@ -1,4 +1,5 @@
-import { type Address, type Hex, type WalletClient } from 'viem'
+import { type Address, type Hex, type WalletClient, encodeAbiParameters, keccak256, toBytes } from 'viem'
+import { privateKeyToAccount } from 'viem/accounts'
 import { baseSepolia } from 'viem/chains'
 import {
   ADDRESSES,
@@ -8,6 +9,58 @@ import {
   usdcAbi,
 } from './config'
 import { engineFetch, logStep, randomBytes32Hex, sleep } from './utils'
+
+// EIP-712 domain matching engine's EIP712_DOMAIN
+const EIP712_DOMAIN = {
+  name: 'AgentAuction' as const,
+  version: '1' as const,
+  chainId: 84532,
+  verifyingContract: ADDRESSES.auctionRegistry,
+} as const
+
+const JOIN_TYPES = {
+  Join: [
+    { name: 'auctionId', type: 'uint256' },
+    { name: 'nullifier', type: 'uint256' },
+    { name: 'depositAmount', type: 'uint256' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'deadline', type: 'uint256' },
+  ],
+} as const
+
+const BID_TYPES = {
+  Bid: [
+    { name: 'auctionId', type: 'uint256' },
+    { name: 'amount', type: 'uint256' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'deadline', type: 'uint256' },
+  ],
+} as const
+
+/** Derive nullifier matching engine's deriveNullifier(wallet, auctionId, actionType=0) */
+function deriveJoinNullifier(wallet: Address, auctionId: `0x${string}`): bigint {
+  const walletBytes = toBytes(wallet, { size: 32 })
+  const auctionBytes = toBytes(auctionId, { size: 32 })
+
+  let secret = 0n
+  for (const b of walletBytes) {
+    secret = (secret << 8n) | BigInt(b)
+  }
+  let auction = 0n
+  for (const b of auctionBytes) {
+    auction = (auction << 8n) | BigInt(b)
+  }
+
+  const encoded = encodeAbiParameters(
+    [
+      { name: 'secret', type: 'uint256' },
+      { name: 'auction', type: 'uint256' },
+      { name: 'actionType', type: 'uint256' },
+    ],
+    [secret, auction, 0n],
+  )
+  return BigInt(keccak256(encoded))
+}
 
 type EngineActionResponse = {
   seq: number
@@ -58,7 +111,7 @@ export async function postBond(params: {
 
   const txHash = await params.walletClient.writeContract({
     chain: baseSepolia,
-    account: params.walletAddress,
+    account: params.walletClient.account!,
     address: ADDRESSES.mockUSDC,
     abi: usdcAbi,
     functionName: 'transfer',
@@ -66,6 +119,26 @@ export async function postBond(params: {
   })
   await publicClient.waitForTransactionReceipt({ hash: txHash })
   return txHash
+}
+
+export async function submitBondProof(params: {
+  auctionId: `0x${string}`
+  agentId: bigint
+  depositor: Address
+  amount: bigint
+  txHash: `0x${string}`
+}): Promise<void> {
+  logStep('bond', `submitting bond proof txHash=${params.txHash}`)
+  await engineFetch(`/auctions/${params.auctionId}/bonds`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      agentId: params.agentId.toString(),
+      depositor: params.depositor,
+      amount: params.amount.toString(),
+      txHash: params.txHash,
+    }),
+  })
 }
 
 export async function waitBondObservation(
@@ -93,14 +166,32 @@ export async function joinAuction(params: {
   wallet: Address
   bondAmount: bigint
   nonce: number
+  privateKey: Hex
 }): Promise<EngineActionResponse> {
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 300) // 5 min
+  const nullifier = deriveJoinNullifier(params.wallet, params.auctionId)
+  const account = privateKeyToAccount(params.privateKey)
+  const signature = await account.signTypedData({
+    domain: EIP712_DOMAIN,
+    types: JOIN_TYPES,
+    primaryType: 'Join',
+    message: {
+      auctionId: BigInt(params.auctionId),
+      nullifier,
+      depositAmount: params.bondAmount,
+      nonce: BigInt(params.nonce),
+      deadline,
+    },
+  })
+
   const payload = {
     type: 'JOIN',
     agentId: params.agentId.toString(),
     wallet: params.wallet,
     amount: params.bondAmount.toString(),
     nonce: params.nonce,
-    signature: '0x',
+    deadline: deadline.toString(),
+    signature,
     proof: null,
   }
 
@@ -136,7 +227,22 @@ export async function placeBid(params: {
   wallet: Address
   amount: bigint
   nonce: number
+  privateKey: Hex
 }): Promise<EngineActionResponse> {
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 300)
+  const account = privateKeyToAccount(params.privateKey)
+  const signature = await account.signTypedData({
+    domain: EIP712_DOMAIN,
+    types: BID_TYPES,
+    primaryType: 'Bid',
+    message: {
+      auctionId: BigInt(params.auctionId),
+      amount: params.amount,
+      nonce: BigInt(params.nonce),
+      deadline,
+    },
+  })
+
   return engineFetch<EngineActionResponse>(`/auctions/${params.auctionId}/action`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -146,13 +252,34 @@ export async function placeBid(params: {
       wallet: params.wallet,
       amount: params.amount.toString(),
       nonce: params.nonce,
-      signature: '0x',
+      deadline: deadline.toString(),
+      signature,
     }),
   })
 }
 
-export async function waitForSettlement(auctionId: `0x${string}`, timeoutMs = 120_000): Promise<void> {
+/**
+ * Wait for on-chain settlement.
+ *
+ * State machine: OPEN(1) → CLOSED(2) via recordResult → SETTLED(3) via CRE onReport.
+ *
+ * Waits up to `timeoutMs` for the auction to reach CLOSED (2) or SETTLED (3).
+ * Returns the final observed state so the caller can decide how to proceed.
+ */
+export async function waitForSettlement(
+  auctionId: `0x${string}`,
+  timeoutMs = 180_000,
+): Promise<{ state: number; label: string }> {
+  const STATE_LABELS: Record<number, string> = {
+    0: 'NONE',
+    1: 'OPEN',
+    2: 'CLOSED',
+    3: 'SETTLED',
+    4: 'CANCELLED',
+  }
+
   const started = Date.now()
+  let lastState = -1
   while (Date.now() - started < timeoutMs) {
     const state = await publicClient.readContract({
       address: ADDRESSES.auctionRegistry,
@@ -161,12 +288,41 @@ export async function waitForSettlement(auctionId: `0x${string}`, timeoutMs = 12
       args: [auctionId],
     })
     const numeric = Number(state)
+
+    if (numeric !== lastState) {
+      const elapsed = ((Date.now() - started) / 1000).toFixed(0)
+      logStep('settlement', `on-chain state → ${STATE_LABELS[numeric] ?? numeric} (${elapsed}s)`)
+      lastState = numeric
+    }
+
+    // SETTLED (3) — full CRE settlement complete
     if (numeric === 3) {
-      return
+      return { state: 3, label: 'SETTLED' }
+    }
+    // CLOSED (2) — recordResult succeeded, CRE settlement pending
+    // Keep polling for a while to see if CRE settles it
+    if (numeric === 2) {
+      // Give CRE an extra 60s to settle after CLOSED
+      const closedAt = Date.now()
+      while (Date.now() - closedAt < 60_000 && Date.now() - started < timeoutMs) {
+        await sleep(4000)
+        const s2 = await publicClient.readContract({
+          address: ADDRESSES.auctionRegistry,
+          abi: registryAbi,
+          functionName: 'getAuctionState',
+          args: [auctionId],
+        })
+        if (Number(s2) === 3) {
+          logStep('settlement', `on-chain state → SETTLED`)
+          return { state: 3, label: 'SETTLED' }
+        }
+      }
+      // CRE didn't settle in time — still return CLOSED as partial success
+      return { state: 2, label: 'CLOSED' }
     }
     await sleep(4000)
   }
-  throw new Error(`auction ${auctionId} did not settle within timeout`)
+  throw new Error(`auction ${auctionId} did not reach CLOSED within ${timeoutMs / 1000}s (last state: ${STATE_LABELS[lastState] ?? lastState})`)
 }
 
 export async function getWinner(auctionId: `0x${string}`): Promise<{
@@ -198,7 +354,7 @@ export async function claimRefund(params: {
   try {
     const txHash = await params.walletClient.writeContract({
       chain: baseSepolia,
-      account: params.caller,
+      account: params.walletClient.account!,
       address: ADDRESSES.auctionEscrow,
       abi: escrowAbi,
       functionName: 'claimRefund',

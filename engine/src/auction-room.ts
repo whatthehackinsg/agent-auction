@@ -12,7 +12,7 @@ import { validateAction, commitValidationMutation } from './handlers/actions'
 import type { AuctionSettlementPacket } from './types/contracts'
 import { ensureAuctionOnChain, recordResultOnChain, signSettlementPacket } from './lib/settlement'
 import { signInclusionReceipt } from './lib/inclusion-receipt'
-import { enforceJoinBondObservation, pollAndRecordBondTransfers } from './lib/bond-watcher'
+import { enforceJoinBondObservation } from './lib/bond-watcher'
 import { serializeReplayBundle, computeContentHash } from './lib/replay-bundle'
 
 /** Zero hash as 0x-prefixed hex string (32 zero bytes) */
@@ -124,6 +124,8 @@ export class AuctionRoom implements DurableObject {
         return this.handleStream(request)
       case '/snapshot':
         return this.handleSnapshot()
+      case '/close':
+        return this.handleClose()
       default:
         return new Response(JSON.stringify({ error: 'not found' }), {
           status: 404,
@@ -206,15 +208,7 @@ export class AuctionRoom implements DurableObject {
 
         const requiredBond = row?.deposit_amount ?? '0'
         if (BigInt(requiredBond) > 0n) {
-          // Refresh pending bond observations from chain logs before gating JOIN.
-          try {
-            await pollAndRecordBondTransfers(
-              this.env.AUCTION_DB,
-              this.env.SEQUENCER_PRIVATE_KEY as `0x${string}`,
-            )
-          } catch {
-            // Best effort: if polling fails, fall back to current D1 observation status.
-          }
+          // Bond must be confirmed via POST /auctions/:id/bonds before JOIN.
           await enforceJoinBondObservation(this.env.AUCTION_DB, {
             auctionId: this.auctionId,
             agentId: action.agentId,
@@ -393,6 +387,95 @@ export class AuctionRoom implements DurableObject {
     return { seq, eventHash: eventHashHex, prevHash, sequencerSig: receipt.sequencerSig }
   }
 
+  /** POST /close — manually trigger auction close with visible errors */
+  private async handleClose(): Promise<Response> {
+    if (!this.auctionId) {
+      return Response.json({ error: 'auctionId not set' }, { status: 400 })
+    }
+
+    if (this.onChainSettled) {
+      return Response.json({ ok: true, already: 'onChainSettled' })
+    }
+
+    // Mark closed locally (idempotent)
+    if (this.auctionStatus < 2) {
+      this.auctionStatus = 2
+      await this.state.storage.put('auctionStatus', this.auctionStatus)
+      await this.env.AUCTION_DB
+        .prepare('UPDATE auctions SET status = 2 WHERE auction_id = ?')
+        .bind(this.auctionId)
+        .run()
+    }
+
+    // Inline settlement logic WITHOUT the catch, so errors propagate
+    try {
+      const auctionRow = await this.env.AUCTION_DB
+        .prepare('SELECT manifest_hash, reserve_price, deposit_amount, deadline, auction_type, max_bid FROM auctions WHERE auction_id = ?')
+        .bind(this.auctionId)
+        .first<{ manifest_hash: string; reserve_price: string; deposit_amount: string; deadline: number; auction_type: string | null; max_bid: string | null }>()
+
+      if (!auctionRow) throw new Error('auction not found in D1')
+
+      const events = await this.env.AUCTION_DB
+        .prepare('SELECT action_type, agent_id, wallet, amount FROM events WHERE auction_id = ? ORDER BY seq')
+        .bind(this.auctionId)
+        .all<{ action_type: string; agent_id: string; wallet: string; amount: string }>()
+
+      let winnerAgentId = 0n
+      let winnerWallet: `0x${string}` = ('0x' + '00'.repeat(20)) as `0x${string}`
+      let winningBidAmount = 0n
+      for (const e of events.results ?? []) {
+        if (e.action_type !== ActionType.BID) continue
+        const amount = BigInt(e.amount)
+        if (amount > winningBidAmount) {
+          winningBidAmount = amount
+          winnerAgentId = BigInt(e.agent_id)
+          winnerWallet = e.wallet as `0x${string}`
+        }
+      }
+
+      const privateKey = this.env.SEQUENCER_PRIVATE_KEY as `0x${string}`
+      const roomConfigHash = keccak256(
+        encodePacked(['string', 'string'], [auctionRow.auction_type ?? 'english', auctionRow.max_bid ?? '0']),
+      )
+      await ensureAuctionOnChain(
+        this.auctionId as `0x${string}`,
+        {
+          manifestHash: auctionRow.manifest_hash as `0x${string}`,
+          roomConfigHash,
+          reservePrice: BigInt(auctionRow.reserve_price),
+          depositAmount: BigInt(auctionRow.deposit_amount),
+          deadline: BigInt(auctionRow.deadline),
+        },
+        privateKey,
+      )
+
+      const packet: AuctionSettlementPacket = {
+        auctionId: this.auctionId as `0x${string}`,
+        manifestHash: auctionRow.manifest_hash as `0x${string}`,
+        finalLogHash: this.chainHead as `0x${string}`,
+        winnerAgentId,
+        winnerWallet,
+        winningBidAmount,
+        closeTimestamp: BigInt(Math.floor(Date.now() / 1000)),
+      }
+
+      const sequencerSig = await signSettlementPacket(packet, privateKey)
+      const txHash = await recordResultOnChain(packet, sequencerSig, privateKey)
+
+      this.onChainSettled = true
+      await this.state.storage.put('onChainSettled', true)
+
+      return Response.json({ ok: true, txHash, onChainSettled: true })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return Response.json({
+        error: message,
+        settlementRetries: this.settlementRetries,
+      }, { status: 500 })
+    }
+  }
+
   // ─── Auction Close Flow ─────────────────────────────────────────────
 
   /**
@@ -471,20 +554,11 @@ export class AuctionRoom implements DurableObject {
       }
     }
 
-    // Compute replay content hash (SHA-256 of canonical replay bundle)
-    let replayContentHashHex: `0x${string}` = ZERO_HASH_HEX as `0x${string}`
-    if (replayEvents.length > 0) {
-      const replayBytes = serializeReplayBundle(this.auctionId, replayEvents)
-      const replayHash = await computeContentHash(replayBytes)
-      replayContentHashHex = toHex(replayHash) as `0x${string}`
-    }
-
     const closeTimestamp = BigInt(Math.floor(Date.now() / 1000))
     const packet: AuctionSettlementPacket = {
       auctionId: this.auctionId as `0x${string}`,
       manifestHash: auctionRow.manifest_hash as `0x${string}`,
       finalLogHash: this.chainHead as `0x${string}`,
-      replayContentHash: replayContentHashHex,
       winnerAgentId,
       winnerWallet,
       winningBidAmount,

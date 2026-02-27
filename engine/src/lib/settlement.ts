@@ -45,12 +45,12 @@ export async function ensureAuctionOnChain(
   }
 }
 
+// Must match deployed contract's SETTLEMENT_TYPEHASH (without replayContentHash)
 const SETTLEMENT_TYPES = {
   AuctionSettlementPacket: [
     { name: 'auctionId', type: 'bytes32' },
     { name: 'manifestHash', type: 'bytes32' },
     { name: 'finalLogHash', type: 'bytes32' },
-    { name: 'replayContentHash', type: 'bytes32' },
     { name: 'winnerAgentId', type: 'uint256' },
     { name: 'winnerWallet', type: 'address' },
     { name: 'winningBidAmount', type: 'uint256' },

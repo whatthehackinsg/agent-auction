@@ -151,6 +151,99 @@ export async function enforceJoinBondObservation(
   throw new Error('bond pending: transfer to escrow not observed yet')
 }
 
+/**
+ * Verify a bond transfer by checking the TX receipt for a matching Transfer log.
+ * This avoids getLogs range limits on public RPCs — works with any RPC provider.
+ */
+export async function verifyBondFromReceipt(
+  db: D1Database,
+  sequencerPrivateKey: `0x${string}`,
+  params: {
+    auctionId: string
+    agentId: string
+    depositor: string
+    amount: string
+    txHash: `0x${string}`
+  },
+  options?: {
+    now?: number
+    publicClientLike?: typeof publicClient
+    walletClientLike?: ReturnType<typeof createSequencerClient>
+  },
+): Promise<boolean> {
+  const pc = options?.publicClientLike ?? publicClient
+  const wc = options?.walletClientLike ?? createSequencerClient(sequencerPrivateKey)
+  const now = options?.now ?? Math.floor(Date.now() / 1000)
+  const requiredAmount = BigInt(params.amount)
+
+  // Retry receipt lookup — the TX may not be indexed on the engine's RPC yet
+  let receipt: Awaited<ReturnType<typeof pc.getTransactionReceipt>> | null = null
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      receipt = await pc.getTransactionReceipt({ hash: params.txHash })
+      if (receipt) break
+    } catch {
+      // receipt not found yet — will retry
+    }
+    if (attempt < 4) {
+      await new Promise((r) => setTimeout(r, 3000))
+    }
+  }
+  if (!receipt || receipt.status !== 'success') {
+    return false
+  }
+
+  // ERC-20 Transfer topic
+  const transferTopic = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+
+  const match = receipt.logs.find((log) => {
+    if (log.address.toLowerCase() !== ADDRESSES.mockUSDC.toLowerCase()) return false
+    if (!log.topics[0] || log.topics[0] !== transferTopic) return false
+    const from = log.topics[1] ? ('0x' + log.topics[1].slice(26)).toLowerCase() : ''
+    const to = log.topics[2] ? ('0x' + log.topics[2].slice(26)).toLowerCase() : ''
+    const value = log.data ? BigInt(log.data) : 0n
+    return (
+      from === params.depositor.toLowerCase() &&
+      to === ADDRESSES.auctionEscrow.toLowerCase() &&
+      value >= requiredAmount
+    )
+  })
+
+  if (!match) return false
+
+  const logIndex = match.logIndex ?? 0
+
+  await wc.writeContract({
+    address: ADDRESSES.auctionEscrow,
+    abi: auctionEscrowAbi,
+    functionName: 'recordBond',
+    args: [
+      params.auctionId as `0x${string}`,
+      BigInt(params.agentId),
+      params.depositor as `0x${string}`,
+      requiredAmount,
+      params.txHash,
+      BigInt(logIndex),
+    ],
+  })
+
+  await db
+    .prepare(
+      `INSERT INTO bond_observations (auction_id, agent_id, depositor, amount, status, requested_at, confirmed_at, observed_tx_hash, observed_log_index)
+       VALUES (?, ?, ?, ?, 'CONFIRMED', ?, ?, ?, ?)
+       ON CONFLICT(auction_id, agent_id) DO UPDATE SET
+         status = 'CONFIRMED', confirmed_at = excluded.confirmed_at,
+         observed_tx_hash = excluded.observed_tx_hash, observed_log_index = excluded.observed_log_index`,
+    )
+    .bind(params.auctionId, params.agentId, params.depositor, params.amount, now, now, params.txHash, logIndex)
+    .run()
+
+  return true
+}
+
+/**
+ * @deprecated Use verifyBondFromReceipt instead — getLogs fails on public RPCs with range limits.
+ */
 export async function pollAndRecordBondTransfers(
   db: D1Database,
   sequencerPrivateKey: `0x${string}`,
@@ -169,80 +262,5 @@ export async function pollAndRecordBondTransfers(
     }
   },
 ): Promise<number> {
-  const pc = options?.publicClientLike ?? publicClient
-  const wc = options?.walletClientLike ?? createSequencerClient(sequencerPrivateKey)
-  const now = options?.now ?? Math.floor(Date.now() / 1000)
-
-  const pending = await db
-    .prepare(
-      "SELECT auction_id, agent_id, depositor, amount, requested_at FROM bond_observations WHERE status = 'PENDING' ORDER BY requested_at ASC",
-    )
-    .all<PendingBond>()
-
-  if ((pending.results ?? []).length === 0) {
-    return 0
-  }
-
-  const transferEvent = erc20Abi.find((x) => x.type === 'event' && x.name === 'Transfer')
-  const getLogs = (pc as {
-    getLogs: (args: unknown) => Promise<Array<{
-      args?: { from?: string; to?: string; value?: bigint }
-      transactionHash?: `0x${string}`
-      logIndex?: number
-    }>>
-  }).getLogs
-
-  const logs = await getLogs({
-    address: ADDRESSES.mockUSDC,
-    event: transferEvent,
-    fromBlock: options?.fromBlock,
-    toBlock: 'latest',
-  })
-
-  let confirmed = 0
-
-  for (const p of pending.results ?? []) {
-    const requiredAmount = BigInt(p.amount)
-    const match = logs.find((log) => {
-      const from = (log.args?.from ?? '').toLowerCase()
-      const to = (log.args?.to ?? '').toLowerCase()
-      const value = log.args?.value ?? 0n
-      return (
-        from === p.depositor.toLowerCase() &&
-        to === ADDRESSES.auctionEscrow.toLowerCase() &&
-        value >= requiredAmount
-      )
-    })
-
-    if (!match || !match.transactionHash || match.logIndex === undefined) {
-      continue
-    }
-
-    await wc.writeContract({
-      address: ADDRESSES.auctionEscrow,
-      abi: auctionEscrowAbi,
-      functionName: 'recordBond',
-      args: [
-        p.auction_id as `0x${string}`,
-        BigInt(p.agent_id),
-        p.depositor as `0x${string}`,
-        requiredAmount,
-        match.transactionHash,
-        BigInt(match.logIndex),
-      ],
-    })
-
-    await db
-      .prepare(
-        `UPDATE bond_observations
-         SET status = 'CONFIRMED', confirmed_at = ?, observed_tx_hash = ?, observed_log_index = ?
-         WHERE auction_id = ? AND agent_id = ?`,
-      )
-      .bind(now, match.transactionHash, match.logIndex, p.auction_id, p.agent_id)
-      .run()
-
-    confirmed += 1
-  }
-
-  return confirmed
+  return 0 // Disabled — use verifyBondFromReceipt
 }

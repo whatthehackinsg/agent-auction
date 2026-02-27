@@ -39,3 +39,4 @@ circuits/*.r1cs
 circuits/*.sym
 circuits/*.ptau
 circuits/**/.DS_Store
+.gitnexus

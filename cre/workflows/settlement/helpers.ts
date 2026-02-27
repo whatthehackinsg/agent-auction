@@ -8,7 +8,6 @@ import {
   TxStatus,
   getNetwork,
   encodeCallMsg,
-  LAST_FINALIZED_BLOCK_NUMBER,
 } from "@chainlink/cre-sdk";
 import {
   encodeAbiParameters,
@@ -142,7 +141,6 @@ export const onAuctionEnded = (
         to: runtime.config.auctionRegistryAddress as Hex,
         data: stateCallData,
       }),
-      blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
     })
     .result();
 
@@ -171,7 +169,6 @@ export const onAuctionEnded = (
         to: runtime.config.auctionRegistryAddress as Hex,
         data: winnerCallData,
       }),
-      blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
     })
     .result();
 
