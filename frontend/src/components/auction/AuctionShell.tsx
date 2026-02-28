@@ -2,13 +2,19 @@
 
 import type { ReactNode } from 'react'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { PixelMenu, type PixelMenuItem } from '@/components/ui/PixelMenu'
-import { PixelButton } from '@/components/ui/PixelButton'
 import { DoodleXBadge } from '@/components/ui/DoodleXBadge'
+
+const WalletButton = dynamic(
+  () => import('@/components/wallet/WalletButton').then((m) => m.WalletButton),
+  { ssr: false },
+)
 
 const menuItems: PixelMenuItem[] = [
   { label: 'HOME', href: '/' },
   { label: 'AUCTIONS', href: '/auctions' },
+  { label: 'CREATE', href: '/auctions/create' },
 ]
 
 export function AuctionShell({ children }: { children: ReactNode }) {
@@ -27,9 +33,7 @@ export function AuctionShell({ children }: { children: ReactNode }) {
 
             <div className="flex items-center gap-3 md:gap-5">
               <PixelMenu items={menuItems} accentColor="#6EE7B7" />
-              <PixelButton size="sm" className="hidden sm:inline-flex">
-                [ spectator_mode ]
-              </PixelButton>
+              <WalletButton />
             </div>
           </header>
 
