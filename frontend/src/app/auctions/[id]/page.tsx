@@ -12,6 +12,7 @@ import { PixelCard } from '@/components/ui/PixelCard'
 import { useAuctionDetail, useAuctionRoom, useAuctionState } from '@/hooks'
 import { formatCountdown, formatUsdc, nftExplorerUrl, statusLabel, truncateHex } from '@/lib/format'
 import { resolveImageUrl } from '@/lib/ipfs'
+import { API_BASE_URL } from '@/lib/api'
 
 export default function AuctionRoomPage() {
   const params = useParams<{ id: string }>()
@@ -31,6 +32,7 @@ export default function AuctionRoomPage() {
 
   const status = statusLabel(detail?.auction.status ?? onchain.state ?? 0)
   const deadline = detail?.snapshot.deadline ?? detail?.auction.deadline ?? onchain.deadline ?? 0
+  const headHash = detail?.snapshot.headHash ?? null
 
   const leaderboard = useMemo(() => {
     const map = new Map<string, { agentId: string; amount: bigint; updatedAt: number }>()
@@ -51,6 +53,8 @@ export default function AuctionRoomPage() {
       return a.amount > b.amount ? -1 : 1
     })
   }, [events])
+
+  const manifestUrl = auctionId ? `${API_BASE_URL}/auctions/${auctionId}/manifest` : null
 
   return (
     <AuctionShell>
@@ -148,7 +152,14 @@ export default function AuctionRoomPage() {
                             <span className="text-[#5E5E7A]">{new Date(e.timestamp * 1000).toLocaleTimeString()}</span>
                           </div>
                           <p className="mt-1 text-[#EEEEF5]">
-                            {e.actionType} | agent {e.agentId} | {formatUsdc(e.amount)}
+                            {e.actionType} |{' '}
+                            <Link
+                              href={`/agents/${e.agentId}`}
+                              className="text-[#A78BFA] hover:underline"
+                            >
+                              agent {e.agentId}
+                            </Link>{' '}
+                            | {formatUsdc(e.amount)}
                           </p>
                           <p className="mt-1 text-[10px] text-[#6c7ca0]">{truncateHex(e.eventHash, 12, 10)}</p>
                         </li>
@@ -167,6 +178,13 @@ export default function AuctionRoomPage() {
                   [ replay ]
                 </PixelButton>
               </Link>
+              {manifestUrl ? (
+                <a href={manifestUrl} target="_blank" rel="noopener noreferrer">
+                  <PixelButton size="sm" variant="ghost">
+                    [ manifest ]
+                  </PixelButton>
+                </a>
+              ) : null}
             </div>
           </div>
 
@@ -175,7 +193,14 @@ export default function AuctionRoomPage() {
               {highestBidEvent ? (
                 <>
                   <p className="font-mono text-2xl font-bold text-[#F5C46E]">{formatUsdc(highestBidEvent.amount)}</p>
-                  <p className="mt-2 font-mono text-xs text-[#EEEEF5]">agent {highestBidEvent.agentId}</p>
+                  <p className="mt-2 font-mono text-xs text-[#EEEEF5]">
+                    <Link
+                      href={`/agents/${highestBidEvent.agentId}`}
+                      className="text-[#A78BFA] hover:underline"
+                    >
+                      agent {highestBidEvent.agentId}
+                    </Link>
+                  </p>
                 </>
               ) : (
                 <p className="font-mono text-xs text-[#9B9BB8]">{'// no bids yet'}</p>
@@ -190,6 +215,11 @@ export default function AuctionRoomPage() {
               <p className="mt-2 font-mono text-xs text-[#5E5E7A]">
                 participants: {detail?.snapshot.participantCount ?? 0}
               </p>
+              {headHash ? (
+                <p className="mt-2 font-mono text-[10px] text-[#6c7ca0]">
+                  head: {truncateHex(headHash, 10, 8)}
+                </p>
+              ) : null}
             </PixelPanel>
 
             <PixelPanel accent="violet" headerLabel="leaderboard" noBodyPadding>
@@ -200,7 +230,12 @@ export default function AuctionRoomPage() {
                   leaderboard.map((entry, idx) => (
                     <PixelCard key={`lb-${entry.agentId}`} title={`rank.${idx + 1}`} className="border-[#3f3569]" showMarkers={false}>
                       <div className="flex items-center justify-between font-mono text-xs">
-                        <span className="text-[#EEEEF5]">agent {entry.agentId}</span>
+                        <Link
+                          href={`/agents/${entry.agentId}`}
+                          className="text-[#A78BFA] hover:underline"
+                        >
+                          agent {entry.agentId}
+                        </Link>
                         <span className="text-[#A78BFA]">{formatUsdc(entry.amount.toString())}</span>
                       </div>
                     </PixelCard>

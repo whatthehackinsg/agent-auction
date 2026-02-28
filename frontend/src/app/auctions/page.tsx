@@ -117,6 +117,13 @@ export default function AuctionsPage() {
                       <p className="mt-1 text-[#F5C46E]">{formatUsdc(auction.reserve_price)}</p>
                     </div>
 
+                    {auction.deposit_amount && auction.deposit_amount !== '0' ? (
+                      <div>
+                        <p className="text-[10px] uppercase tracking-[0.1em] text-[#5E5E7A]">deposit required</p>
+                        <p className="mt-1 text-[#C4B5FD]">{formatUsdc(auction.deposit_amount)}</p>
+                      </div>
+                    ) : null}
+
                     <div>
                       <p className="text-[10px] uppercase tracking-[0.1em] text-[#5E5E7A]">countdown</p>
                       <p className="mt-1 text-[#6EE7B7]">{formatCountdown(auction.deadline)}</p>

@@ -7,8 +7,10 @@ export interface AuctionSummary {
   auction_id: string
   status: number // AuctionState enum: 0=NONE, 1=OPEN, 2=CLOSED, 3=SETTLED, 4=CANCELLED
   reserve_price: string
+  deposit_amount: string
   deadline: number
   created_at: number
+  auction_type?: string
   participant_count?: number
   title?: string | null
   description?: string | null
