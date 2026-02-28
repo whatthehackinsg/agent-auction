@@ -11,6 +11,7 @@ import {
   type AuctionX402Policy,
   type X402RuntimeConfig,
 } from '../src/lib/x402-policy'
+import { extractAuctionIdFromPath } from '../src/middleware/x402'
 import { applySchema, createTestMiniflare } from './setup'
 
 describe('x402 policy helpers', () => {
@@ -70,7 +71,38 @@ describe('x402 policy helpers', () => {
   })
 })
 
+// ── extractAuctionIdFromPath ────────────────────────────────────────
+// The dynamic x402 middleware receives HTTPRequestContext.path (the actual
+// request path, e.g. "/auctions/0xabc.../manifest") and must extract the
+// auction ID to look up per-auction policy.  These tests verify the regex
+// against real path shapes the Hono adapter produces.
+
+describe('extractAuctionIdFromPath', () => {
+  it('extracts auction ID from a real manifest path', () => {
+    const auctionId = '0x' + 'ab'.repeat(32)
+    expect(extractAuctionIdFromPath(`/auctions/${auctionId}/manifest`)).toBe(auctionId)
+  })
+
+  it('extracts auction ID from a real events path', () => {
+    const auctionId = '0x' + 'cd'.repeat(32)
+    expect(extractAuctionIdFromPath(`/auctions/${auctionId}/events`)).toBe(auctionId)
+  })
+
+  it('returns null for unrelated paths', () => {
+    expect(extractAuctionIdFromPath('/health')).toBeNull()
+    expect(extractAuctionIdFromPath('/auctions')).toBeNull()
+    expect(extractAuctionIdFromPath('/auctions/0xabc/action')).toBeNull()
+    expect(extractAuctionIdFromPath('/auctions/0xabc/replay')).toBeNull()
+  })
+
+  it('returns null for empty/root path', () => {
+    expect(extractAuctionIdFromPath('/')).toBeNull()
+    expect(extractAuctionIdFromPath('')).toBeNull()
+  })
+})
+
 // ── Per-Auction Policy Resolution ──────────────────────────────────
+// These model real resolution scenarios an admin would encounter.
 
 describe('resolveAuctionX402Policy', () => {
   const platformOn: X402RuntimeConfig = {
@@ -80,7 +112,8 @@ describe('resolveAuctionX402Policy', () => {
   }
   const platformOff: X402RuntimeConfig = { enabled: false }
 
-  it('null policy → uses platform config (on)', () => {
+  // Scenario: auction with no x402 config → inherits platform behavior
+  it('auction with no policy inherits platform ON → enabled with platform defaults', () => {
     const result = resolveAuctionX402Policy(platformOn, null)
     expect(result.enabled).toBe(true)
     expect(result.receiverAddress).toBe('0x' + '11'.repeat(20))
@@ -88,28 +121,35 @@ describe('resolveAuctionX402Policy', () => {
     expect(result.priceEvents).toBe('$0.0001')
   })
 
-  it('null policy → uses platform config (off)', () => {
+  it('auction with no policy inherits platform OFF → disabled', () => {
     const result = resolveAuctionX402Policy(platformOff, null)
     expect(result.enabled).toBe(false)
   })
 
-  it('mode: on overrides platform off', () => {
+  // Scenario: premium auction forces payments even though platform is free
+  it('premium auction (mode=on) overrides platform OFF', () => {
     const policy: AuctionX402Policy = {
       mode: 'on',
       receiverAddress: '0x' + '22'.repeat(20),
+      priceManifest: '$0.005',
+      priceEvents: '$0.0005',
     }
     const result = resolveAuctionX402Policy(platformOff, policy)
     expect(result.enabled).toBe(true)
     expect(result.receiverAddress).toBe('0x' + '22'.repeat(20))
+    expect(result.priceManifest).toBe('$0.005')
+    expect(result.priceEvents).toBe('$0.0005')
   })
 
-  it('mode: off overrides platform on', () => {
+  // Scenario: demo/free auction exempted even though platform charges
+  it('demo auction (mode=off) overrides platform ON', () => {
     const policy: AuctionX402Policy = { mode: 'off' }
     const result = resolveAuctionX402Policy(platformOn, policy)
     expect(result.enabled).toBe(false)
   })
 
-  it('mode: inherit follows platform', () => {
+  // Scenario: explicit inherit follows platform toggle
+  it('explicit inherit follows platform on/off', () => {
     const policy: AuctionX402Policy = { mode: 'inherit' }
     const resultOn = resolveAuctionX402Policy(platformOn, policy)
     expect(resultOn.enabled).toBe(true)
@@ -117,14 +157,16 @@ describe('resolveAuctionX402Policy', () => {
     expect(resultOff.enabled).toBe(false)
   })
 
-  it('custom prices used, defaults for unset', () => {
+  // Scenario: auction overrides only the manifest price, events keeps default
+  it('partial price override — only priceManifest set, priceEvents uses default', () => {
     const policy: AuctionX402Policy = { priceManifest: '$0.005' }
     const result = resolveAuctionX402Policy(platformOn, policy)
     expect(result.priceManifest).toBe('$0.005')
-    expect(result.priceEvents).toBe('$0.0001') // default
+    expect(result.priceEvents).toBe('$0.0001')
   })
 
-  it('receiver override takes priority over platform', () => {
+  // Scenario: auction sends revenue to a different wallet than the platform
+  it('auction receiver takes priority over platform receiver', () => {
     const policy: AuctionX402Policy = {
       receiverAddress: '0x' + 'aa'.repeat(20),
     }
@@ -132,6 +174,8 @@ describe('resolveAuctionX402Policy', () => {
     expect(result.receiverAddress).toBe('0x' + 'aa'.repeat(20))
   })
 
+  // Scenario: auction forces on but nobody configured a receiver anywhere
+  // → fail-closed (disable rather than panic at middleware time)
   it('fails closed when mode=on but no receiver anywhere', () => {
     const policy: AuctionX402Policy = { mode: 'on' }
     const result = resolveAuctionX402Policy(platformOff, policy)
@@ -140,9 +184,11 @@ describe('resolveAuctionX402Policy', () => {
 })
 
 // ── Per-Auction Policy Validation ──────────────────────────────────
+// These represent what an admin would POST/PATCH — valid and invalid
+// payloads the engine must accept or reject.
 
 describe('validateAuctionX402Policy', () => {
-  it('valid input returns null', () => {
+  it('accepts a fully specified valid policy', () => {
     expect(validateAuctionX402Policy({
       mode: 'on',
       priceManifest: '$0.005',
@@ -151,40 +197,55 @@ describe('validateAuctionX402Policy', () => {
     })).toBeNull()
   })
 
-  it('empty object is valid', () => {
+  it('accepts an empty object (all fields optional)', () => {
     expect(validateAuctionX402Policy({})).toBeNull()
   })
 
-  it('rejects non-object input', () => {
-    expect(validateAuctionX402Policy('invalid')).toContain('must be an object')
-    expect(validateAuctionX402Policy(null)).toContain('must be an object')
-    expect(validateAuctionX402Policy([1, 2])).toContain('must be an object')
+  it('accepts mode=inherit', () => {
+    expect(validateAuctionX402Policy({ mode: 'inherit' })).toBeNull()
   })
 
-  it('rejects invalid mode', () => {
+  it('accepts boundary prices ($0.00001 min, $1.00 max)', () => {
+    expect(validateAuctionX402Policy({ priceManifest: '$0.00001' })).toBeNull()
+    expect(validateAuctionX402Policy({ priceManifest: '$1.00' })).toBeNull()
+    expect(validateAuctionX402Policy({ priceManifest: '$1' })).toBeNull()
+  })
+
+  // Bad inputs an admin might accidentally send
+  it('rejects non-object input', () => {
+    expect(validateAuctionX402Policy('on')).toContain('must be an object')
+    expect(validateAuctionX402Policy(null)).toContain('must be an object')
+    expect(validateAuctionX402Policy([{ mode: 'on' }])).toContain('must be an object')
+  })
+
+  it('rejects mode values that are not on/off/inherit', () => {
     expect(validateAuctionX402Policy({ mode: 'maybe' })).toContain('mode must be one of')
+    expect(validateAuctionX402Policy({ mode: true })).toContain('mode must be one of')
     expect(validateAuctionX402Policy({ mode: 123 })).toContain('mode must be one of')
   })
 
-  it('rejects price below minimum', () => {
+  it('rejects prices outside guardrails', () => {
+    // Below min ($0.00001)
     expect(validateAuctionX402Policy({ priceManifest: '$0.000001' })).toContain('between')
-  })
-
-  it('rejects price above maximum', () => {
+    // Above max ($1.00)
     expect(validateAuctionX402Policy({ priceManifest: '$5.00' })).toContain('between')
+    expect(validateAuctionX402Policy({ priceEvents: '$100' })).toContain('between')
   })
 
-  it('rejects invalid price format', () => {
+  it('rejects prices without $ prefix or with invalid format', () => {
     expect(validateAuctionX402Policy({ priceManifest: '0.001' })).toContain('format')
     expect(validateAuctionX402Policy({ priceEvents: 'free' })).toContain('format')
+    expect(validateAuctionX402Policy({ priceManifest: '$abc' })).toContain('format')
   })
 
-  it('rejects invalid receiver address', () => {
+  it('rejects invalid receiver addresses', () => {
     expect(validateAuctionX402Policy({ receiverAddress: 'not-an-address' })).toContain('valid 0x address')
     expect(validateAuctionX402Policy({ receiverAddress: '0x123' })).toContain('valid 0x address')
+    expect(validateAuctionX402Policy({ receiverAddress: '0x' + 'GG'.repeat(20) })).toContain('valid 0x address')
   })
 
-  it('rejects unknown keys', () => {
-    expect(validateAuctionX402Policy({ mode: 'on', unknownField: true })).toContain('unknown')
+  it('rejects unknown keys (guards against typos)', () => {
+    expect(validateAuctionX402Policy({ mode: 'on', price: '$0.01' })).toContain('unknown')
+    expect(validateAuctionX402Policy({ recieverAddress: '0x' + '11'.repeat(20) })).toContain('unknown')
   })
 })
