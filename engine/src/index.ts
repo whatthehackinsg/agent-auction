@@ -1,15 +1,25 @@
-import { Hono } from 'hono'
+import { Hono, type Context, type Next } from 'hono'
 import { cors } from 'hono/cors'
 import { AuctionRoom } from './auction-room'
 import { toHex, keccak256, encodePacked } from 'viem'
 import { serializeReplayBundle, computeContentHash } from './lib/replay-bundle'
 import { type AuctionEvent, type ItemMetadata, ActionType } from './types/engine'
 import { getBondStatus, verifyBondFromReceipt } from './lib/bond-watcher'
-import { createX402Middleware } from './middleware/x402'
+import { createX402Middleware, createDynamicX402Middleware, extractAuctionIdFromPath } from './middleware/x402'
 import { pinToIpfs } from './lib/ipfs'
 import { onboardAgent } from './lib/onboard'
 import { createSequencerClient, auctionRegistryAbi } from './lib/chain-client'
 import { ADDRESSES } from './lib/addresses'
+import {
+  getPaymentSignatureHeader,
+  hasX402Receipt,
+  resolveX402RuntimeConfig,
+  resolveAuctionX402Policy,
+  validateAuctionX402Policy,
+  sha256Hex,
+  storeX402Receipt,
+  type AuctionX402Policy,
+} from './lib/x402-policy'
 
 export interface Env {
   AUCTION_DB: D1Database
@@ -26,32 +36,178 @@ const app = new Hono<{ Bindings: Env }>()
 
 app.use('/*', cors())
 
-// x402-gated resources (micropayments)
-// Middleware is created lazily per-request so env vars are available at runtime.
-// When X402_MODE !== 'on', all requests pass through without payment.
-let x402Handler: ReturnType<typeof createX402Middleware> | null = null
+const X402_GATED_ROUTES = ['/auctions/:id/manifest', '/auctions/:id/events'] as const
 
-app.use('/auctions/:id/manifest', async (c, next) => {
-  if (c.env.X402_MODE !== 'on') return next()
-  if (!x402Handler) {
-    x402Handler = createX402Middleware({
-      receiverAddress: (c.env.X402_RECEIVER_ADDRESS ?? '0x0000000000000000000000000000000000000000') as `0x${string}`,
-      facilitatorUrl: c.env.X402_FACILITATOR_URL ?? 'https://www.x402.org/facilitator',
-    })
+let x402StaticCache:
+  | {
+    cacheKey: string
+    handler: ReturnType<typeof createX402Middleware>
   }
-  return x402Handler(c, next)
-})
+  | null = null
 
-app.use('/auctions/:id/events', async (c, next) => {
-  if (c.env.X402_MODE !== 'on') return next()
-  if (!x402Handler) {
-    x402Handler = createX402Middleware({
-      receiverAddress: (c.env.X402_RECEIVER_ADDRESS ?? '0x0000000000000000000000000000000000000000') as `0x${string}`,
-      facilitatorUrl: c.env.X402_FACILITATOR_URL ?? 'https://www.x402.org/facilitator',
-    })
+let x402DynamicCache:
+  | {
+    cacheKey: string
+    handler: ReturnType<typeof createDynamicX402Middleware>
   }
-  return x402Handler(c, next)
-})
+  | null = null
+
+function logX402(event: string, payload: Record<string, unknown>): void {
+  console.info(
+    JSON.stringify({
+      component: 'x402',
+      event,
+      ...payload,
+    }),
+  )
+}
+
+function getX402Handler(receiverAddress: `0x${string}`, facilitatorUrl: string): ReturnType<typeof createX402Middleware> {
+  const cacheKey = `${receiverAddress}:${facilitatorUrl}`
+  if (!x402StaticCache || x402StaticCache.cacheKey !== cacheKey) {
+    x402StaticCache = {
+      cacheKey,
+      handler: createX402Middleware({
+        receiverAddress,
+        facilitatorUrl,
+      }),
+    }
+  }
+  return x402StaticCache.handler
+}
+
+function getDynamicX402Handler(
+  facilitatorUrl: string,
+  db: D1Database,
+  platformReceiverAddress: `0x${string}`,
+): ReturnType<typeof createDynamicX402Middleware> {
+  const cacheKey = `dynamic:${facilitatorUrl}`
+  if (!x402DynamicCache || x402DynamicCache.cacheKey !== cacheKey) {
+    x402DynamicCache = {
+      cacheKey,
+      handler: createDynamicX402Middleware({
+        facilitatorUrl,
+        getAuctionPolicy: async (auctionId: string) => {
+          const row = await db
+            .prepare('SELECT x402_policy_json FROM auctions WHERE auction_id = ?')
+            .bind(auctionId)
+            .first<{ x402_policy_json: string | null }>()
+          const policy = row?.x402_policy_json ? JSON.parse(row.x402_policy_json) as AuctionX402Policy : null
+          return {
+            receiverAddress: (policy?.receiverAddress ?? platformReceiverAddress) as `0x${string}`,
+            priceManifest: policy?.priceManifest ?? '$0.001',
+            priceEvents: policy?.priceEvents ?? '$0.0001',
+          }
+        },
+      }),
+    }
+  }
+  return x402DynamicCache.handler
+}
+
+async function lookupAuctionX402Policy(db: D1Database, auctionId: string): Promise<AuctionX402Policy | null> {
+  const row = await db
+    .prepare('SELECT x402_policy_json FROM auctions WHERE auction_id = ?')
+    .bind(auctionId)
+    .first<{ x402_policy_json: string | null }>()
+  if (!row?.x402_policy_json) return null
+  return JSON.parse(row.x402_policy_json) as AuctionX402Policy
+}
+
+async function applyX402Gate(c: Context<{ Bindings: Env }>, next: Next): Promise<Response | void> {
+  const platformConfig = resolveX402RuntimeConfig(c.env)
+  const auctionId = c.req.param('id')
+
+  // Look up per-auction policy from D1
+  const auctionPolicy = auctionId
+    ? await lookupAuctionX402Policy(c.env.AUCTION_DB, auctionId)
+    : null
+
+  // Surface platform config errors when no auction-level override supersedes them
+  const auctionMode = auctionPolicy?.mode ?? 'inherit'
+  if (!platformConfig.enabled && 'error' in platformConfig && platformConfig.error && auctionMode === 'inherit') {
+    return c.json({ error: platformConfig.error }, 500)
+  }
+
+  // Resolve effective policy (platform → per-auction override)
+  const resolved = resolveAuctionX402Policy(platformConfig, auctionPolicy)
+
+  if (!resolved.enabled) {
+    return next()
+  }
+
+  // Platform runtime error (e.g. mode=on but no receiver at platform level and auction didn't provide one)
+  if (!resolved.receiverAddress) {
+    return c.json({ error: 'x402 enabled but no receiver address configured' }, 500)
+  }
+
+  // Receipt dedup
+  const paymentHeader = getPaymentSignatureHeader(c.req.raw)
+  let receiptHash: string | null = null
+
+  if (paymentHeader) {
+    receiptHash = await sha256Hex(paymentHeader)
+    const duplicate = await hasX402Receipt(c.env.AUCTION_DB, receiptHash)
+    if (duplicate) {
+      logX402('payment_duplicate', {
+        auctionId,
+        path: c.req.path,
+        receiptHash,
+        status: 409,
+      })
+      return c.json({ error: 'duplicate PAYMENT-SIGNATURE receipt' }, 409)
+    }
+  }
+
+  // Use dynamic handler when auction has per-auction overrides, static otherwise
+  let handler: ReturnType<typeof createX402Middleware>
+  if (auctionPolicy?.priceManifest || auctionPolicy?.priceEvents || auctionPolicy?.receiverAddress) {
+    handler = getDynamicX402Handler(
+      resolved.facilitatorUrl,
+      c.env.AUCTION_DB,
+      resolved.receiverAddress,
+    )
+  } else {
+    handler = getX402Handler(resolved.receiverAddress, resolved.facilitatorUrl)
+  }
+
+  const handlerResult = await handler(c, next)
+  const response = handlerResult instanceof Response ? handlerResult : c.res
+
+  if (response.status === 402) {
+    logX402('payment_challenge', {
+      auctionId,
+      path: c.req.path,
+      status: response.status,
+    })
+    return response
+  }
+
+  if (paymentHeader) {
+    if (receiptHash && response.status < 400) {
+      await storeX402Receipt(c.env.AUCTION_DB, receiptHash, Math.floor(Date.now() / 1000))
+      logX402('payment_accepted', {
+        auctionId,
+        path: c.req.path,
+        receiptHash,
+        status: response.status,
+      })
+    } else {
+      logX402('payment_rejected', {
+        auctionId,
+        path: c.req.path,
+        receiptHash,
+        status: response.status,
+      })
+    }
+  }
+
+  return response
+}
+
+for (const route of X402_GATED_ROUTES) {
+  app.use(route, applyX402Gate)
+}
 
 app.get('/health', (c) => {
   return c.json({ status: 'ok' })
@@ -61,6 +217,14 @@ function randomAuctionId(): string {
   const bytes = new Uint8Array(32)
   crypto.getRandomValues(bytes)
   return toHex(bytes)
+}
+
+function requireAdmin(c: { env: Env; req: { header: (name: string) => string | undefined }; json: (data: unknown, status?: number) => Response }): Response | null {
+  const expected = c.env.ENGINE_ADMIN_KEY
+  if (!expected) return c.json({ error: 'ENGINE_ADMIN_KEY not configured' }, 500)
+  if ((c.req.header('X-ENGINE-ADMIN-KEY') ?? '') !== expected)
+    return c.json({ error: 'unauthorized' }, 401)
+  return null
 }
 
 function roomStub(env: Env, auctionId: string): DurableObjectStub {
@@ -103,6 +267,8 @@ type CreateAuctionRequest = {
   nftContract?: string
   nftTokenId?: string
   nftChainId?: number
+  x402Policy?: AuctionX402Policy
+  x402_policy?: AuctionX402Policy
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -145,6 +311,9 @@ app.get('/auctions', async (c) => {
 })
 
 app.post('/auctions', async (c) => {
+  const denied = requireAdmin(c)
+  if (denied) return denied
+
   const body = (await c.req.json()) as CreateAuctionRequest
 
   const auctionId = body.auctionId ?? body.auction_id ?? randomAuctionId()
@@ -211,6 +380,17 @@ app.post('/auctions', async (c) => {
     return c.json({ error: `auctionType must be one of: ${validTypes.join(', ')}` }, 400)
   }
 
+  // ── x402 per-auction policy (optional) ────────────────────────────
+  const rawX402Policy = body.x402Policy ?? body.x402_policy ?? null
+  let x402PolicyJson: string | null = null
+  if (rawX402Policy !== null) {
+    const policyError = validateAuctionX402Policy(rawX402Policy)
+    if (policyError) {
+      return c.json({ error: policyError }, 400)
+    }
+    x402PolicyJson = JSON.stringify(rawX402Policy)
+  }
+
   // ── NFT item metadata (all optional) ─────────────────────────────
   const itemImageCid = body.itemImageCid ?? null
   const nftContract = body.nftContract ?? null
@@ -232,7 +412,7 @@ app.post('/auctions', async (c) => {
 
   const insert = await c.env.AUCTION_DB
     .prepare(
-      'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline, title, description, auction_type, max_bid, snipe_window_sec, extension_sec, max_extensions, room_config_json, item_image_cid, nft_contract, nft_token_id, nft_chain_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline, title, description, auction_type, max_bid, snipe_window_sec, extension_sec, max_extensions, room_config_json, x402_policy_json, item_image_cid, nft_contract, nft_token_id, nft_chain_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     )
     .bind(
       auctionId,
@@ -249,6 +429,7 @@ app.post('/auctions', async (c) => {
       extensionSec,
       maxExtensions,
       JSON.stringify(mergedRoomConfig),
+      x402PolicyJson,
       itemImageCid,
       nftContract,
       nftTokenId,
@@ -313,7 +494,13 @@ app.post('/auctions', async (c) => {
     nftChainId,
   }
 
-  return c.json({ auctionId, createdAt, txHash, item }, 201)
+  return c.json({
+    auctionId,
+    createdAt,
+    txHash,
+    item,
+    ...(rawX402Policy ? { x402Policy: rawX402Policy } : {}),
+  }, 201)
 })
 
 app.get('/auctions/:id', async (c) => {
@@ -335,14 +522,8 @@ app.get('/auctions/:id', async (c) => {
 })
 
 app.post('/auctions/:id/close', async (c) => {
-  const expected = c.env.ENGINE_ADMIN_KEY
-  if (!expected) {
-    return c.json({ error: 'ENGINE_ADMIN_KEY not configured' }, 500)
-  }
-  const provided = c.req.header('X-ENGINE-ADMIN-KEY') ?? ''
-  if (provided !== expected) {
-    return c.json({ error: 'unauthorized' }, 401)
-  }
+  const denied = requireAdmin(c)
+  if (denied) return denied
 
   const auctionId = c.req.param('id')
   const room = roomStub(c.env, auctionId)
@@ -356,6 +537,9 @@ app.post('/auctions/:id/close', async (c) => {
 })
 
 app.post('/auctions/:id/cancel', async (c) => {
+  const denied = requireAdmin(c)
+  if (denied) return denied
+
   const auctionId = c.req.param('id')
   const room = roomStub(c.env, auctionId)
   const res = await room.fetch(
@@ -365,6 +549,67 @@ app.post('/auctions/:id/cancel', async (c) => {
     status: res.status,
     headers: { 'Content-Type': 'application/json' },
   })
+})
+
+app.delete('/auctions/:id', async (c) => {
+  const denied = requireAdmin(c)
+  if (denied) return denied
+
+  const auctionId = c.req.param('id')
+
+  // Hard-delete cascade from D1
+  await c.env.AUCTION_DB
+    .prepare('DELETE FROM bond_observations WHERE auction_id = ?')
+    .bind(auctionId)
+    .run()
+  await c.env.AUCTION_DB
+    .prepare('DELETE FROM events WHERE auction_id = ?')
+    .bind(auctionId)
+    .run()
+  await c.env.AUCTION_DB
+    .prepare('DELETE FROM auctions WHERE auction_id = ?')
+    .bind(auctionId)
+    .run()
+
+  // Clear DO storage
+  const room = roomStub(c.env, auctionId)
+  await room.fetch(makeRoomRequest('/delete', auctionId, { method: 'POST' }))
+
+  return c.json({ deleted: true, auctionId })
+})
+
+app.patch('/auctions/:id/x402-policy', async (c) => {
+  const denied = requireAdmin(c)
+  if (denied) return denied
+
+  const auctionId = c.req.param('id')
+
+  const auction = await c.env.AUCTION_DB
+    .prepare('SELECT auction_id, status FROM auctions WHERE auction_id = ?')
+    .bind(auctionId)
+    .first<{ auction_id: string; status: number }>()
+
+  if (!auction) {
+    return c.json({ error: 'auction not found' }, 404)
+  }
+
+  // Only allow policy changes on OPEN auctions (status=1)
+  if (auction.status >= 2) {
+    return c.json({ error: 'cannot update x402 policy on a closed or settled auction' }, 400)
+  }
+
+  const body = await c.req.json()
+  const policyError = validateAuctionX402Policy(body)
+  if (policyError) {
+    return c.json({ error: policyError }, 400)
+  }
+
+  await c.env.AUCTION_DB
+    .prepare('UPDATE auctions SET x402_policy_json = ? WHERE auction_id = ?')
+    .bind(JSON.stringify(body), auctionId)
+    .run()
+
+  return c.json({ ok: true, auctionId, x402Policy: body })
 })
 
 app.post('/auctions/:id/action', async (c) => {

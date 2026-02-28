@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { Miniflare } from 'miniflare'
 import app, { type Env } from '../src/index'
 import { applySchema, createTestMiniflare, randomAuctionId } from './setup'
+import { sha256Hex } from '../src/lib/x402-policy'
 
 type Call = {
   url: string
@@ -71,6 +72,9 @@ function createMockRoomNamespace() {
   return ns as unknown as DurableObjectNamespace & { _calls: Call[] }
 }
 
+const TEST_ADMIN_KEY = 'test-admin-key'
+const adminHeaders = { 'Content-Type': 'application/json', 'X-ENGINE-ADMIN-KEY': TEST_ADMIN_KEY }
+
 describe('API routes (Hono)', () => {
   let mf: Miniflare
   let db: D1Database
@@ -87,6 +91,7 @@ describe('API routes (Hono)', () => {
       AUCTION_DB: db,
       AUCTION_ROOM: rooms,
       SEQUENCER_PRIVATE_KEY: (process.env.SEQUENCER_PRIVATE_KEY ?? '0x' + '11'.repeat(32)) as string,
+      ENGINE_ADMIN_KEY: 'test-admin-key',
     }
   })
 
@@ -110,7 +115,7 @@ describe('API routes (Hono)', () => {
       'http://localhost/auctions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders,
         body: JSON.stringify({
           auctionId,
           manifestHash,
@@ -145,7 +150,7 @@ describe('API routes (Hono)', () => {
       'http://localhost/auctions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders,
         body: JSON.stringify({
           auctionId,
           manifestHash: '0x' + 'bb'.repeat(32),
@@ -192,7 +197,7 @@ describe('API routes (Hono)', () => {
       'http://localhost/auctions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders,
         body: JSON.stringify({
           auctionId,
           manifestHash: '0x' + 'bc'.repeat(32),
@@ -268,8 +273,7 @@ describe('API routes (Hono)', () => {
     expect(rooms._calls.some((c) => c.url.includes('/action'))).toBe(true)
   })
 
-  it('POST /auctions/:id/close requires sequencer admin key', async () => {
-    env.ENGINE_ADMIN_KEY = 'top-secret'
+  it('POST /auctions/:id/close requires admin key', async () => {
     const auctionId = randomAuctionId()
 
     const unauthorized = await app.request(
@@ -283,9 +287,7 @@ describe('API routes (Hono)', () => {
       `http://localhost/auctions/${auctionId}/close`,
       {
         method: 'POST',
-        headers: {
-          'X-ENGINE-ADMIN-KEY': 'top-secret',
-        },
+        headers: { 'X-ENGINE-ADMIN-KEY': TEST_ADMIN_KEY },
       },
       env,
     )
@@ -293,15 +295,22 @@ describe('API routes (Hono)', () => {
     expect(rooms._calls.some((c) => c.url.includes('/close'))).toBe(true)
   })
 
-  it('POST /auctions/:id/cancel proxies to room /cancel without admin auth', async () => {
-    env.ENGINE_ADMIN_KEY = 'top-secret'
+  it('POST /auctions/:id/cancel requires admin auth', async () => {
     const auctionId = randomAuctionId()
-    const res = await app.request(
+
+    const unauthorized = await app.request(
       `http://localhost/auctions/${auctionId}/cancel`,
       { method: 'POST' },
       env,
     )
-    expect(res.status).toBe(200)
+    expect(unauthorized.status).toBe(401)
+
+    const authorized = await app.request(
+      `http://localhost/auctions/${auctionId}/cancel`,
+      { method: 'POST', headers: { 'X-ENGINE-ADMIN-KEY': TEST_ADMIN_KEY } },
+      env,
+    )
+    expect(authorized.status).toBe(200)
     expect(rooms._calls.some((c) => c.url.includes('/cancel'))).toBe(true)
   })
 
@@ -363,6 +372,44 @@ describe('API routes (Hono)', () => {
 
     delete env.X402_MODE
     delete env.X402_RECEIVER_ADDRESS
+  })
+
+  it('manifest/events endpoints reject duplicate payment-signature receipt hash', async () => {
+    const auctionId = randomAuctionId()
+    env.X402_MODE = 'on'
+    env.X402_RECEIVER_ADDRESS = '0x' + '11'.repeat(20)
+
+    const paymentSignature = 'base64-mock-payload'
+    const receiptHash = await sha256Hex(paymentSignature)
+    await db
+      .prepare('INSERT INTO x402_receipts (receipt_hash, used_at) VALUES (?, ?)')
+      .bind(receiptHash, Math.floor(Date.now() / 1000))
+      .run()
+
+    const res = await app.request(
+      `http://localhost/auctions/${auctionId}/manifest`,
+      { headers: { 'PAYMENT-SIGNATURE': paymentSignature } },
+      env,
+    )
+    expect(res.status).toBe(409)
+    const json = await res.json()
+    expect(json.error).toContain('duplicate PAYMENT-SIGNATURE')
+
+    delete env.X402_MODE
+    delete env.X402_RECEIVER_ADDRESS
+  })
+
+  it('x402 mode on fails closed when receiver address is missing', async () => {
+    const auctionId = randomAuctionId()
+    env.X402_MODE = 'on'
+    delete env.X402_RECEIVER_ADDRESS
+
+    const res = await app.request(`http://localhost/auctions/${auctionId}/manifest`, {}, env)
+    expect(res.status).toBe(500)
+    const json = await res.json()
+    expect(json.error).toContain('X402_RECEIVER_ADDRESS')
+
+    delete env.X402_MODE
   })
 
   it('GET /auctions/:id/replay returns canonical replay bytes', async () => {
@@ -473,7 +520,7 @@ describe('API routes (Hono)', () => {
       'http://localhost/auctions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders,
         body: JSON.stringify({
           auctionId,
           manifestHash: '0x' + 'cc'.repeat(32),
@@ -516,7 +563,7 @@ describe('API routes (Hono)', () => {
       'http://localhost/auctions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders,
         body: JSON.stringify({
           auctionId,
           manifestHash: '0x' + 'dd'.repeat(32),
@@ -554,7 +601,7 @@ describe('API routes (Hono)', () => {
       'http://localhost/auctions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders,
         body: JSON.stringify({
           auctionId,
           manifestHash: '0x' + 'ee'.repeat(32),
@@ -579,7 +626,7 @@ describe('API routes (Hono)', () => {
       'http://localhost/auctions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders,
         body: JSON.stringify({
           auctionId,
           manifestHash: '0x' + 'ef'.repeat(32),
@@ -604,7 +651,7 @@ describe('API routes (Hono)', () => {
       'http://localhost/auctions',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders,
         body: JSON.stringify({
           auctionId,
           manifestHash: '0x' + 'fa'.repeat(32),
@@ -688,6 +735,248 @@ describe('API routes (Hono)', () => {
       env,
     )
     expect(res.status).toBe(404)
+  })
+
+  // ── Per-Auction x402 Policy ──────────────────────────────────────────
+
+  it('POST /auctions with x402Policy stores policy in D1 and round-trips', async () => {
+    const auctionId = randomAuctionId()
+    const deadline = Math.floor(Date.now() / 1000) + 60
+
+    const res = await app.request(
+      'http://localhost/auctions',
+      {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify({
+          auctionId,
+          manifestHash: '0x' + 'a1'.repeat(32),
+          reservePrice: '1000000',
+          deadline,
+          x402Policy: { mode: 'on', priceManifest: '$0.005', receiverAddress: '0x' + '33'.repeat(20) },
+        }),
+      },
+      env,
+    )
+
+    expect(res.status).toBe(201)
+    const json = await res.json()
+    expect(json.x402Policy).toBeTruthy()
+    expect(json.x402Policy.mode).toBe('on')
+    expect(json.x402Policy.priceManifest).toBe('$0.005')
+
+    const row = await db
+      .prepare('SELECT x402_policy_json FROM auctions WHERE auction_id = ?')
+      .bind(auctionId)
+      .first<{ x402_policy_json: string | null }>()
+    expect(row).not.toBeNull()
+    const stored = JSON.parse(row!.x402_policy_json!)
+    expect(stored.mode).toBe('on')
+    expect(stored.priceManifest).toBe('$0.005')
+  })
+
+  it('POST /auctions with invalid x402Policy returns 400', async () => {
+    const auctionId = randomAuctionId()
+    const deadline = Math.floor(Date.now() / 1000) + 60
+
+    const res = await app.request(
+      'http://localhost/auctions',
+      {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify({
+          auctionId,
+          manifestHash: '0x' + 'a2'.repeat(32),
+          reservePrice: '1000000',
+          deadline,
+          x402Policy: { mode: 'invalid-mode' },
+        }),
+      },
+      env,
+    )
+
+    expect(res.status).toBe(400)
+    const json = await res.json()
+    expect(json.error).toContain('mode')
+  })
+
+  it('POST /auctions without x402Policy is backward compatible (null)', async () => {
+    const auctionId = randomAuctionId()
+    const deadline = Math.floor(Date.now() / 1000) + 60
+
+    const res = await app.request(
+      'http://localhost/auctions',
+      {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify({
+          auctionId,
+          manifestHash: '0x' + 'a3'.repeat(32),
+          reservePrice: '1000000',
+          deadline,
+        }),
+      },
+      env,
+    )
+
+    expect(res.status).toBe(201)
+    const json = await res.json()
+    expect(json.x402Policy).toBeUndefined()
+
+    const row = await db
+      .prepare('SELECT x402_policy_json FROM auctions WHERE auction_id = ?')
+      .bind(auctionId)
+      .first<{ x402_policy_json: string | null }>()
+    expect(row!.x402_policy_json).toBeNull()
+  })
+
+  it('PATCH /auctions/:id/x402-policy updates D1 and returns success', async () => {
+    const auctionId = randomAuctionId()
+    await db
+      .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(auctionId, '0x' + 'ab'.repeat(32), 1, '1', '0', Math.floor(Date.now() / 1000) + 60)
+      .run()
+
+    const res = await app.request(
+      `http://localhost/auctions/${auctionId}/x402-policy`,
+      {
+        method: 'PATCH',
+        headers: adminHeaders,
+        body: JSON.stringify({ mode: 'off' }),
+      },
+      env,
+    )
+
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.ok).toBe(true)
+    expect(json.x402Policy.mode).toBe('off')
+
+    const row = await db
+      .prepare('SELECT x402_policy_json FROM auctions WHERE auction_id = ?')
+      .bind(auctionId)
+      .first<{ x402_policy_json: string | null }>()
+    expect(JSON.parse(row!.x402_policy_json!).mode).toBe('off')
+  })
+
+  it('PATCH /auctions/:id/x402-policy on closed auction returns 400', async () => {
+    const auctionId = randomAuctionId()
+    await db
+      .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(auctionId, '0x' + 'ab'.repeat(32), 2, '1', '0', Math.floor(Date.now() / 1000) + 60)
+      .run()
+
+    const res = await app.request(
+      `http://localhost/auctions/${auctionId}/x402-policy`,
+      {
+        method: 'PATCH',
+        headers: adminHeaders,
+        body: JSON.stringify({ mode: 'on', receiverAddress: '0x' + '11'.repeat(20) }),
+      },
+      env,
+    )
+
+    expect(res.status).toBe(400)
+    const json = await res.json()
+    expect(json.error).toContain('closed')
+  })
+
+  it('PATCH /auctions/:id/x402-policy without admin key returns 401', async () => {
+    const auctionId = randomAuctionId()
+
+    const res = await app.request(
+      `http://localhost/auctions/${auctionId}/x402-policy`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'off' }),
+      },
+      env,
+    )
+
+    expect(res.status).toBe(401)
+  })
+
+  it('PATCH /auctions/:id/x402-policy on non-existent auction returns 404', async () => {
+    const auctionId = randomAuctionId()
+
+    const res = await app.request(
+      `http://localhost/auctions/${auctionId}/x402-policy`,
+      {
+        method: 'PATCH',
+        headers: adminHeaders,
+        body: JSON.stringify({ mode: 'off' }),
+      },
+      env,
+    )
+
+    expect(res.status).toBe(404)
+  })
+
+  it('per-auction override: auction on + platform off → 402 for that auction', async () => {
+    const auctionId = randomAuctionId()
+    const receiverAddr = '0x' + '44'.repeat(20)
+
+    // Create auction with x402 mode=on
+    await db
+      .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline, x402_policy_json) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(
+        auctionId,
+        '0x' + 'ab'.repeat(32),
+        1,
+        '1',
+        '0',
+        Math.floor(Date.now() / 1000) + 60,
+        JSON.stringify({ mode: 'on', receiverAddress: receiverAddr }),
+      )
+      .run()
+
+    // Platform is off (default env), but this auction overrides to on
+    delete env.X402_MODE
+    delete env.X402_RECEIVER_ADDRESS
+
+    const res = await app.request(
+      `http://localhost/auctions/${auctionId}/manifest`,
+      {},
+      env,
+    )
+
+    expect(res.status).toBe(402)
+  })
+
+  it('per-auction override: auction off + platform on → passthrough', async () => {
+    const auctionId = randomAuctionId()
+
+    // Create auction with x402 mode=off
+    await db
+      .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline, title, x402_policy_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(
+        auctionId,
+        '0x' + 'ab'.repeat(32),
+        1,
+        '1',
+        '0',
+        Math.floor(Date.now() / 1000) + 60,
+        'Free Auction',
+        JSON.stringify({ mode: 'off' }),
+      )
+      .run()
+
+    // Platform is ON
+    env.X402_MODE = 'on'
+    env.X402_RECEIVER_ADDRESS = '0x' + '55'.repeat(20)
+
+    const res = await app.request(
+      `http://localhost/auctions/${auctionId}/manifest`,
+      {},
+      env,
+    )
+
+    // Should pass through — auction is free
+    expect(res.status).toBe(200)
+
+    delete env.X402_MODE
+    delete env.X402_RECEIVER_ADDRESS
   })
 
   it('POST /auctions/:id/image returns 400 for empty body', async () => {

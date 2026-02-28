@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS auctions (
   extension_sec INTEGER NOT NULL DEFAULT 30,
   max_extensions INTEGER NOT NULL DEFAULT 5,
   room_config_json TEXT NOT NULL DEFAULT '{}',
+  x402_policy_json TEXT,
   replay_cid TEXT,
   item_image_cid TEXT,
   nft_contract TEXT,
