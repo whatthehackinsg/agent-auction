@@ -17,35 +17,41 @@ type TrailPreset = {
 
 function getTrailPreset(width: number): TrailPreset | null {
   if (width < 1024) {
-    return null;
+    return {
+      gridSize: 64,
+      trailSize: 0.12,
+      maxAge: 230,
+      interpolate: 6,
+      opacityClass: "opacity-55",
+    };
   }
 
   if (width >= 1536) {
     return {
-      gridSize: 68,
-      trailSize: 0.055,
+      gridSize: 82,
+      trailSize: 0.085,
       maxAge: 170,
-      interpolate: 2,
+      interpolate: 4,
       opacityClass: "opacity-45",
     };
   }
 
   if (width >= 1280) {
     return {
-      gridSize: 62,
-      trailSize: 0.065,
+      gridSize: 76,
+      trailSize: 0.095,
       maxAge: 190,
-      interpolate: 2,
+      interpolate: 4,
       opacityClass: "opacity-50",
     };
   }
 
   return {
-    gridSize: 56,
-      trailSize: 0.075,
-      maxAge: 210,
-    interpolate: 3,
-      opacityClass: "opacity-55",
+    gridSize: 70,
+    trailSize: 0.105,
+    maxAge: 210,
+    interpolate: 5,
+    opacityClass: "opacity-55",
   };
 }
 

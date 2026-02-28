@@ -41,6 +41,16 @@ type UvMoveEvent = {
   };
 };
 
+function configureTrailTexture(texture: THREE.Texture | null) {
+  if (!texture) return texture;
+  texture.minFilter = THREE.NearestFilter;
+  texture.magFilter = THREE.NearestFilter;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 const PixelDotMaterial = shaderMaterial(
   {
     resolution: new THREE.Vector2(1, 1),
@@ -59,17 +69,20 @@ const PixelDotMaterial = shaderMaterial(
     uniform float gridSize;
     uniform vec3 pixelColor;
 
+    vec2 pixelToTrailUv(vec2 pixelCoord) {
+      float maxDim = max(resolution.x, resolution.y);
+      vec2 uv = (pixelCoord + (maxDim - resolution) * 0.5) / maxDim;
+      return clamp(uv, 0.0, 1.0);
+    }
+
     void main() {
-      // Pixel-space grid: cellSize is always square
+      // Width-anchored grid so gridSize remains intuitive on very tall canvases.
       float cellSize = resolution.x / gridSize;
       vec2 cell = floor(gl_FragCoord.xy / cellSize);
       vec2 cellCenterPx = (cell + 0.5) * cellSize;
-
-      // Map pixel coords → trail texture UV (square, centered)
-      float maxDim = max(resolution.x, resolution.y);
-      vec2 trailUv = (cellCenterPx + (maxDim - resolution) * 0.5) / maxDim;
-
+      vec2 trailUv = pixelToTrailUv(cellCenterPx);
       float trail = texture2D(mouseTrail, trailUv).r;
+
       gl_FragColor = vec4(pixelColor, trail);
     }
   `
@@ -122,6 +135,7 @@ function Scene({
     interpolate,
     ease: easingFunction,
   }) as [THREE.Texture | null, (event: UvMoveEvent) => void];
+  const configuredTrail = configureTrailTexture(trail);
 
   const pixelColorUniform = useMemo(() => new THREE.Color(pixelColor), [pixelColor]);
   const resolutionUniform = useMemo(
@@ -161,7 +175,7 @@ function Scene({
         attach="material"
         gridSize={gridSize}
         resolution={resolutionUniform}
-        mouseTrail={trail}
+        mouseTrail={configuredTrail}
         pixelColor={pixelColorUniform}
       />
     </mesh>
@@ -169,10 +183,10 @@ function Scene({
 }
 
 export default function PixelTrail({
-  gridSize = 40,
-  trailSize = 0.05,
-  maxAge = 200,
-  interpolate = 2,
+  gridSize = 56,
+  trailSize = 0.1,
+  maxAge = 250,
+  interpolate = 8,
   easingFunction = (x: number) => x,
   canvasProps,
   glProps = {
@@ -189,6 +203,7 @@ export default function PixelTrail({
   const useGooey = gooeyEnabled ?? Boolean(gooeyFilter);
   const filterId = gooeyFilter?.id ?? "pixel-trail-goo-filter";
   const filterStrength = gooeyFilter?.strength ?? gooStrength;
+  const canvasDpr = canvasProps?.dpr ?? [1, 1.25];
   const canvasStyle = {
     position: "absolute",
     inset: 0,
@@ -202,6 +217,7 @@ export default function PixelTrail({
       {useGooey ? <GooeyFilter id={filterId} strength={filterStrength} /> : null}
       <Canvas
         {...canvasProps}
+        dpr={canvasDpr}
         gl={glProps}
         className={className}
         style={canvasStyle}
