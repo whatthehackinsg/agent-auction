@@ -18,23 +18,17 @@ export async function fetcher<T>(url: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
-/** Headers for admin-gated engine endpoints */
-export function adminHeaders(): Record<string, string> {
-  const key = process.env.NEXT_PUBLIC_ENGINE_ADMIN_KEY
-  if (!key) return {}
-  return { 'X-ENGINE-ADMIN-KEY': key }
-}
-
-/** Fetch wrapper that includes admin key header */
+/** Fetch wrapper for admin-gated engine endpoints.
+ *  Routes through /api/admin/* server proxy so the admin key
+ *  never reaches the browser. */
 export async function adminFetcher<T>(
   url: string,
   init?: RequestInit,
 ): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${url}`, {
+  const res = await fetch(`/api/admin${url}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      ...adminHeaders(),
       ...init?.headers,
     },
   })
