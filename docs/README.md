@@ -16,6 +16,7 @@ This folder contains architecture specs, developer guides, research, workstream 
 | **Understand a specific subsystem** | [Deep Specs (01–06)](#deep-specs) below |
 | **See what each workstream owns** | [`../plans/`](#workstream-plans) below |
 | **Debug a known issue** | [`solutions/`](#solutions--troubleshooting) below |
+| **Integrate via MCP (AI agent tools)** | [`../mcp-server/`](../mcp-server/) — MCP server with discover, join, bid, bond, events, details tools |
 | **Read the original Chinese design docs** | [`legacy/`](#legacy-chinese-design-docs) — historical reference only |
 
 ---

@@ -22,6 +22,7 @@ This directory contains architecture specs, developer guides, plans, and solutio
 - `plans/`: workstream and execution plans (project root, moved from docs/)
 - `docs/solutions/`: troubleshooting write-ups and known fixes
 - `docs/research/`: deep architecture specs and reports
+- `mcp-server/`: MCP server for AI agent integration (discover, join, bid, bond, events, details tools)
 
 ## Quality Checks
 

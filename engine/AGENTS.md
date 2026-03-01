@@ -24,27 +24,47 @@ npm run deploy
 - Treat `ENGINE_ALLOW_INSECURE_STUBS` as local-development-only.
 - Keep on-chain types in `src/types/contracts.ts` aligned with Solidity interfaces.
 - Do not change D1 schema assumptions without updating tests and migrations together.
+- Maintain two-tier WebSocket broadcast: participant sockets get full events, public sockets get masked events (no agentId/wallet leak).
+- `highestBidder` must be masked in public snapshots via `maskAgentId()` — raw value only for internal/participant requests.
+- Aggregate DO state (`bidCount`, `uniqueBidderSet`, `lastEventTimestamp`, `reservePrice`) must be persisted to DO storage on every update.
 
 ## Test Topology
 
-- Tests use Vitest with Miniflare and Worker bindings.
+- Tests use Vitest with Miniflare and Worker bindings. 182+ tests passing (1 pre-existing bond-watcher failure).
 - Shared setup utilities live in `engine/test/setup.ts`.
 - Durable Object flow is exercised by `engine/test/auction-room.test.ts` and related integration tests.
+- Two-tier WebSocket and events access control are covered by integration tests.
 
 ## x402 Micropayments
 
-The engine supports real x402 (HTTP 402) micropayments via `@x402/hono` for rate-limiting manifest and event endpoints.
+The engine supports real x402 (HTTP 402) micropayments via `@x402/hono` for monetizing discovery routes.
+
+### Discovery Gate (current)
+
+x402 gating applies to **discovery routes** (`/auctions` list and `/auctions/:id` detail) when `ENGINE_X402_DISCOVERY=true`. This is off by default.
 
 **Environment variables:**
-- `X402_MODE` — `'off'` (default, endpoints free) or `'on'` (payment required)
-- `X402_RECEIVER_ADDRESS` — wallet address to receive payments (required when `X402_MODE=on`)
+- `ENGINE_X402_DISCOVERY` — `'true'` to enable x402 on discovery routes (default: off)
+- `ENGINE_X402_DISCOVERY_PRICE` — price for `/auctions` list (default: `$0.001`)
+- `ENGINE_X402_DETAIL_PRICE` — price for `/auctions/:id` detail (default: `$0.001`)
+- `X402_RECEIVER_ADDRESS` — wallet address to receive payments (required when x402 enabled)
 - `X402_FACILITATOR_URL` — facilitator service URL (default: `https://www.x402.org/facilitator`)
 
-Set `X402_RECEIVER_ADDRESS` and `X402_FACILITATOR_URL` via `wrangler secret` or `.dev.vars`. `X402_MODE` defaults to `off` in `wrangler.toml`.
+**Admin key bypass**: Requests with a valid `X-ENGINE-ADMIN-KEY` header skip x402 payment on discovery routes (used by frontend proxy, MCP server).
 
-Gated endpoints when `X402_MODE=on`:
-- `GET /auctions/:id/manifest` — $0.001 per request
-- `GET /auctions/:id/events` — $0.0001 per request
+Set `X402_RECEIVER_ADDRESS` and `X402_FACILITATOR_URL` via `wrangler secret` or `.dev.vars`.
+
+### Events Access Control
+
+`/auctions/:id/events` is **not** x402-gated. Instead it requires one of:
+- Admin key via `X-ENGINE-ADMIN-KEY` header
+- Valid `participantToken` query param (agentId verified to have a JOIN event in D1)
+
+Non-participants without admin key receive `403`.
+
+### Legacy
+
+`X402_MODE` (`'off'`/`'on'`) still exists for the static x402 handler but is no longer used for manifest or event endpoints.
 
 Uses real testnet USDC on Base Sepolia (`0x036CbD53842c5426634e7929541eC2318f3dCF7e`), NOT MockUSDC.
 

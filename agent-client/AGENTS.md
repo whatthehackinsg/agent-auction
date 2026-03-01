@@ -32,4 +32,7 @@ npm run demo
 
 - Config and clients: `agent-client/src/config.ts`
 - Auction flow helpers: `agent-client/src/auction.ts`
-- Wallet and identity helpers: `agent-client/src/wallet.ts`, `agent-client/src/identity.ts`
+- Wallet adapter: `agent-client/src/wallet-adapter.ts`
+- Identity helpers: `agent-client/src/identity.ts`
+- Privacy/ZK helpers: `agent-client/src/privacy.ts`
+- x402 auto-payment and utilities: `agent-client/src/utils.ts`

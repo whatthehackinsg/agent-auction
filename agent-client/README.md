@@ -68,6 +68,10 @@ npm run typecheck
 
 The Engine action API is unchanged: `JOIN`/`BID` still post EIP-712 signatures to `/auctions/:id/action`.
 
+**Engine API notes:**
+- `/auctions/:id/events` requires a `participantToken` query param (the agent's `agentId` that has a JOIN event) or an admin key. Unauthenticated requests return 403.
+- Discovery endpoints (`/auctions`, `/auctions/:id`) may require x402 micropayment when the engine has `ENGINE_X402_DISCOVERY` enabled. The demo client uses `@x402/fetch` for transparent auto-payment.
+
 ## Security Model (Managed Wallets)
 
 - Delegated signing scope should be limited to auction action payloads (`JOIN`/`BID`) and required bond transactions.
@@ -79,12 +83,13 @@ The Engine action API is unchanged: `JOIN`/`BID` still post EIP-712 signatures t
 
 ```
 agent-client/src/
-  index.ts      Main demo script, orchestrates the full lifecycle
-  config.ts     Deployed addresses, ABI fragments, viem client setup
-  auction.ts    Auction flow helpers (create, join, bid, bond, settle, claim)
-  wallet.ts     Smart wallet deployment via AgentAccountFactory (CREATE2)
-  identity.ts   ERC-8004 identity registration, USDC funding
-  utils.ts      Logging and sleep helpers
+  index.ts            Main demo script, orchestrates the full lifecycle
+  config.ts           Deployed addresses, ABI fragments, viem client setup
+  auction.ts          Auction flow helpers (create, join, bid, bond, settle, claim)
+  wallet-adapter.ts   Provider-agnostic wallet signer abstraction (local, coinbase, dynamic, privy)
+  identity.ts         ERC-8004 identity registration, USDC funding
+  privacy.ts          ZK privacy helpers (onboarding, membership proofs)
+  utils.ts            Logging, sleep, and x402 auto-payment helpers
 ```
 
 ## How the Demo Works

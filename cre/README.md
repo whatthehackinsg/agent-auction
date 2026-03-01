@@ -108,7 +108,6 @@ cast send $ESCROW "configureCRE(bytes32,bytes10,address)" \
 | AuctionRegistry v2 (trigger source) | `0xFEc7a05707AF85C6b248314E20FF8EfF590c3639` |
 | AuctionEscrow v2 (IReceiver target) | `0x20944f46AB83F7eA40923D7543AF742Da829743c` |
 | KeystoneForwarder (real) | `0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5` |
-| MockIdentityRegistry | `0x68E06c33D4957102362ACffC2BFF9E6b38199318` |
 
 ## MVP Limitations
 

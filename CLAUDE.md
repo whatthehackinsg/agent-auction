@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Chainlink 2026 Hackathon** project: an **agent-native auction platform** where AI agents autonomously discover, join, bid in, and settle auctions — with on-chain USDC escrow, verifiable event ordering, and CRE-based trustless settlement.
 
-**Current stage**: Contracts deployed & tested (117 tests) → security audit complete (9 findings fixed) → deployed to Base Sepolia → CRE E2E settlement confirmed on-chain (`transmissionSuccess=true`) → engine + frontend integration in progress.
+**Current stage**: Contracts deployed & tested (144 tests) → security audit complete (9 findings fixed) → deployed to Base Sepolia → CRE E2E settlement confirmed on-chain → monetization redesign complete (commission, two-tier WebSocket, x402 discovery gating) → frontend scoreboard with masked data → MCP server with 7 agent tools.
 
 ## Build, Test, and Lint
 
@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Smart contracts (Foundry — solc 0.8.24, Cancun EVM, optimizer 200 runs)
 cd contracts
 forge build                          # Compile all contracts
-forge test                           # Run all 117 tests
+forge test                           # Run all 144 tests
 forge test --match-contract Escrow   # Run a specific test suite
 forge test --match-test testDeposit  # Run a single test
 forge test -vvv                      # Verbose with stack traces
@@ -47,6 +47,11 @@ npm run lint                         # ESLint
 cd packages/crypto
 npm run build                        # Compile TypeScript
 npm test                             # Run 56 tests (requires --experimental-vm-modules)
+
+# MCP server (Streamable HTTP transport)
+cd mcp-server
+npx tsc --noEmit                     # Type check
+npm start                            # Start server (default port 3001)
 
 # Agent client
 cd agent-client
@@ -94,7 +99,7 @@ AuctionEscrow.onReport() → settlement
 | Contract | Role |
 |---|---|
 | `AuctionRegistry.sol` | Lifecycle state machine: OPEN → CLOSED → SETTLED/CANCELLED |
-| `AuctionEscrow.sol` | USDC bonds + CRE settlement via `IReceiver.onReport()` |
+| `AuctionEscrow.sol` | USDC bonds + CRE settlement via `IReceiver.onReport()` + platform commission (global `commissionBps`, capped 10%) |
 | `AgentPrivacyRegistry.sol` | ZK membership Merkle root + nullifier tracking |
 | `NftEscrow.sol` | ERC-721 custody for auction items (deposit/claim/reclaim) |
 | `MockKeystoneForwarder.sol` | Test helper simulating Chainlink KeystoneForwarder |
@@ -112,6 +117,9 @@ Target chain: **Base Sepolia** (chainId 84532).
 - **Crypto delegation**: Poseidon hash chain via poseidon-lite (zero-dep, CF Workers compatible), matching `@agent-auction/crypto` for ZK-verifiable chains; real snarkjs.groth16.verify for ZK proofs with inlined vkeys (RegistryMembership + BidRange). `ENGINE_REQUIRE_PROOFS=true` enforces mandatory ZK proofs on JOIN and BID. `ENGINE_ALLOW_INSECURE_STUBS=true` bypasses EIP-712 sig checks (local dev only — stubs fail-closed by default)
 - **Identity verification**: `ENGINE_VERIFY_WALLET=true` verifies wallet matches ERC-8004 `ownerOf(agentId)` on JOIN (cached in DO storage). `POST /verify-identity` for on-chain identity checks.
 - **Privacy registry**: Engine reads `AgentPrivacyRegistry.getRoot()` to cross-check ZK membership proof's registryRoot against on-chain state
+- **Two-tier WebSocket**: Public connections receive masked events (no agentId/wallet); participant connections (verified via `participantToken` from JOIN) receive full event data
+- **x402 discovery gating**: Optional (`ENGINE_X402_DISCOVERY=true`) micropayment gate on `GET /auctions` and `GET /auctions/:id`. Prices configurable via `ENGINE_X402_DISCOVERY_PRICE` and `ENGINE_X402_DETAIL_PRICE`. Admin key (`ENGINE_ADMIN_KEY`) bypasses gate.
+- **Aggregate snapshot fields**: `bidCount`, `uniqueBidders`, `lastActivitySec`, `competitionLevel`, `priceIncreasePct`, `snipeWindowActive`, `extensionsRemaining` — strategic intelligence without identity leaks
 
 ## CRE Settlement Flow
 
@@ -169,8 +177,8 @@ Deployer/Sequencer: `0x633ec0e633AA4d8BbCCEa280331A935747416737`.
 ## Architecture Invariants (Must Preserve)
 
 1. **Identity**: ERC-8004 registry — agents self-register, engine reads on-chain
-2. **Bond path**: Direct USDC deposit primary; x402 fallback
-3. **Settlement**: Always via CRE `onReport()`, never direct payout
+2. **Bond path**: Direct USDC deposit to escrow primary; x402 fallback
+3. **Settlement**: Always via CRE `onReport()`, never direct payout. Commission deducted at settlement (global `commissionBps`).
 4. **Sequencer**: `seq` values monotonic and gap-free per room
 5. **Off-chain agents**: Can observe but cannot bid or bond
 6. **Runtime signing**: secp256k1, verifiable via EIP-712/ecrecover

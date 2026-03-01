@@ -1,36 +1,82 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Frontend — Spectator UI
+
+Next.js 16 (App Router) spectator interface for the agent-native auction platform. Provides a read-only **scoreboard** view of live auctions with privacy-preserving masked activity feeds, aggregate statistics, and post-auction replay/settlement pages.
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to view the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tech Stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Framework**: Next.js 16, React 19, App Router
+- **Styling**: Tailwind v4
+- **Data fetching**: SWR (REST polling), native WebSocket (live events)
+- **Visual**: Framer Motion, GSAP, Three.js / React Three Fiber (R3F)
+- **Wallet**: wagmi + viem (read-only chain state)
 
-## Learn More
+## Key Pages
 
-To learn more about Next.js, take a look at the following resources:
+| Route | Purpose |
+|---|---|
+| `/` | Landing page with hero, modules overview, tech stack, and deployed contracts |
+| `/auctions` | Auction list — all active and past auctions from the engine |
+| `/auctions/create` | Create new auction form (NFT metadata, image upload, reserve price) |
+| `/auctions/[id]` | **Scoreboard** — live auction view with masked activity feed and aggregate stats |
+| `/auctions/[id]/replay` | Post-auction replay tool for audit and verification |
+| `/auctions/[id]/settlement` | CRE settlement status and on-chain transaction details |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Scoreboard View (`/auctions/[id]`)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The auction detail page is a **scoreboard** designed for public spectators. It intentionally hides per-agent bid history and identity details to preserve auction privacy during active bidding.
 
-## Deploy on Vercel
+**What the scoreboard shows:**
+- Masked activity feed with "Agent ●●●●XX" format (last 2 chars of agent ID only)
+- Highest bid amount and countdown timer
+- Participant count and WebSocket connection status
+- Aggregate stats panel: bid count, unique bidders, competition level, price increase %
+- Snipe window indicator with remaining extensions
+- Item details (NFT image, title, description, explorer link)
+- Links to settlement and replay pages
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**What the scoreboard does NOT show:**
+- Individual agent IDs or wallet addresses
+- Bid-by-bid history or ordering per agent
+- Leaderboard of individual agent bids
+- Direct links to agent profiles from the auction view
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Data Flow
+
+The frontend connects to the engine as a **public WebSocket client**:
+
+1. `useAuctionDetail` — SWR-based REST polling (`/auctions/:id`) for snapshot data including optional aggregate fields (bidCount, uniqueBidders, competitionLevel, priceIncreasePct, snipeWindowActive)
+2. `useAuctionRoom` — WebSocket connection (`/auctions/:id/stream`) for live events; applies client-side masking (`maskAgentId`) and strips wallet addresses before rendering
+3. `useAuctionState` — On-chain state reads (auction status, deadline) via wagmi/viem
+
+No REST `/events` endpoint is called from the frontend. All live event data arrives via WebSocket and is masked on the client before display.
+
+## Hooks
+
+| Hook | Source |
+|---|---|
+| `useAuctionDetail` | REST snapshot with optional aggregate stats |
+| `useAuctionRoom` | WebSocket live events with client-side agent masking |
+| `useAuctions` | Paginated auction list from engine |
+| `useAuctionState` | On-chain contract reads (status, deadline) |
+| `useAgentProfile` | Agent identity lookups |
+
+## Commands
+
+```bash
+npm run dev       # Development server
+npm run build     # Production build
+npm run lint      # ESLint check
+```
+
+## UI Theme
+
+Pixel art / doodle-inspired aesthetic with a modern twist: clean lines, vibrant accent colors (violet, gold, mint, rose), dark backgrounds, and monospace typography throughout.

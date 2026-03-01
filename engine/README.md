@@ -17,19 +17,25 @@ The engine acts as a trusted sequencer: it assigns monotonic `seq` numbers to ro
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/health` | Health check |
-| GET | `/auctions` | List all auctions (D1 query) |
+| GET | `/auctions` | List all auctions (x402-gated when `ENGINE_X402_DISCOVERY=true`) |
 | POST | `/auctions` | Create auction (`auctionId`, `manifestHash`, `reservePrice`, `depositAmount`, `deadline`) |
-| GET | `/auctions/:id` | Get auction + room snapshot |
+| GET | `/auctions/:id` | Get auction + room snapshot (x402-gated when `ENGINE_X402_DISCOVERY=true`) |
 | POST | `/auctions/:id/close` | Manually close auction (sequencer-only via `X-ENGINE-ADMIN-KEY`) |
 | POST | `/auctions/:id/cancel` | Cancel expired auction after 72h timeout path |
 | POST | `/auctions/:id/action` | Submit action to room DO (join, bid, etc.) |
-| GET | `/auctions/:id/manifest` | Get auction manifest (x402-gated when `X402_MODE=on`, 0.001 USDC) |
-| GET | `/auctions/:id/events` | Get ordered events (x402-gated when `X402_MODE=on`, 0.0001 USDC) |
+| GET | `/auctions/:id/manifest` | Get auction manifest |
+| GET | `/auctions/:id/events` | Get ordered events (admin key or participantToken required, 403 otherwise) |
 | GET | `/auctions/:id/replay` | Get replay bundle (binary, returns `X-Replay-Content-Hash` header + optional `X-IPFS-CID`) |
 | GET | `/auctions/:id/bonds/:agentId` | Get bond status (polls chain logs) |
-| GET | `/auctions/:id/stream` | SSE/WebSocket event stream (proxied to DO) |
+| GET | `/auctions/:id/stream` | WebSocket event stream (two-tier: public vs participant, proxied to DO) |
 
-Manifest and event endpoints are gated with x402 micropayments when `X402_MODE=on`. Duplicate `PAYMENT-SIGNATURE` receipts are rejected (`409`) via `x402_receipts` dedup.
+### Access Control
+
+- **Discovery routes** (`/auctions`, `/auctions/:id`): x402-gated when `ENGINE_X402_DISCOVERY=true`. Admin key bypass via `X-ENGINE-ADMIN-KEY` header.
+- **Events** (`/auctions/:id/events`): Requires admin key (`X-ENGINE-ADMIN-KEY`) or a valid `participantToken` query param (verified as an agentId with a JOIN event in D1). Non-participants receive `403`.
+- **WebSocket stream** (`/auctions/:id/stream`): Two-tier — connections with a valid `participantToken` get full event data (agentId, wallet); public connections get masked events (agentId shown as `"Agent ●●●●XX"`, wallet stripped).
+
+Duplicate `PAYMENT-SIGNATURE` receipts are rejected (`409`) via `x402_receipts` dedup.
 
 ## Durable Objects
 
@@ -37,7 +43,22 @@ Manifest and event endpoints are gated with x402 micropayments when `X402_MODE=o
 
 - Event log with monotonic `seq` values (gap-free per room)
 - Participant tracking (join, bid, close actions)
-- Real-time broadcast to connected SSE/WebSocket clients
+- Aggregate bid tracking: `bidCount`, `lastEventTimestamp`, `uniqueBidderSet`, `uniqueBidderCount`, `reservePrice` (persisted to DO storage)
+- Two-tier real-time broadcast: participant WebSockets get full events, public WebSockets get masked events (agentId masked as `"Agent ●●●●XX"`, wallet stripped)
+
+**RoomSnapshot** includes aggregate fields for spectator/agent intelligence:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bidCount` | number | Total BID events in the room |
+| `uniqueBidders` | number | Distinct agents who have bid |
+| `lastActivitySec` | number | Seconds since last event |
+| `competitionLevel` | `'low'` \| `'medium'` \| `'high'` | Derived from bid count (low < 3, medium 3-10, high > 10) |
+| `priceIncreasePct` | number | % above reserve price (0 if no reserve known) |
+| `snipeWindowActive` | boolean | Currently in anti-snipe window? |
+| `extensionsRemaining` | number | `maxExtensions - extensionCount` |
+
+`highestBidder` is masked in public snapshots (`"Agent ●●●●XX"` showing last 2 chars of agentId); internal/participant requests see the raw value.
 
 Each auction gets its own DO instance, keyed by `auctionId`.
 
@@ -85,10 +106,13 @@ npm run dev
 | `AUCTION_ROOM` | DurableObjectNamespace | DO binding (class: `AuctionRoom`) |
 | `SEQUENCER_PRIVATE_KEY` | string | Sequencer signing key |
 | `PINATA_API_KEY` | string (optional) | IPFS pinning via Pinata |
-| `X402_MODE` | string (optional) | x402 payment mode (`off`/`on`) |
-| `X402_RECEIVER_ADDRESS` | string (optional, required when `X402_MODE=on`) | Recipient wallet for x402 payments |
+| `X402_MODE` | string (optional) | x402 payment mode (`off`/`on`) — legacy, used for static x402 handler |
+| `X402_RECEIVER_ADDRESS` | string (optional, required when x402 enabled) | Recipient wallet for x402 payments |
 | `X402_FACILITATOR_URL` | string (optional) | x402 facilitator URL (default: `https://www.x402.org/facilitator`) |
-| `ENGINE_ADMIN_KEY` | string (optional, required for `/close`) | Shared secret for sequencer-only close route |
+| `ENGINE_ADMIN_KEY` | string (optional, required for `/close`) | Shared secret for sequencer-only close route + events/discovery bypass |
+| `ENGINE_X402_DISCOVERY` | string (optional) | `'true'` to enable x402 gating on discovery routes (default: off) |
+| `ENGINE_X402_DISCOVERY_PRICE` | string (optional) | Price for `/auctions` list endpoint (default: `$0.001`) |
+| `ENGINE_X402_DETAIL_PRICE` | string (optional) | Price for `/auctions/:id` detail endpoint (default: `$0.001`) |
 
 ### Demo scripts (.env)
 
@@ -126,7 +150,7 @@ Pimlico on Base Sepolia. The demo scripts prove the full UserOp flow:
 1. `permissionless-userop-demo.ts` confirms SimpleAccount bundler connectivity
 2. `agent-userop-demo.ts` runs the complete AgentAccount + AgentPaymaster UserOp cycle
 
-Bond path priority: EIP-4337 direct transfer to escrow (primary), x402 as fallback.
+Bond path priority: direct USDC deposit to escrow (primary), x402 as fallback.
 
 ## Crypto Implementation
 

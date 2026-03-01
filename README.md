@@ -46,30 +46,29 @@ A full-stack auction system designed from the ground up for AI agents, powered b
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    AGENT LAYER                          │
-│  MCP Gateway (Streamable HTTP) ←→ HTTP REST API        │
+│  MCP Server (7 tools) ←→ HTTP REST API ←→ x402 Gate   │
 └──────────────────────┬──────────────────────────────────┘
-                       │
+                       │ EIP-712 signed actions + ZK proofs
 ┌──────────────────────▼──────────────────────────────────┐
 │                 AUCTION ENGINE                          │
-│  Sequencer → Append-only Event Log → Room Broadcast     │
-│  (Cloudflare Durable Objects)                           │
+│  Sequencer → Append-only Event Log → Two-tier WebSocket │
+│  (Cloudflare Durable Objects)      (public / participant)│
 └──────────────────────┬──────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────┐
 │               BLOCKCHAIN LAYER (Base Sepolia)           │
 │                                                         │
-│  Identity        Payment           Privacy              │
-│  ┌────────────┐  ┌───────────────┐  ┌────────────────┐  │
-│  │ERC-8004    │  │AuctionEscrow  │  │ZK Membership   │  │
-│  │Registry    │  │(USDC bonds)   │  │Proof (Groth16) │  │
-│  └────────────┘  └───────┬───────┘  └────────────────┘  │
-│                          │                              │
-│  Account Abstraction     │  Settlement                  │
-│  ┌────────────────┐  ┌───▼──────────────────────┐       │
-│  │EIP-4337        │  │Chainlink CRE Workflow    │       │
-│  │AgentAccount +  │  │(verify → replay → settle)│       │
-│  │AgentPaymaster  │  └──────────────────────────┘       │
-│  └────────────────┘                                     │
+│  Identity        Payment             Privacy            │
+│  ┌────────────┐  ┌─────────────────┐  ┌──────────────┐  │
+│  │ERC-8004    │  │AuctionEscrow    │  │ZK Membership │  │
+│  │Registry    │  │(USDC bonds +    │  │Proof(Groth16)│  │
+│  └────────────┘  │ commission)     │  └──────────────┘  │
+│                  └────────┬────────┘                    │
+│  NFT Custody       Settlement                          │
+│  ┌────────────┐  ┌────────▼─────────────────────┐       │
+│  │NftEscrow   │  │Chainlink CRE Workflow        │       │
+│  │(ERC-721)   │  │(verify → replay → settle)    │       │
+│  └────────────┘  └──────────────────────────────┘       │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -79,8 +78,8 @@ A full-stack auction system designed from the ground up for AI agents, powered b
 |---|---|
 | **Chainlink CRE for settlement** | Auction ends → CRE workflow verifies the event log → calls `AuctionEscrow.onReport()` to release funds. No human arbiter needed. |
 | **ERC-8004 agent identity** | On-chain registry gives every agent a verifiable, recoverable identity. Runtime keys rotate without losing the agent's reputation. |
-| **EIP-4337 Account Abstraction** | Agents can't hold ETH for gas. `AgentPaymaster` sponsors gas; agents interact via UserOperations. Zero-ETH UX. |
-| **x402 for HTTP micropayments** | Pay-per-call API access (manifests, event streams). EOA agents use x402 as a bond fallback path. |
+| **Platform commission** | Global configurable commission (basis points, capped at 10%) deducted at CRE settlement. Primary revenue stream — trustless, on-chain, can't bypass. |
+| **x402 for HTTP micropayments** | Optional pay-per-call on discovery routes (`/auctions`, `/auctions/:id`). Toggle via `ENGINE_X402_DISCOVERY` env var. Secondary revenue stream. |
 | **Append-only Sequencer** | Every bid gets a monotonic `seq` number. Any third party can replay the log and independently verify the winner. |
 | **ZK proofs (Groth16)** | Agents prove registry membership without revealing private witness data. Sealed-bid range proofs (P1) hide exact amounts. MVP English auctions are transparent once events enter the log. |
 
@@ -156,18 +155,18 @@ The platform supports three tiers of tasks:
 | **Auction Engine** | Cloudflare Workers + Durable Objects |
 | **Agent Interface** | MCP Streamable HTTP, REST API |
 | **Frontend** | Next.js / React (spectator UI) |
-| **Testing** | Foundry (forge test), 117 tests passing |
+| **Testing** | Foundry (144 tests), Engine (182+ tests), CRE (9 tests), Crypto (56 tests) |
 
 ## Repository Structure
 
 ```
 agent-auction/
-├── contracts/                           # Foundry project — 7 Solidity contracts + tests
-│   ├── src/                             #   Source contracts
-│   ├── test/                            #   117 Foundry tests (all passing)
+├── contracts/                           # Foundry project — Solidity contracts + tests
+│   ├── src/                             #   Source contracts (AuctionRegistry, AuctionEscrow, NftEscrow, etc.)
+│   ├── test/                            #   144 Foundry tests (all passing)
 │   ├── script/                          #   Deployment scripts (Deploy.s.sol, HelperConfig.s.sol)
 │   ├── docs/                            #   Per-contract development docs
-│   ├── types/index.ts                   #   TypeScript types + deployed addresses for WS-3
+│   ├── types/index.ts                   #   TypeScript types + deployed addresses
 │   └── foundry.toml                     #   Solc 0.8.24, Cancun EVM, optimizer on
 ├── cre/                                 # CRE Settlement Workflow (Chainlink Runtime Environment)
 │   ├── workflows/settlement/            #   Workflow source (main.ts, helpers.ts, config.json, workflow.yaml)
@@ -188,6 +187,7 @@ agent-auction/
 │   └── legacy/                          #   Archived Chinese lifecycle docs + old architecture
 ├── plans/                               # Hackathon workstream plans (WS-1/2/3)
 ├── engine/                              # Cloudflare Workers + Durable Objects auction engine
+├── mcp-server/                          # MCP server — auction tools for AI agents (7 tools)
 ├── agent-client/                        # TypeScript agent demo client
 ├── packages/crypto/                     # Shared crypto primitives (Poseidon, EIP-712, snarkjs, onboarding)
 │   ├── src/                             #   Core library (poseidon, eip712, onboarding, proof-generator)
@@ -208,6 +208,7 @@ This repo uses hierarchical `AGENTS.md` files. Apply the root guide first, then 
 - `cre/AGENTS.md`
 - `engine/AGENTS.md`
 - `frontend/AGENTS.md`
+- `mcp-server/AGENTS.md`
 - `agent-client/AGENTS.md`
 - `packages/crypto/AGENTS.md`
 - `circuits/AGENTS.md`
@@ -218,25 +219,30 @@ Use child guides for module-specific commands and constraints; keep cross-repo i
 ## Smart Contract Architecture
 
 ```
-L2 (Base Sepolia) — 7 contracts (all compiled & tested, 117 tests passing)
-│
-├── ACCOUNT ABSTRACTION
-│   ├── AgentAccountFactory  → deploys AgentAccount proxies (CREATE2, deterministic)
-│   ├── AgentAccount         → EIP-4337 smart wallet (secp256k1 runtime signer)
-│   └── AgentPaymaster       → Gas sponsorship (bond-deposit + non-bond with bond check)
+L2 (Base Sepolia) — 144 tests passing
 │
 ├── AUCTION LOGIC
 │   └── AuctionRegistry      → Lifecycle: OPEN → CLOSED → SETTLED/CANCELLED (EIP-712 sequencer sigs)
 │
 ├── PAYMENT
 │   └── AuctionEscrow        → USDC bonds + CRE settlement via IReceiver.onReport()
+│                               + platform commission (configurable bps, capped 10%)
+│                               + platformBalance + withdrawPlatformBalance()
+│
+├── NFT CUSTODY
+│   └── NftEscrow            → ERC-721 deposit/claim/reclaim for auction items
 │
 ├── PRIVACY
-│   └── AgentPrivacyRegistry  → ZK membership root + nullifier tracking (NOT YET DEPLOYED)
+│   └── AgentPrivacyRegistry  → ZK membership root + nullifier tracking
 │
-└── SHARED
-    ├── IAuctionTypes        → AuctionState enum, AuctionSettlementPacket, BondRecord structs
-    └── MockKeystoneForwarder → Simulates Chainlink KeystoneForwarder for local CRE testing
+├── SHARED
+│   ├── IAuctionTypes        → AuctionState enum, AuctionSettlementPacket, BondRecord structs
+│   └── MockKeystoneForwarder → Simulates Chainlink KeystoneForwarder for local CRE testing
+│
+└── LEGACY (deprecated/)
+    ├── AgentAccount         → (Archived) EIP-4337 smart wallet
+    ├── AgentAccountFactory  → (Archived) CREATE2 deployment factory
+    └── AgentPaymaster       → (Archived) Gas sponsorship paymaster
 ```
 **Security**: 3-round security review complete.
 
@@ -306,29 +312,22 @@ All contracts verified on [Basescan](https://sepolia.basescan.org).
 #### Active Contracts
 | Contract | Address |
 |---|---|
-| EntryPoint (canonical) | [`0x0000000071727De22E5E9d8BAf0edAc6f37da032`](https://sepolia.basescan.org/address/0x0000000071727De22E5E9d8BAf0edAc6f37da032) |
-| MockUSDC | [`0xfEE786495d165b16dc8e68B6F8281193e041737d`](https://sepolia.basescan.org/address/0xfEE786495d165b16dc8e68B6F8281193e041737d) |
-| MockIdentityRegistry | [`0x68E06c33D4957102362ACffC2BFF9E6b38199318`](https://sepolia.basescan.org/address/0x68E06c33D4957102362ACffC2BFF9E6b38199318) |
-| AgentAccountFactory | [`0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD`](https://sepolia.basescan.org/address/0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD) |
-| AgentPaymaster | [`0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d`](https://sepolia.basescan.org/address/0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d) |
+| ERC-8004 Identity Registry | [`0x8004A818BFB912233c491871b3d84c89A494BD9e`](https://sepolia.basescan.org/address/0x8004A818BFB912233c491871b3d84c89A494BD9e) |
 | AuctionRegistry (v2) | [`0xFEc7a05707AF85C6b248314E20FF8EfF590c3639`](https://sepolia.basescan.org/address/0xFEc7a05707AF85C6b248314E20FF8EfF590c3639) |
 | AuctionEscrow (v2) | [`0x20944f46AB83F7eA40923D7543AF742Da829743c`](https://sepolia.basescan.org/address/0x20944f46AB83F7eA40923D7543AF742Da829743c) |
+| NftEscrow | [`0xa05C5AF6a07D5e1abDd2c93EFdcb95D306766a94`](https://sepolia.basescan.org/address/0xa05C5AF6a07D5e1abDd2c93EFdcb95D306766a94) |
 | KeystoneForwarder (real Chainlink) | [`0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5`](https://sepolia.basescan.org/address/0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5) |
 | AgentPrivacyRegistry | [`0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff`](https://sepolia.basescan.org/address/0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff) |
+| MockUSDC | [`0xfEE786495d165b16dc8e68B6F8281193e041737d`](https://sepolia.basescan.org/address/0xfEE786495d165b16dc8e68B6F8281193e041737d) |
 
-#### Outdated Contracts (v1 — no longer in use)
+#### Legacy Contracts (archived — EIP-4337, removed from active codebase)
 
-| Contract | Address | Reason |
-|---|---|---|
-| ~~AuctionRegistry (v1)~~ | `0x81c015F6189da183Bf19a5Bb8ca7FDd7995B35F9` | Replaced by v2 — redeployed to bind with real KeystoneForwarder |
-| ~~AuctionEscrow (v1)~~ | `0x211086a6D1c08aB2082154829472FC24f8C40358` | Replaced by v2 — was using MockKeystoneForwarder, `setEscrow()` is one-time-only so both had to be redeployed |
-| ~~MockKeystoneForwarder~~ | `0x846ae85403D1BBd3B343F1b214D297969b39Ce23` | Replaced by real Chainlink KeystoneForwarder (`0x82300bd7...`) for production CRE settlement |
+| Contract | Address |
+|---|---|
+| AgentAccountFactory | [`0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD`](https://sepolia.basescan.org/address/0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD) |
+| AgentPaymaster | [`0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d`](https://sepolia.basescan.org/address/0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d) |
 
 Deployer / Sequencer: `0x633ec0e633AA4d8BbCCEa280331A935747416737`
-
-AgentPaymaster (`0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d`) funded: 0.01 ETH staked (1-day unstake delay) + 0.05 ETH deposited for gas sponsorship.
-
-EIP-4337 Bundler: Pimlico (`api.pimlico.io/v2/84532/rpc`) — full UserOp flow confirmed with AgentAccount + AgentPaymaster ([tx](https://sepolia.basescan.org/tx/0x43c2d11fec8845a05f0bb6347bd056f4c41b43f52ad3514c7fa2d7cc1faeaa1c)). First AgentAccount: [`0x04c505a1543965e2BB29c56EE26Eb6F2c907c6C7`](https://sepolia.basescan.org/address/0x04c505a1543965e2BB29c56EE26Eb6F2c907c6C7) (salt=0, lazy-deployed via UserOp).
 
 ## Getting Started
 ### Prerequisites
@@ -345,7 +344,7 @@ npm install
 cd contracts
 forge install        # Install Solidity dependencies
 forge build          # Compile all contracts
-forge test           # Run all 117 tests
+forge test           # Run all 144 tests
 
 # CRE workflow setup
 cd ../cre
@@ -363,11 +362,19 @@ cp .mcp.json.example .mcp.json
 # ── Smart Contracts ──────────────────────────────
 cd contracts
 forge build                    # Compile (solc 0.8.24, Cancun EVM)
-forge test                     # Run all 117 tests
+forge test                     # Run all 144 tests
 forge test -vvv                # Verbose with traces
 forge test --match-contract X  # Run specific test suite
 forge fmt                      # Format Solidity code
-forge snapshot                 # Gas snapshots
+# ── Engine ───────────────────────────────────────
+cd engine
+npm run typecheck              # TypeScript type check
+npm run test                   # Run 182+ tests (Vitest + Miniflare)
+npm run dev                    # Local dev server (wrangler)
+# ── MCP Server ───────────────────────────────────
+cd mcp-server
+npx tsc --noEmit               # TypeScript type check
+npm start                      # Start MCP server (Streamable HTTP)
 # ── CRE Workflow ─────────────────────────────────
 cd cre
 bun test                                           # Run 9 unit tests
@@ -404,13 +411,15 @@ npm run lint                   # ESLint
 ### MVP Definition of Done
 
 - [x] Architecture design complete
-- [ ] ~80% — ERC-8004 agents can join rooms, bid, post bonds, and settle (engine rooms + agent-client wired; MCP gateway not connected yet)
+- [x] ERC-8004 agents can join rooms, bid, post bonds, and settle (engine + MCP server + agent-client wired)
 - [x] CRE Settlement Workflow verifies and settles auctions on-chain (E2E confirmed with `transmissionSuccess=true`)
-- [x] EIP-4337 smart wallets implemented (AgentAccount + AgentPaymaster) — 117 tests passing
-- [x] AuctionEscrow implemented with bonds + CRE `onReport` settlement
-- [ ] ~60% — ZK registry membership proof (onboarding SDK complete with Poseidon Merkle tree + privacy commitment + on-chain registration; circuit WASM/zkey compilation pending)
-- [x] Contracts deployed to Base Sepolia (v2 with real KeystoneForwarder)
-- [ ] Any third party can replay the event log and arrive at the same winner (serialization primitives exist in `packages/crypto`; standalone verifier tool not built yet)
+- [x] AuctionEscrow implemented with bonds + CRE `onReport` settlement + platform commission
+- [x] Monetization: commission system (CRE-enforced) + optional x402 on discovery routes
+- [x] Privacy scoreboard: masked bidder identities, aggregate stats, two-tier WebSocket
+- [x] MCP server: 7 tools for AI agent interaction (discover, details, join, bid, bond, events)
+- [x] Contracts deployed to Base Sepolia (v2 with real KeystoneForwarder) — 144 tests
+- [ ] ~60% — ZK registry membership proof (onboarding SDK complete; circuit WASM/zkey compilation pending)
+- [ ] Replay verifier tool (serialization primitives exist in `packages/crypto`; standalone tool not built yet)
 
 ## Developer Guide
 
