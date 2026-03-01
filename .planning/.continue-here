@@ -4,7 +4,8 @@
 
 **Workflow:** `/gsd:new-project` — ZK Privacy E2E milestone
 **Step completed:** Step 4 (Write PROJECT.md) — committed as 1fda234
-**Next step:** Step 5 (Workflow Preferences) → Step 6 (Research Decision) → Step 7 (Requirements) → Step 8 (Roadmap)
+**Next step:** Step 5 (Workflow Preferences — config.json) → Step 6 (Research Decision) → Step 7 (Requirements — REQUIREMENTS.md) → Step 8 (Roadmap — ROADMAP.md)
+**No global defaults found** at ~/.gsd/defaults.json — ask config questions manually
 
 ## What's Done
 
