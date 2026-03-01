@@ -80,7 +80,7 @@ AuctionEscrow.onReport() → settlement
 
 | Directory | Runtime | Purpose |
 |---|---|---|
-| `contracts/` | Foundry/Solidity | 7 contracts: identity (EIP-4337), auctions, escrow, privacy |
+| `contracts/` | Foundry/Solidity | Core contracts: auctions, escrow, privacy (4337 archived in deprecated/) |
 | `cre/` | Bun + CRE SDK | Settlement workflow triggered by `AuctionEnded` log event |
 | `engine/` | Cloudflare Workers | Durable Object sequencer, event log, API (Hono), D1, x402 micropayments |
 | `frontend/` | Next.js 16 | Spectator UI (read-only auction state, replay, 3D/GSAP animations) |
@@ -92,15 +92,16 @@ AuctionEscrow.onReport() → settlement
 
 | Contract | Role |
 |---|---|
-| `AgentAccount.sol` | EIP-4337 smart wallet (secp256k1 runtime signer) |
-| `AgentAccountFactory.sol` | CREATE2 deterministic deployment factory |
-| `AgentPaymaster.sol` | Gas sponsorship (bond-deposit + non-bond modes) |
 | `AuctionRegistry.sol` | Lifecycle state machine: OPEN → CLOSED → SETTLED/CANCELLED |
 | `AuctionEscrow.sol` | USDC bonds + CRE settlement via `IReceiver.onReport()` |
 | `AgentPrivacyRegistry.sol` | ZK membership Merkle root + nullifier tracking |
+| `NftEscrow.sol` | ERC-721 custody for auction items (deposit/claim/reclaim) |
 | `MockKeystoneForwarder.sol` | Test helper simulating Chainlink KeystoneForwarder |
+| `deprecated/AgentAccount.sol` | (Archived) EIP-4337 smart wallet |
+| `deprecated/AgentAccountFactory.sol` | (Archived) CREATE2 deployment factory |
+| `deprecated/AgentPaymaster.sol` | (Archived) Gas sponsorship paymaster |
 
-Target chain: **Base Sepolia** (chainId 84532). EntryPoint v0.7 (`0x0000000071727De22E5E9d8BAf0edAc6f37da032`).
+Target chain: **Base Sepolia** (chainId 84532).
 
 ## Engine Internals
 
@@ -146,20 +147,25 @@ Each module has its own `AGENTS.md` with local constraints. Apply root `AGENTS.m
 
 | Contract | Address |
 |---|---|
-| AgentAccountFactory | `0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD` |
-| AgentPaymaster | `0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d` |
 | AuctionRegistry (v2) | `0xFEc7a05707AF85C6b248314E20FF8EfF590c3639` |
 | AuctionEscrow (v2) | `0x20944f46AB83F7eA40923D7543AF742Da829743c` |
 | KeystoneForwarder (real) | `0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5` |
 | AgentPrivacyRegistry | `0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff` |
 | MockUSDC | `0xfEE786495d165b16dc8e68B6F8281193e041737d` |
 
-Deployer/Sequencer: `0x633ec0e633AA4d8BbCCEa280331A935747416737`. Paymaster funded: 0.01 ETH staked + 0.05 ETH deposited.
+Deployer/Sequencer: `0x633ec0e633AA4d8BbCCEa280331A935747416737`.
+
+### Legacy (Archived — EIP-4337, removed from active codebase)
+
+| Contract | Address |
+|---|---|
+| AgentAccountFactory | `0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD` |
+| AgentPaymaster | `0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d` |
 
 ## Architecture Invariants (Must Preserve)
 
-1. **Identity**: 3-layer model — Root Controller / Runtime Key / Session Token
-2. **Bond path**: EIP-4337 primary; x402 fallback
+1. **Identity**: ERC-8004 registry — agents self-register, engine reads on-chain
+2. **Bond path**: Direct USDC deposit primary; x402 fallback
 3. **Settlement**: Always via CRE `onReport()`, never direct payout
 4. **Sequencer**: `seq` values monotonic and gap-free per room
 5. **Off-chain agents**: Can observe but cannot bid or bond
