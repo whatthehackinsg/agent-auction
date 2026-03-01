@@ -206,12 +206,12 @@ const signer = verifyEIP712Signature(domain, types, value, signature);
 
 | Package | What it uses | Notes |
 |---------|-------------|-------|
-| `engine/` | Poseidon hashing, event hashes, nullifiers, replay bundles | Some features stubbed for Cloudflare Workers compatibility |
+| `engine/` | Poseidon hashing, event hashes, nullifiers, replay bundles | Fully compatible — poseidon-lite is CF Workers safe |
 | `agent-client/` | Full SDK via root workspace dependency | |
-| `circuits/test/` | Verification keys consumed from this package | Circuit tests use circomlibjs directly |
+| `circuits/test/` | Verification keys consumed from this package | |
 
 ## Dependencies
 
-- `circomlibjs` ^0.1.7 (Poseidon, Merkle tree primitives)
+- `poseidon-lite` ^0.3.0 (Poseidon hash — zero-dep, pure BigInt, CF Workers compatible)
 - `snarkjs` ^0.7.5 (Groth16 proof generation and verification)
 - `ethers` ^6.13.0 (ABI encoding, EIP-712, contract interaction)

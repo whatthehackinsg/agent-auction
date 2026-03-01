@@ -1,10 +1,10 @@
 /**
  * Crypto primitives for the auction engine (CF Workers compatible).
  *
- * Uses keccak256 (via viem) for event hash chaining and nullifier derivation.
- * This differs from @agent-auction/crypto which uses Poseidon for ZK-verifiability.
- * The engine's hash chain is purely an integrity commitment — ZK verification
- * happens in the CRE workflow, not in the engine.
+ * Uses Poseidon (via poseidon-lite, zero-dep) for event hash chaining — matching
+ * @agent-auction/crypto for ZK-verifiable hash chains. Nullifier derivation
+ * uses keccak256 as a deprecated fallback (ZK Poseidon nullifiers from proofs
+ * are preferred when available).
  *
  * EIP-712 signature verification uses viem.verifyTypedData (pure JS, CF Workers compatible).
  * ZK membership proof verification uses snarkjs.groth16.verify with inlined vkeys.
@@ -17,6 +17,10 @@ import {
   verifyTypedData,
 } from 'viem'
 import { EIP712_DOMAIN } from './addresses'
+import {
+  computeEventHash as poseidonComputeEventHash,
+  computePayloadHash as cryptoComputePayloadHash,
+} from '@agent-auction/crypto'
 
 // snarkjs is lazy-imported to avoid ffjavascript's URL.createObjectURL() at
 // module init time — that API doesn't exist in Cloudflare Workers.
@@ -28,7 +32,7 @@ async function getSnarkjs() {
   return _snarkjs
 }
 
-// ---- Hash Chain (keccak256-based, CF Workers compatible) ----
+// ---- Hash Chain (Poseidon-based via poseidon-lite, CF Workers compatible) ----
 
 /**
  * Compute the payload hash for an auction event.
@@ -55,28 +59,13 @@ export function computePayloadHash(
 }
 
 /**
- * Compute the chained event hash.
- * eventHash = keccak256(abi.encode(uint256 seq, bytes32 prevHash, bytes32 payloadHash))
+ * Compute the chained event hash using Poseidon.
+ * eventHash = Poseidon([to_fr(seq), to_fr(prevHash), to_fr(payloadHash)])
  *
- * Note: @agent-auction/crypto uses Poseidon for this step. The engine uses keccak256
- * because Poseidon (via circomlibjs/ffjavascript) is incompatible with CF Workers.
- * This is safe because the finalLogHash is a commitment, not ZK-verified in the engine.
+ * Matches @agent-auction/crypto's computeEventHash — same BN254 Poseidon via poseidon-lite.
+ * This makes the engine's hash chain ZK-verifiable and consistent with the shared crypto package.
  */
-export async function computeEventHash(
-  seq: bigint,
-  prevHash: Uint8Array,
-  payloadHash: Uint8Array,
-): Promise<Uint8Array> {
-  const encoded = encodeAbiParameters(
-    [
-      { name: 'seq', type: 'uint256' },
-      { name: 'prevHash', type: 'bytes32' },
-      { name: 'payloadHash', type: 'bytes32' },
-    ],
-    [seq, toHex(prevHash, { size: 32 }) as `0x${string}`, toHex(payloadHash, { size: 32 }) as `0x${string}`],
-  )
-  return toBytes(keccak256(encoded))
-}
+export const computeEventHash = poseidonComputeEventHash
 
 // ---- Nullifier Derivation (keccak256-based) ----
 

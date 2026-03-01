@@ -109,7 +109,7 @@ Target chain: **Base Sepolia** (chainId 84532).
 - **Durable Object** (`AuctionRoom`): core sequencer assigning monotonic `seq` numbers, maintains Poseidon hash chain event log
 - **Hono** HTTP framework for API routes
 - **D1** (SQLite) for persistent auction metadata
-- **Crypto delegation**: keccak256 hash chain (CF Workers compatible); real snarkjs.groth16.verify for ZK proofs with inlined vkeys (RegistryMembership + BidRange). `ENGINE_REQUIRE_PROOFS=true` enforces mandatory ZK proofs on JOIN and BID. `ENGINE_ALLOW_INSECURE_STUBS=true` bypasses EIP-712 sig checks (local dev only — stubs fail-closed by default)
+- **Crypto delegation**: Poseidon hash chain via poseidon-lite (zero-dep, CF Workers compatible), matching `@agent-auction/crypto` for ZK-verifiable chains; real snarkjs.groth16.verify for ZK proofs with inlined vkeys (RegistryMembership + BidRange). `ENGINE_REQUIRE_PROOFS=true` enforces mandatory ZK proofs on JOIN and BID. `ENGINE_ALLOW_INSECURE_STUBS=true` bypasses EIP-712 sig checks (local dev only — stubs fail-closed by default)
 - **Identity verification**: `ENGINE_VERIFY_WALLET=true` verifies wallet matches ERC-8004 `ownerOf(agentId)` on JOIN (cached in DO storage). `POST /verify-identity` for on-chain identity checks.
 - **Privacy registry**: Engine reads `AgentPrivacyRegistry.getRoot()` to cross-check ZK membership proof's registryRoot against on-chain state
 

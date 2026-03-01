@@ -7,7 +7,7 @@ import {
 } from "../src/replay-bundle.js";
 
 describe("ReplayBundleV1 serialization", () => {
-  it("Vector A: single JOIN event", () => {
+  it("Vector A: single JOIN event", async () => {
     const auctionId =
       "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const events: AuctionEvent[] = [
@@ -27,13 +27,13 @@ describe("ReplayBundleV1 serialization", () => {
     ];
 
     const bundle = serializeReplayBundle(auctionId, events);
-    const hash = computeContentHash(bundle);
+    const hash = await computeContentHash(bundle);
     expect(hash).toBe(
       "0xab8971d7ea24703e893bde6d94080df82dd1906e43fae580f5857ee8d93a62df"
     );
   });
 
-  it("Vector B: JOIN + BID events", () => {
+  it("Vector B: JOIN + BID events", async () => {
     const auctionId =
       "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     const events: AuctionEvent[] = [
@@ -66,7 +66,7 @@ describe("ReplayBundleV1 serialization", () => {
     ];
 
     const bundle = serializeReplayBundle(auctionId, events);
-    const hash = computeContentHash(bundle);
+    const hash = await computeContentHash(bundle);
     expect(hash).toBe(
       "0x4f695aa5b8a96673ca6e7e67ccc863de0e62c0782eaeab86c49a2fb41126979a"
     );

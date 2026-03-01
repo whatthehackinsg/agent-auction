@@ -8,7 +8,6 @@ import {
 } from "../src/proof-generator.js";
 import { verifyBidRangeProof, verifyMembershipProof } from "../src/snarkjs-verify.js";
 import { poseidonHash } from "../src/poseidon-chain.js";
-import { buildPoseidon } from "circomlibjs";
 
 describe("proof-generator: BidRange", () => {
   it("generates and verifies a valid bid range proof", async () => {
@@ -49,9 +48,6 @@ describe("proof-generator: BidRange", () => {
 
 describe("proof-generator: RegistryMembership", () => {
   it("generates and verifies a membership proof", async () => {
-    const poseidon = await buildPoseidon();
-    const F = poseidon.F;
-
     const agentSecret = 12345678901234567890n;
     const capabilityId = 42n;
     const leafIndex = 0n;

@@ -1,6 +1,8 @@
 /**
  * ReplayBundleV1 canonical serialization.
  *
+ * Runtime-universal: uses Web Crypto API (CF Workers, browsers) with Node crypto fallback.
+ *
  * Format (per spec docs/full_contract_arch(amended).md):
  *   - Encoding: UTF-8, LF line separator, no trailing newline
  *   - Header: schema:v1\nauction_id:<0x64-hex>
@@ -8,7 +10,17 @@
  *             prev_hash=<0x64-hex>|event_hash=<0x64-hex>|payload_hash=<0x64-hex>
  *   - replayContentHash = sha256(canonical_bytes)
  */
-import { createHash } from "crypto";
+
+/** Compute SHA-256 using Web Crypto (universal) or Node crypto (fallback) */
+async function sha256(data: Uint8Array): Promise<Uint8Array> {
+  if (typeof globalThis.crypto?.subtle?.digest === "function") {
+    const buf = await globalThis.crypto.subtle.digest("SHA-256", data);
+    return new Uint8Array(buf);
+  }
+  // Node.js fallback
+  const { createHash } = await import("crypto");
+  return createHash("sha256").update(data).digest();
+}
 
 /** Action type tokens (uppercase, per spec) */
 export const ACTION_TOKENS: Record<number, string> = {
@@ -16,6 +28,8 @@ export const ACTION_TOKENS: Record<number, string> = {
   2: "BID",
   3: "CLOSE",
   4: "CANCEL",
+  5: "DELIVER",
+  6: "WITHDRAW",
 };
 
 const TOKEN_TO_TYPE: Record<string, number> = {
@@ -23,14 +37,16 @@ const TOKEN_TO_TYPE: Record<string, number> = {
   BID: 2,
   CLOSE: 3,
   CANCEL: 4,
+  DELIVER: 5,
+  WITHDRAW: 6,
 };
 
 export interface AuctionEvent {
-  seq: bigint;
+  seq: bigint | number;
   actionType: number | string; // number (1,2,...) or string ("JOIN","BID",...)
-  agentId: bigint;
+  agentId: bigint | string;
   wallet: string; // 0x-prefixed, 40 hex chars
-  amount: bigint;
+  amount: bigint | string;
   prevHash: string; // 0x-prefixed, 64 hex chars
   eventHash: string; // 0x-prefixed, 64 hex chars
   payloadHash: string; // 0x-prefixed, 64 hex chars
@@ -76,10 +92,11 @@ export function serializeReplayBundle(
   lines.push("schema:v1");
   lines.push(`auction_id:${fmtHex(auctionId, 64)}`);
 
-  // Events (sorted by seq)
-  const sorted = [...events].sort((a, b) =>
-    a.seq < b.seq ? -1 : a.seq > b.seq ? 1 : 0
-  );
+  // Events (sorted by seq — coerce to BigInt for mixed-type comparison)
+  const sorted = [...events].sort((a, b) => {
+    const sa = BigInt(a.seq), sb = BigInt(b.seq);
+    return sa < sb ? -1 : sa > sb ? 1 : 0;
+  });
 
   for (const e of sorted) {
     const token = resolveToken(e.actionType);
@@ -105,16 +122,16 @@ export function serializeReplayBundle(
  * Compute SHA-256 of a replay bundle's canonical bytes.
  * Returns 0x-prefixed lowercase hex string.
  */
-export function computeContentHash(bundleBytes: Uint8Array): string {
-  const hash = createHash("sha256").update(bundleBytes).digest();
-  return "0x" + hash.toString("hex");
+export async function computeContentHash(bundleBytes: Uint8Array): Promise<string> {
+  const hash = await sha256(bundleBytes);
+  return "0x" + Array.from(hash, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /**
  * Compute SHA-256 as raw bytes.
  */
-export function computeContentHashBytes(bundleBytes: Uint8Array): Uint8Array {
-  return createHash("sha256").update(bundleBytes).digest();
+export async function computeContentHashBytes(bundleBytes: Uint8Array): Promise<Uint8Array> {
+  return sha256(bundleBytes);
 }
 
 /**

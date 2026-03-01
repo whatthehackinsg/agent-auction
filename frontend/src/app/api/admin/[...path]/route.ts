@@ -16,20 +16,25 @@ export async function POST(
 
   const body = await req.text()
 
-  const res = await fetch(target, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-ENGINE-ADMIN-KEY': ADMIN_KEY,
-    },
-    body,
-  })
+  try {
+    const res = await fetch(target, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-ENGINE-ADMIN-KEY': ADMIN_KEY,
+      },
+      body,
+    })
 
-  const data = await res.text()
-  return new NextResponse(data, {
-    status: res.status,
-    headers: { 'Content-Type': res.headers.get('Content-Type') ?? 'application/json' },
-  })
+    const data = await res.text()
+    return new NextResponse(data, {
+      status: res.status,
+      headers: { 'Content-Type': res.headers.get('Content-Type') ?? 'application/json' },
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return NextResponse.json({ error: `engine unreachable: ${msg}` }, { status: 502 })
+  }
 }
 
 export async function DELETE(
@@ -43,14 +48,19 @@ export async function DELETE(
   const { path } = await params
   const target = `${ENGINE_URL}/${path.join('/')}`
 
-  const res = await fetch(target, {
-    method: 'DELETE',
-    headers: { 'X-ENGINE-ADMIN-KEY': ADMIN_KEY },
-  })
+  try {
+    const res = await fetch(target, {
+      method: 'DELETE',
+      headers: { 'X-ENGINE-ADMIN-KEY': ADMIN_KEY },
+    })
 
-  const data = await res.text()
-  return new NextResponse(data, {
-    status: res.status,
-    headers: { 'Content-Type': res.headers.get('Content-Type') ?? 'application/json' },
-  })
+    const data = await res.text()
+    return new NextResponse(data, {
+      status: res.status,
+      headers: { 'Content-Type': res.headers.get('Content-Type') ?? 'application/json' },
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return NextResponse.json({ error: `engine unreachable: ${msg}` }, { status: 502 })
+  }
 }
