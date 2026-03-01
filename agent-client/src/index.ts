@@ -20,7 +20,6 @@ import {
   waitForSettlement,
 } from './auction'
 import { fundWithUSDC, getUsdcBalance, registerIdentity } from './identity'
-import { deployWallet } from './wallet'
 import { createAgentSignerAdapters, type WalletSignerAdapter } from './wallet-adapter'
 
 type AgentRun = {
@@ -28,7 +27,6 @@ type AgentRun = {
   agentId: bigint
   eoaAddress: `0x${string}`
   signer: WalletSignerAdapter
-  smartWallet: `0x${string}`
 }
 
 const USDC = BigInt(1_000_000)
@@ -59,22 +57,20 @@ async function main() {
   for (let i = 0; i < 3; i++) {
     const signer = signers[i]
     const eoaAddress = await signer.getAddress()
-    const smartWallet = await deployWallet(eoaAddress, BigInt(100 + i))
 
     await registerIdentity(agentIds[i], eoaAddress)
     await fundWithUSDC(eoaAddress, BigInt(200) * USDC)
 
     const balance = await getUsdcBalance(eoaAddress)
-    logStep('funding', `${labels[i]} balance=${formatUnits(balance, 6)} USDC`) 
+    logStep('funding', `${labels[i]} balance=${formatUnits(balance, 6)} USDC`)
 
     runs.push({
       name: labels[i],
       agentId: agentIds[i],
       eoaAddress,
       signer,
-      smartWallet,
     })
-    logStep('agent', `${labels[i]} ready eoa=${eoaAddress} smart=${smartWallet}`)
+    logStep('agent', `${labels[i]} ready eoa=${eoaAddress}`)
 
     if (CHALLENGE_SIGN_ENABLED) {
       const proof = await signOnboardingChallenge({

@@ -10,7 +10,6 @@ contract HelperConfig is Script {
     /* ── Types ──────────────────────────────────────────────────── */
 
     struct NetworkConfig {
-        address entryPoint; // EIP-4337 EntryPoint v0.7
         address usdc; // USDC token
         address identityRegistry; // ERC-8004 registry
         address keystoneForwarder; // Chainlink KeystoneForwarder
@@ -19,9 +18,6 @@ contract HelperConfig is Script {
     }
 
     /* ── Constants ──────────────────────────────────────────────── */
-
-    /// @dev EIP-4337 EntryPoint v0.7 canonical address (same on all EVM chains)
-    address public constant ENTRY_POINT_V07 = 0x0000000071727De22E5E9d8BAf0edAc6f37da032;
 
     /// @dev Base Sepolia chain ID
     uint256 public constant BASE_SEPOLIA_CHAIN_ID = 84_532;
@@ -57,7 +53,6 @@ contract HelperConfig is Script {
         address sequencer = vm.envOr("SEQUENCER_ADDRESS", vm.addr(deployerKey));
 
         return NetworkConfig({
-            entryPoint: ENTRY_POINT_V07,
             usdc: address(0), // Will deploy MockUSDC
             identityRegistry: address(0), // Will deploy MockIdentityRegistry
             keystoneForwarder: address(0), // Will deploy MockKeystoneForwarder
@@ -67,10 +62,8 @@ contract HelperConfig is Script {
     }
 
     function _getAnvilConfig() internal pure returns (NetworkConfig memory) {
-        // Anvil: everything gets mocked, including EntryPoint
-        // Note: EntryPoint may already be deployed at canonical address on anvil
+        // Anvil: everything gets mocked
         return NetworkConfig({
-            entryPoint: ENTRY_POINT_V07,
             usdc: address(0), // Will deploy MockUSDC
             identityRegistry: address(0), // Will deploy MockIdentityRegistry
             keystoneForwarder: address(0), // Will deploy MockKeystoneForwarder

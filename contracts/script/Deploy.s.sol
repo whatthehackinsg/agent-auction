@@ -2,22 +2,18 @@
 pragma solidity ^0.8.24;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {IEntryPoint} from "@account-abstraction/interfaces/IEntryPoint.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {AgentAccountFactory} from "../src/AgentAccountFactory.sol";
-import {AgentPaymaster, IERC8004Registry} from "../src/AgentPaymaster.sol";
 import {AuctionRegistry} from "../src/AuctionRegistry.sol";
 import {AuctionEscrow} from "../src/AuctionEscrow.sol";
 import {AgentPrivacyRegistry} from "../src/AgentPrivacyRegistry.sol";
 import {MockKeystoneForwarder} from "../src/MockKeystoneForwarder.sol";
 import {MockUSDC} from "../src/mocks/MockUSDC.sol";
 import {MockIdentityRegistry} from "../src/mocks/MockIdentityRegistry.sol";
-import {MockEntryPoint} from "../src/mocks/MockEntryPoint.sol";
 import {HelperConfig} from "./HelperConfig.s.sol";
 
 /// @title Deploy — Full deployment script for Agent Auction contracts
-/// @notice Deploys all 6 contracts + testnet mocks in correct order, then wires them.
+/// @notice Deploys core contracts + testnet mocks in correct order, then wires them.
 ///
 /// Usage:
 ///   # Local (anvil):
@@ -29,8 +25,6 @@ import {HelperConfig} from "./HelperConfig.s.sol";
 /// Environment variables:
 ///   DEPLOYER_PRIVATE_KEY  — Required for Base Sepolia
 ///   SEQUENCER_ADDRESS     — Optional, defaults to deployer
-///   PAYMASTER_STAKE_ETH   — Optional, ETH to stake on paymaster (default: 0.01)
-///   PAYMASTER_DEPOSIT_ETH — Optional, ETH to deposit on paymaster (default: 0.05)
 contract Deploy is Script {
     /* ── Deployed addresses (populated during run) ───────────────── */
 
@@ -40,8 +34,6 @@ contract Deploy is Script {
     MockKeystoneForwarder public mockForwarder;
 
     // Core contracts
-    AgentAccountFactory public factory;
-    AgentPaymaster public paymaster;
     AuctionRegistry public registry;
     AuctionEscrow public escrow;
     AgentPrivacyRegistry public privacyRegistry;
@@ -85,42 +77,20 @@ contract Deploy is Script {
             console2.log("MockKeystoneForwarder deployed:", keystoneForwarder);
         }
 
-        // ── Step 2: Resolve EntryPoint ──────────────────────────
-        address entryPointAddr = config.entryPoint;
-        if (entryPointAddr.code.length == 0) {
-            // No EntryPoint at canonical address — deploy MockEntryPoint
-            MockEntryPoint mockEP = new MockEntryPoint();
-            entryPointAddr = address(mockEP);
-            console2.log("MockEntryPoint deployed:", entryPointAddr);
-        } else {
-            console2.log("EntryPoint verified at:", entryPointAddr);
-        }
-        IEntryPoint entryPoint = IEntryPoint(entryPointAddr);
-
-        // ── Step 3: Deploy AgentAccountFactory ──────────────────
-        //   (internally deploys AgentAccount implementation)
-        factory = new AgentAccountFactory(entryPoint);
-        console2.log("AgentAccountFactory deployed:", address(factory));
-        console2.log("  AgentAccount impl:", address(factory.ACCOUNT_IMPLEMENTATION()));
-
-        // ── Step 4: Deploy AgentPaymaster ────────────────────────
-        paymaster = new AgentPaymaster(entryPoint, IERC20(usdc), IERC8004Registry(identityRegistry));
-        console2.log("AgentPaymaster deployed:", address(paymaster));
-
-        // ── Step 5: Deploy AuctionRegistry ──────────────────────
+        // ── Step 2: Deploy AuctionRegistry ──────────────────────
         registry = new AuctionRegistry(config.sequencer);
         console2.log("AuctionRegistry deployed:", address(registry));
         console2.log("  Sequencer:", config.sequencer);
 
-        // ── Step 6: Deploy AuctionEscrow ────────────────────────
+        // ── Step 3: Deploy AuctionEscrow ────────────────────────
         escrow = new AuctionEscrow(IERC20(usdc), keystoneForwarder);
         console2.log("AuctionEscrow deployed:", address(escrow));
 
-        // ── Step 6b: Deploy AgentPrivacyRegistry ─────────────────
+        // ── Step 4: Deploy AgentPrivacyRegistry ─────────────────
         privacyRegistry = new AgentPrivacyRegistry();
         console2.log("AgentPrivacyRegistry deployed:", address(privacyRegistry));
 
-        // ── Step 7: Cross-bind contracts ────────────────────────
+        // ── Step 5: Cross-bind contracts ────────────────────────
 
         // Registry ← Escrow (one-time, immutable after set)
         registry.setEscrow(address(escrow));
@@ -130,15 +100,11 @@ contract Deploy is Script {
         escrow.setRegistry(address(registry));
         console2.log("AuctionEscrow.setRegistry:", address(registry));
 
-        // Paymaster ← Escrow (for bond-check path)
-        paymaster.setEscrow(address(escrow));
-        console2.log("AgentPaymaster.setEscrow:", address(escrow));
-
         // Escrow ← IdentityRegistry (for withdraw auth)
         escrow.setIdentityRegistry(identityRegistry);
         console2.log("AuctionEscrow.setIdentityRegistry:", identityRegistry);
 
-        // ── Step 8: Configure CRE workflow params on Escrow ─────
+        // ── Step 6: Configure CRE workflow params on Escrow ─────
         if (address(mockForwarder) != address(0)) {
             escrow.setExpectedWorkflowId(mockForwarder.workflowId());
             escrow.setExpectedWorkflowName(mockForwarder.workflowName());
@@ -148,31 +114,9 @@ contract Deploy is Script {
         // NOTE: Real KeystoneForwarder deployments must call configureCRE(workflowId, workflowName, workflowOwner)
         // after CRE workflow registration/activation. onReport() is fail-closed until configured.
 
-        // ── Step 8b: Paymaster target allowlist ────────────────
-        paymaster.setAllowedTarget(address(escrow), true);
-        paymaster.setAllowedTarget(address(registry), true);
-        console2.log("AgentPaymaster: allowed targets set (escrow + registry)");
-
-        // ── Step 9: Fund Paymaster (stake + deposit) ────────────
-        uint256 stakeAmount = vm.envOr("PAYMASTER_STAKE_ETH", uint256(0.01 ether));
-        uint256 depositAmount = vm.envOr("PAYMASTER_DEPOSIT_ETH", uint256(0.05 ether));
-
-        if (stakeAmount > 0 && address(vm.addr(config.deployerKey)).balance >= stakeAmount + depositAmount) {
-            paymaster.addStake{value: stakeAmount}(86_400); // 1 day unstake delay
-            console2.log("AgentPaymaster staked:", stakeAmount);
-
-            paymaster.deposit{value: depositAmount}();
-            console2.log("AgentPaymaster deposited:", depositAmount);
-        } else {
-            console2.log("SKIP: Paymaster stake/deposit (insufficient ETH or zero config)");
-            console2.log("  Run manually:");
-            console2.log("  cast send", address(paymaster), "\"addStake(uint32)\" 86400 --value 0.01ether");
-            console2.log("  cast send", address(paymaster), "\"deposit()\" --value 0.05ether");
-        }
-
         vm.stopBroadcast();
 
-        // ── Step 10: Print deployment summary ───────────────────
+        // ── Step 7: Print deployment summary ───────────────────
         _printSummary(config, usdc, identityRegistry, keystoneForwarder);
     }
 
@@ -191,16 +135,12 @@ contract Deploy is Script {
         console2.log("Chain ID:", block.chainid);
         console2.log("");
         console2.log("-- External Dependencies --");
-        console2.log("EntryPoint:          ", config.entryPoint);
         console2.log("USDC:                ", usdc);
         console2.log("IdentityRegistry:    ", identityRegistry);
         console2.log("KeystoneForwarder:   ", keystoneForwarder);
         console2.log("Sequencer:           ", config.sequencer);
         console2.log("");
         console2.log("-- Core Contracts --");
-        console2.log("AgentAccountFactory: ", address(factory));
-        console2.log("  (AgentAccount impl:", address(factory.ACCOUNT_IMPLEMENTATION()), ")");
-        console2.log("AgentPaymaster:      ", address(paymaster));
         console2.log("AuctionRegistry:     ", address(registry));
         console2.log("AuctionEscrow:       ", address(escrow));
         console2.log("AgentPrivacyRegistry:", address(privacyRegistry));
@@ -208,7 +148,6 @@ contract Deploy is Script {
         console2.log("-- Wiring --");
         console2.log("Registry.escrow =    ", address(escrow));
         console2.log("Escrow.registry =    ", address(registry));
-        console2.log("Paymaster.escrow =   ", address(escrow));
         console2.log("Escrow.idReg =       ", identityRegistry);
         console2.log("========================================");
     }
