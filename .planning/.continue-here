@@ -1,0 +1,35 @@
+# Continue Here
+
+## Where We Left Off
+
+**Workflow:** `/gsd:new-project` — ZK Privacy E2E milestone
+**Step completed:** Step 4 (Write PROJECT.md) — committed as 1fda234
+**Next step:** Step 5 (Workflow Preferences) → Step 6 (Research Decision) → Step 7 (Requirements) → Step 8 (Roadmap)
+
+## What's Done
+
+- [x] Codebase mapped (.planning/codebase/ — 7 documents, 1686 lines)
+- [x] Deep questioning completed (ZK E2E focus, full stack + UI, MCP tools, live Base Sepolia demo)
+- [x] PROJECT.md written and committed (brownfield — 13 validated, 9 active requirements)
+
+## What's Next
+
+1. **Workflow Preferences** — config.json (mode, depth, parallelization, agents)
+2. **Research Decision** — research ZK proof integration patterns or skip
+3. **Define Requirements** — formalize REQUIREMENTS.md with REQ-IDs from PROJECT.md active list
+4. **Create Roadmap** — phase breakdown for ZK E2E wiring
+
+## Key Decisions From Questioning
+
+- Wire existing ZK circuits end-to-end (not build new ones)
+- Full stack + UI (agent-client → MCP → engine → contracts → CRE → frontend)
+- Agent uses MCP tools (not direct HTTP) for proof submission
+- Live on-chain demo on Base Sepolia (not local)
+- Working ZK proofs > polished demo flow (priority if time tight)
+- Auctions-preview deferred to separate milestone
+
+## Models (from init)
+
+- researcher_model: sonnet
+- synthesizer_model: sonnet
+- roadmapper_model: sonnet
