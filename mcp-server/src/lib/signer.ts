@@ -1,0 +1,180 @@
+/**
+ * EIP-712 signing using viem's privateKeyToAccount.
+ *
+ * Implements the same domain/types as the engine and agent-client
+ * to produce valid signatures for JOIN and BID actions.
+ */
+
+import {
+  type Address,
+  type Hex,
+  encodeAbiParameters,
+  keccak256,
+  toBytes,
+} from 'viem'
+import { privateKeyToAccount } from 'viem/accounts'
+
+// ── Constants ────────────────────────────────────────────────────────────
+
+const AUCTION_REGISTRY = '0xFEc7a05707AF85C6b248314E20FF8EfF590c3639' as const
+
+const EIP712_DOMAIN = {
+  name: 'AgentAuction' as const,
+  version: '1' as const,
+  chainId: 84532,
+  verifyingContract: AUCTION_REGISTRY as Address,
+} as const
+
+const JOIN_TYPES = {
+  Join: [
+    { name: 'auctionId', type: 'uint256' },
+    { name: 'nullifier', type: 'uint256' },
+    { name: 'depositAmount', type: 'uint256' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'deadline', type: 'uint256' },
+  ],
+} as const
+
+const BID_TYPES = {
+  Bid: [
+    { name: 'auctionId', type: 'uint256' },
+    { name: 'amount', type: 'uint256' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'deadline', type: 'uint256' },
+  ],
+} as const
+
+// ── Nullifier derivation ─────────────────────────────────────────────────
+
+/**
+ * Derive the JOIN nullifier exactly as the engine and agent-client do.
+ *
+ * nullifier = keccak256(abi.encode(walletAsUint256, auctionIdAsUint256, 0))
+ */
+export function deriveJoinNullifier(wallet: Address, auctionId: Hex): bigint {
+  const walletBytes = toBytes(wallet, { size: 32 })
+  const auctionBytes = toBytes(auctionId, { size: 32 })
+
+  let secret = 0n
+  for (const b of walletBytes) {
+    secret = (secret << 8n) | BigInt(b)
+  }
+  let auction = 0n
+  for (const b of auctionBytes) {
+    auction = (auction << 8n) | BigInt(b)
+  }
+
+  const encoded = encodeAbiParameters(
+    [
+      { name: 'secret', type: 'uint256' },
+      { name: 'auction', type: 'uint256' },
+      { name: 'actionType', type: 'uint256' },
+    ],
+    [secret, auction, 0n],
+  )
+  return BigInt(keccak256(encoded))
+}
+
+// ── Signer ───────────────────────────────────────────────────────────────
+
+export class ActionSigner {
+  private readonly account
+
+  constructor(privateKey: Hex) {
+    this.account = privateKeyToAccount(privateKey)
+  }
+
+  get address(): Address {
+    return this.account.address
+  }
+
+  /**
+   * Sign a JOIN action and return the full payload for POST /auctions/:id/action.
+   */
+  async signJoin(params: {
+    auctionId: Hex
+    agentId: string
+    bondAmount: bigint
+    nonce: number
+    deadlineSec?: number
+  }): Promise<{
+    type: 'JOIN'
+    agentId: string
+    wallet: Address
+    amount: string
+    nonce: number
+    deadline: string
+    signature: Hex
+    proof: null
+  }> {
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + (params.deadlineSec ?? 300))
+    const nullifier = deriveJoinNullifier(this.account.address, params.auctionId)
+
+    const signature = await this.account.signTypedData({
+      domain: EIP712_DOMAIN,
+      types: JOIN_TYPES,
+      primaryType: 'Join',
+      message: {
+        auctionId: BigInt(params.auctionId),
+        nullifier,
+        depositAmount: params.bondAmount,
+        nonce: BigInt(params.nonce),
+        deadline,
+      },
+    })
+
+    return {
+      type: 'JOIN',
+      agentId: params.agentId,
+      wallet: this.account.address,
+      amount: params.bondAmount.toString(),
+      nonce: params.nonce,
+      deadline: deadline.toString(),
+      signature,
+      proof: null,
+    }
+  }
+
+  /**
+   * Sign a BID action and return the full payload for POST /auctions/:id/action.
+   */
+  async signBid(params: {
+    auctionId: Hex
+    agentId: string
+    amount: bigint
+    nonce: number
+    deadlineSec?: number
+  }): Promise<{
+    type: 'BID'
+    agentId: string
+    wallet: Address
+    amount: string
+    nonce: number
+    deadline: string
+    signature: Hex
+  }> {
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + (params.deadlineSec ?? 300))
+
+    const signature = await this.account.signTypedData({
+      domain: EIP712_DOMAIN,
+      types: BID_TYPES,
+      primaryType: 'Bid',
+      message: {
+        auctionId: BigInt(params.auctionId),
+        amount: params.amount,
+        nonce: BigInt(params.nonce),
+        deadline,
+      },
+    })
+
+    return {
+      type: 'BID',
+      agentId: params.agentId,
+      wallet: this.account.address,
+      amount: params.amount.toString(),
+      nonce: params.nonce,
+      deadline: deadline.toString(),
+      signature,
+    }
+  }
+}
