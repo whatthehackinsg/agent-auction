@@ -2,9 +2,16 @@
 
 **Date:** 2026-02-27
 **Owner:** engine / zk
-**Status:** superseded
+**Status:** OUTDATED — completed differently than planned
 
-> **Superseded by**: Ticket `auction-design-1vy` (Fix nullifier hash mismatch). The engine event hash chain stays keccak256 (CF Workers compatible). Only the nullifier tracking changed: ZK-proven Poseidon nullifier from `publicSignals[2]` is used when a proof is provided, keccak fallback otherwise. Per-auction `hashAlgo` toggle was not needed.
+> **What happened**: `poseidon-lite` (zero-dep, CF Workers compatible) replaced circomlibjs as the default event hash chain for ALL auctions — no per-auction `hashAlgo` toggle was needed. Implemented in commit `cf0a323`.
+>
+> **Current design (3-hash system)**:
+> - **Poseidon (BN254)** — event hash chain + ZK circuits + ZK nullifiers (via `poseidon-lite`)
+> - **keccak256** — payload hash (EVM ABI encoding), on-chain contracts, CRE settlement
+> - **SHA-256** — replay bundle content hash, x402 receipts
+>
+> The per-auction `hashAlgo` toggle, dual-algo coexistence, and phased rollout described below were never implemented — the simpler approach of switching all auctions to Poseidon made them unnecessary.
 
 ## Goal
 
