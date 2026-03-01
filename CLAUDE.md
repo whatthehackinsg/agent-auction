@@ -87,6 +87,7 @@ AuctionEscrow.onReport() → settlement
 | `agent-client/` | Node/tsx | TypeScript demo client with x402 auto-payment (`@x402/fetch`) |
 | `packages/crypto/` | Node (ESM) | Poseidon hash chain, EIP-712, ZK proof gen/verify, nullifiers |
 | `circuits/` | Circom 2.2.3 | Two Groth16 circuits: RegistryMembership (~12K), BidRange (~5K) |
+| `mcp-server/` | Node (ESM) | MCP server: auction tools for AI agents (discover, join, bid, bond) |
 
 ## Smart Contracts (`contracts/src/`)
 
@@ -108,8 +109,9 @@ Target chain: **Base Sepolia** (chainId 84532).
 - **Durable Object** (`AuctionRoom`): core sequencer assigning monotonic `seq` numbers, maintains Poseidon hash chain event log
 - **Hono** HTTP framework for API routes
 - **D1** (SQLite) for persistent auction metadata
-- **Crypto delegation**: keccak256 hash chain (CF Workers compatible); real snarkjs.groth16.verify for ZK proofs with inlined vkey. `ENGINE_REQUIRE_PROOFS=true` enforces mandatory ZK proofs on JOIN. `ENGINE_ALLOW_INSECURE_STUBS=true` bypasses EIP-712 sig checks (local dev only — stubs fail-closed by default)
-- **EIP-4337 bundler**: Pimlico (`api.pimlico.io/v2/84532/rpc`)
+- **Crypto delegation**: keccak256 hash chain (CF Workers compatible); real snarkjs.groth16.verify for ZK proofs with inlined vkeys (RegistryMembership + BidRange). `ENGINE_REQUIRE_PROOFS=true` enforces mandatory ZK proofs on JOIN and BID. `ENGINE_ALLOW_INSECURE_STUBS=true` bypasses EIP-712 sig checks (local dev only — stubs fail-closed by default)
+- **Identity verification**: `ENGINE_VERIFY_WALLET=true` verifies wallet matches ERC-8004 `ownerOf(agentId)` on JOIN (cached in DO storage). `POST /verify-identity` for on-chain identity checks.
+- **Privacy registry**: Engine reads `AgentPrivacyRegistry.getRoot()` to cross-check ZK membership proof's registryRoot against on-chain state
 
 ## CRE Settlement Flow
 
@@ -147,6 +149,7 @@ Each module has its own `AGENTS.md` with local constraints. Apply root `AGENTS.m
 
 | Contract | Address |
 |---|---|
+| ERC-8004 Identity Registry | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
 | AuctionRegistry (v2) | `0xFEc7a05707AF85C6b248314E20FF8EfF590c3639` |
 | AuctionEscrow (v2) | `0x20944f46AB83F7eA40923D7543AF742Da829743c` |
 | KeystoneForwarder (real) | `0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5` |
