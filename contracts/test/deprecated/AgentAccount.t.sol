@@ -5,8 +5,8 @@ import {Test, console} from "forge-std/Test.sol";
 import {IEntryPoint} from "@account-abstraction/interfaces/IEntryPoint.sol";
 import {PackedUserOperation} from "@account-abstraction/interfaces/PackedUserOperation.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
-import {AgentAccount} from "../src/AgentAccount.sol";
-import {AgentAccountFactory} from "../src/AgentAccountFactory.sol";
+import {AgentAccount} from "../../src/deprecated/AgentAccount.sol";
+import {AgentAccountFactory} from "../../src/deprecated/AgentAccountFactory.sol";
 
 contract AgentAccountTest is Test {
     AgentAccountFactory factory;

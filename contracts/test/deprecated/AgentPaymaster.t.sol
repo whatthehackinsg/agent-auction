@@ -5,7 +5,7 @@ import {Test, console} from "forge-std/Test.sol";
 import {IEntryPoint} from "@account-abstraction/interfaces/IEntryPoint.sol";
 import {PackedUserOperation} from "@account-abstraction/interfaces/PackedUserOperation.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {AgentPaymaster, IERC8004Registry, IAuctionEscrowBonds} from "../src/AgentPaymaster.sol";
+import {AgentPaymaster, IERC8004Registry, IAuctionEscrowBonds} from "../../src/deprecated/AgentPaymaster.sol";
 import {IPaymaster} from "@account-abstraction/interfaces/IPaymaster.sol";
 
 /// @dev Minimal mock ERC-8004 identity registry

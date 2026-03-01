@@ -13,36 +13,11 @@ export const ENGINE_URL = process.env.ENGINE_URL ?? 'http://localhost:8787'
 export const X402_ENABLED = process.env.X402_ENABLED !== 'false' // on by default
 
 export const ADDRESSES = {
-  entryPoint: '0x0000000071727De22E5E9d8BAf0edAc6f37da032',
   mockUSDC: '0xfEE786495d165b16dc8e68B6F8281193e041737d',
   mockIdentityRegistry: '0x68E06c33D4957102362ACffC2BFF9E6b38199318',
-  agentAccountFactory: '0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD',
   auctionRegistry: '0xFEc7a05707AF85C6b248314E20FF8EfF590c3639',
   auctionEscrow: '0x20944f46AB83F7eA40923D7543AF742Da829743c',
 } as const satisfies Record<string, Address>
-
-export const factoryAbi = [
-  {
-    name: 'createAccount',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'runtimeSigner', type: 'address' },
-      { name: 'salt', type: 'uint256' },
-    ],
-    outputs: [{ name: '', type: 'address' }],
-  },
-  {
-    name: 'getAddress',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [
-      { name: 'runtimeSigner', type: 'address' },
-      { name: 'salt', type: 'uint256' },
-    ],
-    outputs: [{ name: '', type: 'address' }],
-  },
-] as const
 
 export const identityAbi = [
   {
