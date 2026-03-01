@@ -60,6 +60,7 @@ contract NftEscrow is ERC721Holder, ReentrancyGuard {
     error NotReclaimable();
     error NoDeposit();
     error AlreadyReturned();
+    error NoWinner();
 
     /* ── Constructor ────────────────────────────────────────────── */
 
@@ -109,6 +110,7 @@ contract NftEscrow is ERC721Holder, ReentrancyGuard {
         dep.state = NftState.CLAIMED;
 
         (, address winnerWallet,) = registry.getWinner(auctionId);
+        if (winnerWallet == address(0)) revert NoWinner();
 
         IERC721(dep.nftContract).transferFrom(address(this), winnerWallet, dep.tokenId);
 
@@ -129,10 +131,14 @@ contract NftEscrow is ERC721Holder, ReentrancyGuard {
         IAuctionTypes.AuctionState auctionState = registry.getAuctionState(auctionId);
 
         bool cancelled = auctionState == IAuctionTypes.AuctionState.CANCELLED;
-        bool timedOut = auctionState == IAuctionTypes.AuctionState.SETTLED
+        // Winner has RECLAIM_TIMEOUT to claim; after that depositor can reclaim
+        bool settledTimeout = auctionState == IAuctionTypes.AuctionState.SETTLED
+            && block.timestamp >= dep.depositTimestamp + RECLAIM_TIMEOUT;
+        // If CRE never settles, CLOSED state has no other escape — allow reclaim after timeout
+        bool closedTimeout = auctionState == IAuctionTypes.AuctionState.CLOSED
             && block.timestamp >= dep.depositTimestamp + RECLAIM_TIMEOUT;
 
-        if (!cancelled && !timedOut) revert NotReclaimable();
+        if (!cancelled && !settledTimeout && !closedTimeout) revert NotReclaimable();
 
         dep.state = NftState.RETURNED;
 

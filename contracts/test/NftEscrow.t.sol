@@ -311,6 +311,96 @@ contract NftEscrowTest is Test {
         nftEscrow.reclaimNft(auctionId);
     }
 
+    function test_reclaimNft_successOnClosedTimeout() public {
+        // Bug fix: NFT permanently locked if CRE never settles (CLOSED state)
+        _depositNft();
+        _closeAuction();
+
+        // Auction is CLOSED (not SETTLED) — CRE never called
+        assertEq(uint256(registry.getAuctionState(auctionId)), uint256(IAuctionTypes.AuctionState.CLOSED));
+
+        // Warp past RECLAIM_TIMEOUT
+        vm.warp(block.timestamp + 30 days);
+
+        nftEscrow.reclaimNft(auctionId);
+
+        // NFT back to seller
+        assertEq(nft.ownerOf(tokenId), seller);
+
+        (,,, NftEscrow.NftState state,) = nftEscrow.deposits(auctionId);
+        assertEq(uint256(state), uint256(NftEscrow.NftState.RETURNED));
+    }
+
+    function test_reclaimNft_revertsIfClosedButNotTimedOut() public {
+        // CLOSED state but before timeout — still not reclaimable
+        _depositNft();
+        _closeAuction();
+
+        assertEq(uint256(registry.getAuctionState(auctionId)), uint256(IAuctionTypes.AuctionState.CLOSED));
+
+        vm.warp(block.timestamp + 1 days);
+
+        vm.expectRevert(NftEscrow.NotReclaimable.selector);
+        nftEscrow.reclaimNft(auctionId);
+    }
+
+    function test_claimNft_revertsIfNoWinner() public {
+        // Bug fix: claimNft should revert if winnerWallet is address(0)
+        // Create a second auction where we settle with no winner set
+        bytes32 auctionId2 = keccak256("nft-auction-no-winner");
+
+        vm.prank(sequencer);
+        registry.createAuction(
+            auctionId2, keccak256("manifest2"), keccak256("room2"), 100e6, 10e6, block.timestamp + 1 days
+        );
+
+        // Mint and deposit NFT for this auction
+        uint256 tokenId2 = 99;
+        nft.mint(seller, tokenId2);
+        vm.startPrank(seller);
+        nft.approve(address(nftEscrow), tokenId2);
+        nftEscrow.depositNft(auctionId2, address(nft), tokenId2);
+        vm.stopPrank();
+
+        // Close with winner = address(0)
+        IAuctionTypes.AuctionSettlementPacket memory packet = IAuctionTypes.AuctionSettlementPacket({
+            auctionId: auctionId2,
+            manifestHash: keccak256("manifest2"),
+            finalLogHash: keccak256("finalLog2"),
+            replayContentHash: keccak256("replayContent2"),
+            winnerAgentId: 0,
+            winnerWallet: address(0),
+            winningBidAmount: 0,
+            closeTimestamp: uint64(block.timestamp)
+        });
+        bytes32 structHash = keccak256(
+            abi.encode(
+                registry.SETTLEMENT_TYPEHASH(),
+                packet.auctionId,
+                packet.manifestHash,
+                packet.finalLogHash,
+                packet.replayContentHash,
+                packet.winnerAgentId,
+                packet.winnerWallet,
+                packet.winningBidAmount,
+                packet.closeTimestamp
+            )
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", registry.DOMAIN_SEPARATOR(), structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(sequencerPk, digest);
+        registry.recordResult(packet, abi.encodePacked(r, s, v));
+
+        // Settle via CRE
+        bytes memory report = abi.encode(auctionId2, uint256(0), address(0), uint256(0));
+        forwarder.forwardReport(address(auctionEscrow), report);
+
+        assertEq(uint256(registry.getAuctionState(auctionId2)), uint256(IAuctionTypes.AuctionState.SETTLED));
+
+        // claimNft should revert with NoWinner
+        vm.expectRevert(NftEscrow.NoWinner.selector);
+        nftEscrow.claimNft(auctionId2);
+    }
+
     function test_reclaimNft_revertsIfAlreadyReturned() public {
         _depositNft();
 
