@@ -5,6 +5,7 @@ import {
   computePayloadHash,
   deriveNullifier,
   verifyMembershipProof,
+  verifyBidRangeProof,
   verifyActionSignature,
   AUCTION_EIP712_TYPES,
   ZERO_HASH,
@@ -91,6 +92,54 @@ describe('Crypto Primitives', () => {
           curve: 'bn128',
         },
         publicSignals: ['111', '222', '333'],
+      })
+      expect(result.valid).toBe(false)
+    })
+  })
+
+  describe('verifyBidRangeProof', () => {
+    it('returns valid when no proof is provided (backward compatible)', async () => {
+      const result = await verifyBidRangeProof(null)
+      expect(result.valid).toBe(true)
+      expect(result.bidCommitment).toBe('0')
+      expect(result.reservePrice).toBe('0')
+      expect(result.maxBudget).toBe('0')
+    })
+
+    it('rejects null proof when requireProof is true', async () => {
+      const result = await verifyBidRangeProof(null, { requireProof: true })
+      expect(result.valid).toBe(false)
+      expect(result.bidCommitment).toBe('0')
+    })
+
+    it('accepts null proof when requireProof is false (explicit)', async () => {
+      const result = await verifyBidRangeProof(null, { requireProof: false })
+      expect(result.valid).toBe(true)
+    })
+
+    it('returns invalid for malformed proof payload', async () => {
+      const result = await verifyBidRangeProof({ garbage: true })
+      expect(result.valid).toBe(false)
+    })
+
+    it('returns invalid for a proof with wrong number of public signals', async () => {
+      const result = await verifyBidRangeProof({
+        proof: { pi_a: [], pi_b: [], pi_c: [], protocol: 'groth16', curve: 'bn128' },
+        publicSignals: ['1', '2', '3'], // needs 4
+      })
+      expect(result.valid).toBe(false)
+    })
+
+    it('returns invalid for a structurally valid but cryptographically wrong proof', async () => {
+      const result = await verifyBidRangeProof({
+        proof: {
+          pi_a: ['1', '2', '1'],
+          pi_b: [['1', '2'], ['3', '4'], ['1', '0']],
+          pi_c: ['1', '2', '1'],
+          protocol: 'groth16',
+          curve: 'bn128',
+        },
+        publicSignals: ['1', '111', '222', '333'],
       })
       expect(result.valid).toBe(false)
     })

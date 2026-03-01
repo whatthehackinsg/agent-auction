@@ -278,6 +278,42 @@ describe('handleBid', () => {
       handleBid(action, storage, TEST_AUCTION_ID, '1000000', '3000000'),
     ).rejects.toThrow('exceeds max bid cap')
   })
+
+  it('bid with no proof succeeds (backward compat)', async () => {
+    const action = makeAction({
+      type: ActionType.BID,
+      nonce: 0,
+      amount: '2000000',
+    })
+    // No proof field — should pass without error
+    delete (action as Record<string, unknown>).proof
+    const result = await handleBid(action, storage, TEST_AUCTION_ID, '1000000', '0')
+    expect(result.action.type).toBe(ActionType.BID)
+    expect(result.action.amount).toBe('2000000')
+  })
+
+  it('rejects bid when requireProofs=true and no proof provided', async () => {
+    const action = makeAction({
+      type: ActionType.BID,
+      nonce: 0,
+      amount: '2000000',
+    })
+    await expect(
+      handleBid(action, storage, TEST_AUCTION_ID, '1000000', '0', { requireProofs: true }),
+    ).rejects.toThrow('Invalid bid range proof')
+  })
+
+  it('rejects bid with malformed proof', async () => {
+    const action = makeAction({
+      type: ActionType.BID,
+      nonce: 0,
+      amount: '2000000',
+      proof: { garbage: true },
+    })
+    await expect(
+      handleBid(action, storage, TEST_AUCTION_ID, '1000000', '0'),
+    ).rejects.toThrow('Invalid bid range proof')
+  })
 })
 
 describe('handleDeliver', () => {

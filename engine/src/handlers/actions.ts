@@ -12,9 +12,11 @@
 import {
   verifyActionSignature,
   verifyMembershipProof,
+  verifyBidRangeProof,
   deriveNullifier,
   type AuctionSpeechActType,
   type VerifyMembershipOptions,
+  type VerifyBidRangeOptions,
 } from '../lib/crypto'
 import { ActionType } from '../types/engine'
 import type { ActionRequest, ValidatedAction } from '../types/engine'
@@ -282,8 +284,8 @@ export async function handleJoin(
 }
 
 /**
- * Handle BID action: verify signature, check nonce sequential,
- * validate amount > 0 and amount > highestBid.
+ * Handle BID action: verify BidRange proof (if present), verify signature,
+ * check nonce sequential, validate amount > 0 and amount > highestBid.
  */
 export async function handleBid(
   action: ActionRequest,
@@ -291,13 +293,39 @@ export async function handleBid(
   auctionId: string,
   highestBid: string,
   maxBid: string,
+  ctx?: ValidationContext,
 ): Promise<ValidationResult> {
+  // 1. Verify BidRange proof (optional unless ENGINE_REQUIRE_PROOFS=true)
+  const bidRangeOptions: VerifyBidRangeOptions = {
+    requireProof: ctx?.requireProofs,
+  }
+  const bidRangeResult = await verifyBidRangeProof(action.proof ?? null, bidRangeOptions)
+  if (!bidRangeResult.valid) {
+    throw new Error(`Invalid bid range proof for agent ${action.agentId}`)
+  }
+
+  // 2. If proof was provided, cross-check that the proven reservePrice and maxBudget
+  //    are consistent with the auction's constraints
+  if (action.proof != null && bidRangeResult.bidCommitment !== '0') {
+    // The proof's reservePrice must not exceed the bid amount
+    // and the bid amount must not exceed the proof's maxBudget.
+    // (The circuit already enforces reservePrice <= bid <= maxBudget,
+    //  so we trust the proof — but we verify the proven range bounds
+    //  are compatible with the auction's maxBid cap if set.)
+    if (BigInt(maxBid) > 0n && BigInt(bidRangeResult.maxBudget) > BigInt(maxBid)) {
+      throw new Error(
+        `Bid range proof maxBudget ${bidRangeResult.maxBudget} exceeds auction max bid cap ${maxBid}`,
+      )
+    }
+  }
+
+  // 3. Verify EIP-712 signature
   await verifySignature(action, auctionId)
 
-  // Check nonce
+  // 4. Check nonce
   await checkNonce(action.agentId, ActionType.BID, action.nonce, storage)
 
-  // Validate bid amount
+  // 5. Validate bid amount
   const amount = BigInt(action.amount)
   if (amount <= 0n) {
     throw new Error(`Bid amount must be greater than 0, got ${action.amount}`)
@@ -380,7 +408,7 @@ export async function validateAction(
     case ActionType.JOIN:
       return handleJoin(action, storage, auctionId, ctx)
     case ActionType.BID:
-      return handleBid(action, storage, auctionId, highestBid, maxBid)
+      return handleBid(action, storage, auctionId, highestBid, maxBid, ctx)
     case ActionType.DELIVER:
       return handleDeliver(action, storage, auctionId)
     default:
