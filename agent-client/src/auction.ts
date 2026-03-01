@@ -1,5 +1,12 @@
-import { type Address, type Hex, type WalletClient, encodeAbiParameters, keccak256, toBytes } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
+import {
+  type Address,
+  type Hex,
+  type WalletClient,
+  encodeAbiParameters,
+  encodeFunctionData,
+  keccak256,
+  toBytes,
+} from 'viem'
 import { baseSepolia } from 'viem/chains'
 import {
   ADDRESSES,
@@ -9,6 +16,7 @@ import {
   usdcAbi,
 } from './config'
 import { engineFetch, logStep, randomBytes32Hex, sleep } from './utils'
+import type { WalletSignerAdapter } from './wallet-adapter'
 
 // EIP-712 domain matching engine's EIP712_DOMAIN
 const EIP712_DOMAIN = {
@@ -132,20 +140,22 @@ export async function uploadAuctionImage(params: {
 }
 
 export async function postBond(params: {
-  walletClient: WalletClient
-  walletAddress: Address
+  signer: WalletSignerAdapter
   auctionId: `0x${string}`
   amount: bigint
 }): Promise<`0x${string}`> {
-  logStep('bond', `transfer ${params.amount.toString()} from ${params.walletAddress} to escrow`)
+  const walletAddress = await params.signer.getAddress()
+  logStep('bond', `transfer ${params.amount.toString()} from ${walletAddress} to escrow`)
 
-  const txHash = await params.walletClient.writeContract({
-    chain: baseSepolia,
-    account: params.walletClient.account!,
-    address: ADDRESSES.mockUSDC,
+  const transferData = encodeFunctionData({
     abi: usdcAbi,
     functionName: 'transfer',
-    args: [ADDRESSES.auctionEscrow, params.amount],
+    args: [ADDRESSES.auctionEscrow, params.amount] as const,
+  })
+  const txHash = await params.signer.sendTransaction({
+    to: ADDRESSES.mockUSDC,
+    data: transferData,
+    value: 0n,
   })
   await publicClient.waitForTransactionReceipt({ hash: txHash })
   return txHash
@@ -193,15 +203,14 @@ export async function waitBondObservation(
 export async function joinAuction(params: {
   auctionId: `0x${string}`
   agentId: bigint
-  wallet: Address
   bondAmount: bigint
   nonce: number
-  privateKey: Hex
+  signer: WalletSignerAdapter
 }): Promise<EngineActionResponse> {
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 300) // 5 min
-  const nullifier = deriveJoinNullifier(params.wallet, params.auctionId)
-  const account = privateKeyToAccount(params.privateKey)
-  const signature = await account.signTypedData({
+  const wallet = await params.signer.getAddress()
+  const nullifier = deriveJoinNullifier(wallet, params.auctionId)
+  const signature = await params.signer.signTypedData({
     domain: EIP712_DOMAIN,
     types: JOIN_TYPES,
     primaryType: 'Join',
@@ -217,7 +226,7 @@ export async function joinAuction(params: {
   const payload = {
     type: 'JOIN',
     agentId: params.agentId.toString(),
-    wallet: params.wallet,
+    wallet,
     amount: params.bondAmount.toString(),
     nonce: params.nonce,
     deadline: deadline.toString(),
@@ -254,14 +263,13 @@ export async function joinAuction(params: {
 export async function placeBid(params: {
   auctionId: `0x${string}`
   agentId: bigint
-  wallet: Address
   amount: bigint
   nonce: number
-  privateKey: Hex
+  signer: WalletSignerAdapter
 }): Promise<EngineActionResponse> {
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 300)
-  const account = privateKeyToAccount(params.privateKey)
-  const signature = await account.signTypedData({
+  const wallet = await params.signer.getAddress()
+  const signature = await params.signer.signTypedData({
     domain: EIP712_DOMAIN,
     types: BID_TYPES,
     primaryType: 'Bid',
@@ -279,7 +287,7 @@ export async function placeBid(params: {
     body: JSON.stringify({
       type: 'BID',
       agentId: params.agentId.toString(),
-      wallet: params.wallet,
+      wallet,
       amount: params.amount.toString(),
       nonce: params.nonce,
       deadline: deadline.toString(),

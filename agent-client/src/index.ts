@@ -1,11 +1,13 @@
 import { formatUnits } from 'viem'
 import {
   createDeployerClients,
-  createWalletForPrivateKey,
-  getAgentPrivateKeys,
 } from './config'
 import {
   engineFetch,
+  initX402,
+  logStep,
+  signOnboardingChallenge,
+  sleep,
 } from './utils'
 import {
   claimRefund,
@@ -19,28 +21,28 @@ import {
 } from './auction'
 import { fundWithUSDC, getUsdcBalance, registerIdentity } from './identity'
 import { deployWallet } from './wallet'
-import { initX402, logStep, sleep } from './utils'
+import { createAgentSignerAdapters, type WalletSignerAdapter } from './wallet-adapter'
 
 type AgentRun = {
   name: string
   agentId: bigint
   eoaAddress: `0x${string}`
-  privateKey: `0x${string}`
-  walletClient: ReturnType<typeof createWalletForPrivateKey>['walletClient']
+  signer: WalletSignerAdapter
   smartWallet: `0x${string}`
 }
 
 const USDC = BigInt(1_000_000)
+const CHALLENGE_SIGN_ENABLED = process.env.ONBOARDING_CHALLENGE_SIGN === '1'
 
 async function main() {
   const started = Date.now()
   logStep('demo', 'starting 3-agent lifecycle demo')
 
   const deployer = createDeployerClients()
-  const privateKeys = getAgentPrivateKeys().slice(0, 3)
+  const signers = await createAgentSignerAdapters(3)
 
-  // Initialize x402 auto-payment using first agent key
-  initX402(privateKeys[0])
+  // Initialize x402 auto-payment using first agent signer
+  await initX402(signers[0])
 
   const agentIds = [BigInt(1001), BigInt(1002), BigInt(1003)]
   const labels = ['Agent-A', 'Agent-B', 'Agent-C'] as const
@@ -55,30 +57,40 @@ async function main() {
   logStep('auction', `created ${auction.auctionId}`)
 
   for (let i = 0; i < 3; i++) {
-    const signer = createWalletForPrivateKey(privateKeys[i])
-    const smartWallet = await deployWallet(signer.account.address, BigInt(100 + i))
+    const signer = signers[i]
+    const eoaAddress = await signer.getAddress()
+    const smartWallet = await deployWallet(eoaAddress, BigInt(100 + i))
 
-    await registerIdentity(agentIds[i], signer.account.address)
-    await fundWithUSDC(signer.account.address, BigInt(200) * USDC)
+    await registerIdentity(agentIds[i], eoaAddress)
+    await fundWithUSDC(eoaAddress, BigInt(200) * USDC)
 
-    const balance = await getUsdcBalance(signer.account.address)
+    const balance = await getUsdcBalance(eoaAddress)
     logStep('funding', `${labels[i]} balance=${formatUnits(balance, 6)} USDC`) 
 
     runs.push({
       name: labels[i],
       agentId: agentIds[i],
-      eoaAddress: signer.account.address,
-      privateKey: privateKeys[i],
-      walletClient: signer.walletClient,
+      eoaAddress,
+      signer,
       smartWallet,
     })
-    logStep('agent', `${labels[i]} ready eoa=${signer.account.address} smart=${smartWallet}`)
+    logStep('agent', `${labels[i]} ready eoa=${eoaAddress} smart=${smartWallet}`)
+
+    if (CHALLENGE_SIGN_ENABLED) {
+      const proof = await signOnboardingChallenge({
+        signer,
+        agentId: agentIds[i],
+      })
+      logStep(
+        'onboard-proof',
+        `${labels[i]} signed challenge wallet=${proof.wallet} challenge=${proof.challenge} sig=${proof.signature}`,
+      )
+    }
   }
 
   for (const agent of runs) {
     const bondTxHash = await postBond({
-      walletClient: agent.walletClient,
-      walletAddress: agent.eoaAddress,
+      signer: agent.signer,
       auctionId: auction.auctionId,
       amount: BigInt(50) * USDC,
     })
@@ -99,10 +111,9 @@ async function main() {
     await joinAuction({
       auctionId: auction.auctionId,
       agentId: agent.agentId,
-      wallet: agent.eoaAddress,
       bondAmount: BigInt(50) * USDC,
       nonce: 0,
-      privateKey: agent.privateKey,
+      signer: agent.signer,
     })
     logStep('join', `${agent.name} joined auction`) 
   }
@@ -110,10 +121,9 @@ async function main() {
   await placeBid({
     auctionId: auction.auctionId,
     agentId: runs[0].agentId,
-    wallet: runs[0].eoaAddress,
     amount: BigInt(100) * USDC,
     nonce: 0,
-    privateKey: runs[0].privateKey,
+    signer: runs[0].signer,
   })
   logStep('bid', 'Agent-A bid 100 USDC')
   await sleep(800)
@@ -121,10 +131,9 @@ async function main() {
   await placeBid({
     auctionId: auction.auctionId,
     agentId: runs[1].agentId,
-    wallet: runs[1].eoaAddress,
     amount: BigInt(150) * USDC,
     nonce: 0,
-    privateKey: runs[1].privateKey,
+    signer: runs[1].signer,
   })
   logStep('bid', 'Agent-B bid 150 USDC')
   await sleep(800)
@@ -132,10 +141,9 @@ async function main() {
   await placeBid({
     auctionId: auction.auctionId,
     agentId: runs[2].agentId,
-    wallet: runs[2].eoaAddress,
     amount: BigInt(200) * USDC,
     nonce: 0,
-    privateKey: runs[2].privateKey,
+    signer: runs[2].signer,
   })
   logStep('bid', 'Agent-C bid 200 USDC')
 

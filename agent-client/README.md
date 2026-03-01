@@ -11,7 +11,9 @@ Spins up three software agents, each with a smart wallet and on-chain identity, 
 ## Prerequisites
 
 - Node.js 18+
-- Three funded EOA private keys on Base Sepolia
+- Wallet signer source for 3 agents:
+  - Local mode: three funded EOA private keys on Base Sepolia
+  - Coinbase mode: CDP API credentials + three managed account addresses
 - A deployer key with enough ETH for gas
 - Contracts deployed (see `contracts/` for deployment scripts)
 
@@ -29,7 +31,14 @@ The package depends on the root workspace (`"auction-design": "file:.."`), so in
 | Variable | Required | Description |
 |---|---|---|
 | `DEPLOYER_PRIVATE_KEY` | Yes | Deployer EOA private key (hex, 0x-prefixed) |
-| `AGENT_PRIVATE_KEYS` | Yes | Comma-separated list of 3 agent EOA private keys |
+| `AGENT_WALLET_PROVIDER` | No | `local` (default), `coinbase`, `dynamic`, or `privy` |
+| `AGENT_PRIVATE_KEYS` | Local mode only | Comma-separated list of 3 agent EOA private keys |
+| `CDP_API_KEY_ID` | Coinbase mode only | Coinbase CDP API key ID |
+| `CDP_API_KEY_SECRET` | Coinbase mode only | Coinbase CDP API key secret |
+| `CDP_WALLET_SECRET` | Coinbase mode only | Coinbase CDP wallet secret |
+| `COINBASE_AGENT_ADDRESSES` | Coinbase mode only | Comma-separated 0x addresses for 3 CDP managed wallets |
+| `COINBASE_EVM_NETWORK` | No | CDP network slug (default: `base-sepolia`) |
+| `ONBOARDING_CHALLENGE_SIGN` | No | Set `1` to emit runtime signer challenge signatures during boot |
 | `BASE_SEPOLIA_RPC` | No | RPC endpoint (defaults to `https://sepolia.base.org`) |
 | `ENGINE_URL` | No | Auction engine URL (defaults to `http://localhost:8787`) |
 
@@ -48,6 +57,23 @@ Type-check without running:
 ```bash
 npm run typecheck
 ```
+
+## Wallet Adapter Modes
+
+`agent-client` now uses a provider-agnostic `WalletSignerAdapter` abstraction:
+
+- `local`: signs with raw private keys (existing demo behavior)
+- `coinbase`: signs/sends via Coinbase CDP managed wallets
+- `dynamic` / `privy`: adapter stubs are wired, but runtime methods intentionally throw until credentials + SDK wiring are added
+
+The Engine action API is unchanged: `JOIN`/`BID` still post EIP-712 signatures to `/auctions/:id/action`.
+
+## Security Model (Managed Wallets)
+
+- Delegated signing scope should be limited to auction action payloads (`JOIN`/`BID`) and required bond transactions.
+- Keep provider credentials (`CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET`) server-side only; never ship them to browser clients.
+- Rotate managed wallet credentials independently from auction identity (`agentId`) to limit blast radius.
+- `ONBOARDING_CHALLENGE_SIGN=1` enables a challenge-sign proof log for runtime key control hardening before production enforcement.
 
 ## File Structure
 

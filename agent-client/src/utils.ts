@@ -1,7 +1,8 @@
-import { ENGINE_URL, X402_ENABLED } from './config'
+import { ENGINE_URL, X402_ENABLED, publicClient } from './config'
 import { x402Client, wrapFetchWithPayment } from '@x402/fetch'
 import { registerExactEvmScheme } from '@x402/evm/exact/client'
-import { privateKeyToAccount } from 'viem/accounts'
+import type { Address, Hex } from 'viem'
+import type { WalletSignerAdapter } from './wallet-adapter'
 
 export function nowTag(): string {
   return new Date().toISOString()
@@ -25,13 +26,46 @@ export function randomBytes32Hex(): `0x${string}` {
 // x402 auto-payment: initialized lazily via initX402()
 let x402Fetch: typeof fetch | null = null
 
-export function initX402(privateKey: `0x${string}`) {
+export async function initX402(signer: WalletSignerAdapter) {
   if (!X402_ENABLED) return
-  const signer = privateKeyToAccount(privateKey)
+  const address = await signer.getAddress()
   const client = new x402Client()
-  registerExactEvmScheme(client, { signer })
+  registerExactEvmScheme(client, {
+    signer: {
+      address,
+      signTypedData: async (payload) => signer.signTypedData({
+        domain: payload.domain as Record<string, unknown>,
+        types: payload.types as Record<string, Array<{ name: string; type: string }>>,
+        primaryType: payload.primaryType,
+        message: payload.message as Record<string, unknown>,
+      }),
+      readContract: async (args) => publicClient.readContract({
+        address: args.address,
+        abi: args.abi as readonly unknown[],
+        functionName: args.functionName as never,
+        args: args.args as readonly unknown[] | undefined,
+      }),
+    },
+  })
   x402Fetch = wrapFetchWithPayment(fetch, client)
-  logStep('x402', `auto-payment enabled for ${signer.address}`)
+  logStep('x402', `auto-payment enabled for ${address} via ${signer.provider}`)
+}
+
+function randomNonceHex(bytes = 8): string {
+  const raw = new Uint8Array(bytes)
+  crypto.getRandomValues(raw)
+  return [...raw].map((value) => value.toString(16).padStart(2, '0')).join('')
+}
+
+export async function signOnboardingChallenge(params: {
+  signer: WalletSignerAdapter
+  agentId: bigint
+}): Promise<{ wallet: Address; challenge: string; signature: Hex }> {
+  const wallet = await params.signer.getAddress()
+  const issuedAt = Math.floor(Date.now() / 1000)
+  const challenge = `agent-auction:onboard:${params.agentId.toString()}:${issuedAt}:${randomNonceHex()}`
+  const signature = await params.signer.signMessage(challenge)
+  return { wallet, challenge, signature }
 }
 
 export async function engineFetch<T>(path: string, init?: RequestInit): Promise<T> {

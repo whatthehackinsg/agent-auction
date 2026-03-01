@@ -242,6 +242,8 @@ export class AuctionRoom implements DurableObject {
         return this.handleClose(request)
       case '/cancel':
         return this.handleCancel(request)
+      case '/delete':
+        return this.handleDelete()
       default:
         return new Response(JSON.stringify({ error: 'not found' }), {
           status: 404,
@@ -731,6 +733,12 @@ export class AuctionRoom implements DurableObject {
       winnerWallet: this.winnerWallet,
       winningBidAmount: this.winningBidAmount,
     })
+  }
+
+  /** POST /delete — wipe all DO storage for this room */
+  private async handleDelete(): Promise<Response> {
+    await this.state.storage.deleteAll()
+    return Response.json({ ok: true })
   }
 
   // ─── Auction Close Flow ─────────────────────────────────────────────
