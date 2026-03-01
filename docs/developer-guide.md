@@ -20,6 +20,7 @@ This guide covers contract addresses, core flows with `cast` examples, EIP-712 s
   - [6. Claim Refund](#6-claim-refund)
 - [EIP-712 Signing](#eip-712-signing)
 - [TypeScript Integration](#typescript-integration)
+- [x402 Micropayments](#x402-micropayments)
 - [CRE Workflow](#cre-workflow)
 - [Key Gotchas](#key-gotchas)
 - [Security Notes](#security-notes)
@@ -534,6 +535,145 @@ AuctionState.CANCELLED // 4
 const bondAmount = 10_000_000n; // 10 USDC
 const bidAmount = 100_000_000n; // 100 USDC
 ```
+
+---
+
+## x402 Micropayments
+
+The engine supports [x402](https://x402.org) — an HTTP 402 payment protocol — as an optional paywall on data-access routes. When enabled, clients that lack a valid payment receipt receive a `402 Payment Required` response with a machine-readable payment challenge. AI agent clients using `@x402/fetch` resolve these challenges automatically using a secp256k1 wallet.
+
+### Gated Routes
+
+x402 gates apply only to two read routes:
+
+| Route | Default price |
+|---|---|
+| `GET /auctions/:id/manifest` | `$0.001` |
+| `GET /auctions/:id/events` | `$0.0001` |
+
+All other routes (`POST /auctions/:id/action`, `GET /auctions/:id/replay`, etc.) are always free.
+
+### Engine Environment Variables
+
+Set these in `engine/wrangler.toml` (for Cloudflare Workers) or the equivalent `engine/.dev.vars` for local development. Secrets (`X402_RECEIVER_ADDRESS`, `X402_FACILITATOR_URL`) should be set via `wrangler secret put` in production rather than committed to `wrangler.toml`.
+
+| Variable | Default | Description |
+|---|---|---|
+| `X402_MODE` | `off` | Controls platform-level x402 gating. `off` disables the gate entirely; `on` enables it for all auctions that do not override the mode. There is no `per-auction` enum value here — per-auction overrides are controlled through the per-auction policy (see below). |
+| `X402_RECEIVER_ADDRESS` | — | Required when `X402_MODE=on`. Ethereum address (`0x`-prefixed, 40 hex chars) that receives payment on Base Sepolia. |
+| `X402_FACILITATOR_URL` | `https://www.x402.org/facilitator` | URL of the x402 facilitator service used to verify payment receipts. Override this to point at a self-hosted facilitator. |
+
+**Example `wrangler.toml` snippet for local development:**
+
+```toml
+[vars]
+X402_MODE = "on"
+X402_RECEIVER_ADDRESS = "0xYourReceiverAddress"
+# X402_FACILITATOR_URL defaults to the public facilitator; omit unless self-hosting
+```
+
+**Fail-closed behaviour**: if `X402_MODE=on` but `X402_RECEIVER_ADDRESS` is missing or invalid, the engine returns `500` on gated routes rather than serving the data for free.
+
+### How the Middleware Works
+
+The middleware runs before the route handler on both gated routes. The resolution order is:
+
+1. Read `X402_MODE` from the environment. If `off`, skip all payment checks and call `next()`.
+2. Look up the per-auction policy from D1 (see [Per-Auction Policy](#per-auction-policy) below).
+3. Merge platform config with the per-auction policy. The per-auction `mode` field can force the gate `on` or `off` regardless of the platform setting; `inherit` (the default) defers to the platform.
+4. If the effective mode is `on`, check the incoming `PAYMENT-SIGNATURE` (or `X-PAYMENT`) header. A missing header triggers a `402` challenge response. A header that has already been used (stored in the `x402_receipts` D1 table) returns `409` to prevent replay attacks.
+5. If the payment is valid, the request proceeds to the route handler.
+
+When a per-auction receiver address or pricing differs from the platform defaults, the engine switches to the dynamic middleware path that resolves pricing at request time by extracting the auction ID from the URL.
+
+### Per-Auction Policy
+
+Each auction can override the platform x402 settings. Pass an `x402Policy` object when creating an auction, or update it later while the auction is still `OPEN`.
+
+**At auction creation** (`POST /auctions`):
+
+```json
+{
+  "manifestHash": "0x...",
+  "reservePrice": "100000000",
+  "deadline": 1750000000,
+  "x402Policy": {
+    "mode": "on",
+    "priceManifest": "$0.005",
+    "priceEvents": "$0.0005",
+    "receiverAddress": "0xAuctionSpecificReceiver"
+  }
+}
+```
+
+**After creation** (`PATCH /auctions/:id/x402-policy`):
+
+```bash
+curl -X PATCH https://engine.example.com/auctions/$AUCTION_ID/x402-policy \
+  -H "Content-Type: application/json" \
+  -H "X-ENGINE-ADMIN-KEY: $ENGINE_ADMIN_KEY" \
+  -d '{
+    "mode": "on",
+    "priceManifest": "$0.005",
+    "priceEvents": "$0.0005",
+    "receiverAddress": "0xAuctionSpecificReceiver"
+  }'
+```
+
+This endpoint requires `X-ENGINE-ADMIN-KEY` authentication and only accepts updates while the auction is in `OPEN` state (status `1`). Attempting to patch a closed or settled auction returns `400`.
+
+**Policy fields:**
+
+| Field | Type | Constraint | Description |
+|---|---|---|---|
+| `mode` | `"on"` \| `"off"` \| `"inherit"` | optional | Force the gate on or off for this auction, or inherit the platform setting. |
+| `priceManifest` | `"$N.NN"` | `$0.00001`–`$1.00` | Per-request price for `GET /auctions/:id/manifest`. |
+| `priceEvents` | `"$N.NN"` | `$0.00001`–`$1.00` | Per-request price for `GET /auctions/:id/events`. |
+| `receiverAddress` | `0x…` | valid EVM address | Overrides the platform receiver for this auction's payments. |
+
+### Agent-Client Auto-Payment Setup
+
+The agent client in `agent-client/` uses `@x402/fetch` to handle payment challenges automatically. When the engine returns `402`, the wrapped `fetch` function signs the payment challenge in-process and retries the request — the calling code sees no difference from a normal successful fetch.
+
+Auto-payment is initialized once at startup using the first agent's signer:
+
+```typescript
+import { initX402 } from './utils'
+import { createAgentSignerAdapters } from './wallet-adapter'
+
+const signers = await createAgentSignerAdapters(1)
+await initX402(signers[0])
+// All subsequent engineFetch() calls are automatically x402-capable
+```
+
+The `initX402` function registers the `ExactEvmScheme` for Base Sepolia (`eip155:84532`) and wraps the global `fetch` with a payment handler that signs EIP-712 typed data challenges using the agent's key.
+
+**Agent-client environment variables:**
+
+| Variable | Required | Description |
+|---|---|---|
+| `AGENT_PRIVATE_KEYS` | Yes | Comma-separated list of at least 3 `0x`-prefixed secp256k1 private keys. The first key is used to sign x402 payment challenges when `AGENT_WALLET_PROVIDER=local`. |
+| `AGENT_WALLET_PROVIDER` | No (default: `local`) | Wallet backend: `local` (raw private keys), `coinbase` (CDP SDK), `dynamic`, or `privy`. Only `local` and `coinbase` are fully wired for x402 signing today. |
+| `X402_ENABLED` | No (default: `true`) | Set to `false` to disable x402 auto-payment in the agent client (useful when `X402_MODE=off` on the engine). |
+| `ENGINE_URL` | No (default: `http://localhost:8787`) | Base URL of the auction engine. |
+
+**Minimal `.env` for a local agent-client run with x402 enabled:**
+
+```bash
+# Agent keys (sign bids, bonds, and x402 payment challenges)
+AGENT_PRIVATE_KEYS=0xabc...,0xdef...,0x123...
+
+# Deployer key (funds agents, submits settlement)
+DEPLOYER_PRIVATE_KEY=0x456...
+
+# Point at local engine (or deployed Worker URL)
+ENGINE_URL=http://localhost:8787
+
+# X402_ENABLED defaults to true; set to false if the engine has X402_MODE=off
+# X402_ENABLED=false
+```
+
+If `AGENT_WALLET_PROVIDER=coinbase`, the x402 signer uses the Coinbase CDP SDK instead of a raw private key. Supply `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET`, and `COINBASE_AGENT_ADDRESSES` instead of `AGENT_PRIVATE_KEYS`.
 
 ---
 
