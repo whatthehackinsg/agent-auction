@@ -84,8 +84,9 @@ export async function computeEventHash(
  * Derive nullifier for an agent's action in a specific auction.
  * nullifier = keccak256(abi.encode(uint256 agentSecret, uint256 auctionId, uint256 actionType))
  *
- * Note: @agent-auction/crypto uses Poseidon for nullifiers (matching ZK circuits).
- * The engine uses keccak256 as a unique deterministic identifier for double-join detection.
+ * @deprecated Legacy keccak256 nullifier — used only as fallback when no ZK proof is provided.
+ * When a ZK membership proof IS provided, the engine uses the Poseidon nullifier
+ * from publicSignals[2] instead (see verifyMembershipProof).
  */
 export async function deriveNullifier(
   agentSecret: bigint | Uint8Array,
@@ -247,20 +248,35 @@ function isMembershipProofPayload(v: unknown): v is MembershipProofPayload {
   )
 }
 
+export interface VerifyMembershipOptions {
+  /** When true, null/missing proof is rejected instead of accepted. */
+  requireProof?: boolean
+  /** On-chain registry root to cross-check against proof's publicSignals[0]. */
+  expectedRegistryRoot?: string
+}
+
 /**
  * Verify a RegistryMembership Groth16 proof.
  *
- * - If no proof is provided, returns valid (proofs are optional — P1 feature).
+ * - If requireProof=true and no proof is provided, returns invalid.
+ * - If requireProof=false (default) and no proof is provided, returns valid (backward compat).
  * - If a structured proof payload is provided, runs real snarkjs.groth16.verify().
+ * - If expectedRegistryRoot is provided, cross-checks against proof's publicSignals[0].
  *
  * Public signals order: [registryRoot, capabilityCommitment, nullifier]
  */
 export async function verifyMembershipProof(
   proofPayload: unknown,
-  _signals?: unknown,
+  options?: VerifyMembershipOptions,
 ): Promise<{ valid: boolean; registryRoot: string; nullifier: string }> {
-  // No proof provided — accept (backward compatible, proofs are optional)
+  const requireProof = options?.requireProof ?? false
+  const expectedRoot = options?.expectedRegistryRoot
+
+  // No proof provided
   if (proofPayload == null) {
+    if (requireProof) {
+      return { valid: false, registryRoot: '0x00', nullifier: '0x00' }
+    }
     return { valid: true, registryRoot: '0x00', nullifier: '0x00' }
   }
 
@@ -275,8 +291,18 @@ export async function verifyMembershipProof(
       proofPayload.publicSignals,
       proofPayload.proof as Parameters<typeof snarkjs.groth16.verify>[2],
     )
+
+    if (!valid) {
+      return { valid: false, registryRoot: proofPayload.publicSignals[0], nullifier: proofPayload.publicSignals[2] }
+    }
+
+    // Cross-check registry root against on-chain value when provided
+    if (expectedRoot && proofPayload.publicSignals[0] !== expectedRoot) {
+      return { valid: false, registryRoot: proofPayload.publicSignals[0], nullifier: proofPayload.publicSignals[2] }
+    }
+
     return {
-      valid,
+      valid: true,
       registryRoot: proofPayload.publicSignals[0],
       nullifier: proofPayload.publicSignals[2],
     }

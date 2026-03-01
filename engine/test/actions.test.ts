@@ -192,6 +192,22 @@ describe('handleJoin', () => {
       handleJoin(action2, storage, TEST_AUCTION_ID),
     ).rejects.toThrow('Nullifier already spent')
   })
+
+  it('rejects join when requireProofs=true and no proof provided', async () => {
+    const action = makeAction({ type: ActionType.JOIN, nonce: 0 })
+    await expect(
+      handleJoin(action, storage, TEST_AUCTION_ID, { requireProofs: true }),
+    ).rejects.toThrow('Invalid membership proof')
+  })
+
+  it('returns zkNullifier=undefined when no proof provided', async () => {
+    const action = makeAction({ type: ActionType.JOIN, nonce: 0 })
+    const result = await handleJoin(action, storage, TEST_AUCTION_ID)
+    // No proof → keccak fallback, no zkNullifier
+    expect(result.mutation.zkNullifier).toBeUndefined()
+    // But nullifierHash is still set (keccak fallback)
+    expect(result.mutation.nullifierHash).toMatch(/^0x[0-9a-f]+$/)
+  })
 })
 
 describe('handleBid', () => {

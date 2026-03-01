@@ -1,8 +1,10 @@
 # Poseidon Upgrade Plan (Engine, ZK-Native)
 
-**Date:** 2026-02-27  
-**Owner:** engine / zk  
-**Status:** planned
+**Date:** 2026-02-27
+**Owner:** engine / zk
+**Status:** superseded
+
+> **Superseded by**: Ticket `auction-design-1vy` (Fix nullifier hash mismatch). The engine event hash chain stays keccak256 (CF Workers compatible). Only the nullifier tracking changed: ZK-proven Poseidon nullifier from `publicSignals[2]` is used when a proof is provided, keccak fallback otherwise. Per-auction `hashAlgo` toggle was not needed.
 
 ## Goal
 

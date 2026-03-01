@@ -55,14 +55,27 @@ Uses real testnet USDC on Base Sepolia (`0x036CbD53842c5426634e7929541eC2318f3dC
 - Action validation: `engine/src/handlers/actions.ts`
 - Chain helpers: `engine/src/lib/`
 
-## Crypto Delegation
+## Crypto & ZK Verification
 
-As of Feb 2026, `src/lib/crypto.ts` and `src/lib/replay-bundle.ts` delegate to `@agent-auction/crypto` (local dependency at `packages/crypto`).
+`src/lib/crypto.ts` and `src/lib/replay-bundle.ts` delegate to `@agent-auction/crypto` (local dependency at `packages/crypto`).
 
-- **Real implementations**: `computeEventHash` (Poseidon), `computePayloadHash`, `deriveNullifier` — all async.
-- **De-stubbed**: `verifyMembershipProof` — real `snarkjs.groth16.verify()` with inlined vkey (no `node:fs` needed). If no proof is provided, accepts (backward compatible — ZK proofs are P1/optional). If a proof is provided, it is cryptographically verified.
+- **Real implementations**: `computeEventHash` (keccak256), `computePayloadHash` (keccak256) — CF Workers compatible.
+- **`verifyMembershipProof`** — real `snarkjs.groth16.verify()` with inlined vkey. Behavior controlled by `ENGINE_REQUIRE_PROOFS` env var:
+  - `ENGINE_REQUIRE_PROOFS=true`: null/missing proofs are **rejected** (fail-closed).
+  - `ENGINE_REQUIRE_PROOFS` unset/false: null proofs accepted (backward compatible).
+  - When a proof is provided, it is always cryptographically verified.
+  - Accepts optional `expectedRegistryRoot` to cross-check proof's `publicSignals[0]` against on-chain root.
+- **Nullifier strategy**: When a ZK proof is provided, the engine uses the **Poseidon nullifier** from `publicSignals[2]` (matching ZK circuits). When no proof is provided (legacy mode), falls back to keccak256 `deriveNullifier()`. The ZK nullifier is stored as `zkNullifier` on `AuctionEvent` for privacy-ready tracking.
+- **`deriveNullifier`** — **deprecated** keccak256 fallback. Only used when no ZK proof is provided. Will be removed when `ENGINE_REQUIRE_PROOFS=true` becomes the default.
 - **Stub kept**: `verifyActionSignature` still uses `ENGINE_ALLOW_INSECURE_STUBS` bypass for tests with dummy signatures.
 - Build `packages/crypto` (`npm run build`) before running engine typecheck or tests.
+
+### Environment Variables (ZK)
+
+| Var | Values | Default | Purpose |
+|---|---|---|---|
+| `ENGINE_REQUIRE_PROOFS` | `'true'` / unset | unset (false) | Reject null ZK proofs on JOIN |
+| `ENGINE_ALLOW_INSECURE_STUBS` | `'true'` / unset | unset (false) | Skip EIP-712 sig verification (test only) |
 
 ## EIP-4337 Bundler (Pimlico)
 

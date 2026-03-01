@@ -9,7 +9,7 @@ import type {
 import { ActionType } from './types/engine'
 import { computeEventHash, computePayloadHash, ZERO_HASH } from './lib/crypto'
 import { toHex, toBytes, keccak256, encodePacked } from 'viem'
-import { validateAction, commitValidationMutation } from './handlers/actions'
+import { validateAction, commitValidationMutation, type ValidationContext } from './handlers/actions'
 import type { AuctionSettlementPacket } from './types/contracts'
 import { ensureAuctionOnChain, recordResultOnChain, signSettlementPacket } from './lib/settlement'
 import { signInclusionReceipt } from './lib/inclusion-receipt'
@@ -403,14 +403,18 @@ export class AuctionRoom implements DurableObject {
         maxBid = row?.max_bid ?? '0'
       }
 
+      const validationCtx: ValidationContext = {
+        requireProofs: this.env.ENGINE_REQUIRE_PROOFS === 'true',
+      }
       const validation = await validateAction(
         action,
         this.state.storage,
         this.auctionId,
         this.highestBid,
         maxBid,
+        validationCtx,
       )
-      const result = await this.ingestAction(validation.action)
+      const result = await this.ingestAction(validation.action, validation.mutation.zkNullifier)
       await commitValidationMutation(validation.mutation, this.state.storage)
       return Response.json(result)
     } catch (err) {
@@ -484,7 +488,7 @@ export class AuctionRoom implements DurableObject {
    * Ingest a validated action into the append-only event log.
    * Assigns monotonic seq, computes hash chain, persists to DO storage + D1.
    */
-  async ingestAction(action: ValidatedAction): Promise<{
+  async ingestAction(action: ValidatedAction, zkNullifier?: string): Promise<{
     seq: number
     eventHash: string
     prevHash: string
@@ -540,6 +544,7 @@ export class AuctionRoom implements DurableObject {
       wallet: action.wallet,
       amount: action.amount,
       createdAt: Math.floor(Date.now() / 1000),
+      ...(zkNullifier ? { zkNullifier } : {}),
     } satisfies AuctionEvent)
 
     // Persist to D1

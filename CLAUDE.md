@@ -107,7 +107,7 @@ Target chain: **Base Sepolia** (chainId 84532). EntryPoint v0.7 (`0x000000007172
 - **Durable Object** (`AuctionRoom`): core sequencer assigning monotonic `seq` numbers, maintains Poseidon hash chain event log
 - **Hono** HTTP framework for API routes
 - **D1** (SQLite) for persistent auction metadata
-- **Crypto delegation**: real Poseidon hashing from `@agent-auction/crypto`; snarkjs verification stubbed in Workers (set `ENGINE_ALLOW_INSECURE_STUBS=true` for local dev only — stubs fail-closed by default)
+- **Crypto delegation**: keccak256 hash chain (CF Workers compatible); real snarkjs.groth16.verify for ZK proofs with inlined vkey. `ENGINE_REQUIRE_PROOFS=true` enforces mandatory ZK proofs on JOIN. `ENGINE_ALLOW_INSECURE_STUBS=true` bypasses EIP-712 sig checks (local dev only — stubs fail-closed by default)
 - **EIP-4337 bundler**: Pimlico (`api.pimlico.io/v2/84532/rpc`)
 
 ## CRE Settlement Flow
@@ -185,7 +185,7 @@ Deployer/Sequencer: `0x633ec0e633AA4d8BbCCEa280331A935747416737`. Paymaster fund
 <!-- gitnexus:start -->
 # GitNexus MCP
 
-This project is indexed by GitNexus as **auction-design** (43330 symbols, 137630 relationships, 300 execution flows).
+This project is indexed by GitNexus as **auction-design** (43422 symbols, 137768 relationships, 300 execution flows).
 
 GitNexus provides a knowledge graph over this codebase — call chains, blast radius, execution flows, and semantic search.
 

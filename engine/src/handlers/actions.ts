@@ -14,16 +14,26 @@ import {
   verifyMembershipProof,
   deriveNullifier,
   type AuctionSpeechActType,
+  type VerifyMembershipOptions,
 } from '../lib/crypto'
 import { ActionType } from '../types/engine'
 import type { ActionRequest, ValidatedAction } from '../types/engine'
 import { toBytes, toHex } from 'viem'
+
+export interface ValidationContext {
+  /** When true, null/missing ZK proof is rejected. */
+  requireProofs?: boolean
+  /** On-chain registry root for cross-checking proof's registryRoot. */
+  expectedRegistryRoot?: string
+}
 
 export interface ValidationMutation {
   agentId: string
   actionType: ActionType
   nonce: number
   nullifierHash?: string
+  /** ZK-proven Poseidon nullifier (from proof publicSignals[2]). */
+  zkNullifier?: string
 }
 
 export interface ValidationResult {
@@ -187,41 +197,65 @@ async function verifySignature(
   }
 }
 
-async function verifyMembership(action: ActionRequest): Promise<void> {
-  const result = await verifyMembershipProof(action.proof ?? null, null)
+async function verifyMembership(
+  action: ActionRequest,
+  ctx?: ValidationContext,
+): Promise<{ registryRoot: string; nullifier: string }> {
+  const options: VerifyMembershipOptions = {
+    requireProof: ctx?.requireProofs,
+    expectedRegistryRoot: ctx?.expectedRegistryRoot,
+  }
+  const result = await verifyMembershipProof(action.proof ?? null, options)
   if (!result.valid) {
     throw new Error(`Invalid membership proof for agent ${action.agentId}`)
   }
+  return { registryRoot: result.registryRoot, nullifier: result.nullifier }
 }
 
 // ─── Per-Action Handlers ──────────────────────────────────────────────
 
 /**
- * Handle JOIN action: derive nullifier, verify signature (covers nullifier),
- * verify membership, check nullifier not spent, check nonce.
+ * Handle JOIN action: verify membership proof (get ZK nullifier if available),
+ * derive fallback nullifier if needed, verify signature, check nullifier not spent,
+ * check nonce.
  */
 export async function handleJoin(
   action: ActionRequest,
   storage: DurableObjectStorage,
   auctionId: string,
+  ctx?: ValidationContext,
 ): Promise<ValidationResult> {
-  // 1. Derive nullifier first — needed for signature verification
-  //    (the Join EIP-712 message includes nullifier)
-  const nullifier = await deriveNullifier(
-    toBytes(action.wallet as `0x${string}`, { size: 32 }),
-    toBytes(auctionId as `0x${string}`, { size: 32 }),
-    0, // ActionType.JOIN = 0
-  )
-  const nullifierHash = toHex(nullifier)
-  const nullifierBigInt = BigInt(nullifierHash)
+  // 1. Verify membership proof — get ZK nullifier from publicSignals[2] if proof exists
+  const membership = await verifyMembership(action, ctx)
 
-  // 2. Verify EIP-712 signature (message includes nullifier)
+  // 2. Determine which nullifier to use:
+  //    - If proof provided a valid ZK nullifier (Poseidon), use it
+  //    - Otherwise fall back to keccak nullifier (legacy)
+  const hasZkNullifier = membership.nullifier !== '0x00'
+  let nullifierHash: string
+  let nullifierBigInt: bigint
+  let zkNullifier: string | undefined
+
+  if (hasZkNullifier) {
+    // ZK-proven Poseidon nullifier from proof's publicSignals[2]
+    zkNullifier = membership.nullifier
+    nullifierHash = membership.nullifier
+    nullifierBigInt = BigInt(membership.nullifier)
+  } else {
+    // Legacy keccak fallback (no proof or proof was optional and missing)
+    const fallback = await deriveNullifier(
+      toBytes(action.wallet as `0x${string}`, { size: 32 }),
+      toBytes(auctionId as `0x${string}`, { size: 32 }),
+      0, // ActionType.JOIN = 0
+    )
+    nullifierHash = toHex(fallback)
+    nullifierBigInt = BigInt(nullifierHash)
+  }
+
+  // 3. Verify EIP-712 signature (Join message includes nullifier)
   await verifySignature(action, auctionId, { nullifier: nullifierBigInt })
 
-  // 3. Verify membership proof
-  await verifyMembership(action)
-
-  // 4. Check nullifier not spent
+  // 4. Check nullifier not spent (double-join prevention)
   await checkNullifier(nullifierHash, storage)
 
   // 5. Check nonce
@@ -242,6 +276,7 @@ export async function handleJoin(
       actionType: ActionType.JOIN,
       nonce: action.nonce,
       nullifierHash,
+      zkNullifier,
     },
   }
 }
@@ -339,10 +374,11 @@ export async function validateAction(
   auctionId: string,
   highestBid: string,
   maxBid: string,
+  ctx?: ValidationContext,
 ): Promise<ValidationResult> {
   switch (action.type) {
     case ActionType.JOIN:
-      return handleJoin(action, storage, auctionId)
+      return handleJoin(action, storage, auctionId, ctx)
     case ActionType.BID:
       return handleBid(action, storage, auctionId, highestBid, maxBid)
     case ActionType.DELIVER:

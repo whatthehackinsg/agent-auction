@@ -56,6 +56,18 @@ describe('Crypto Primitives', () => {
       expect(result.registryRoot).toBe('0x00')
     })
 
+    it('rejects null proof when requireProof is true', async () => {
+      const result = await verifyMembershipProof(null, { requireProof: true })
+      expect(result.valid).toBe(false)
+      expect(result.registryRoot).toBe('0x00')
+      expect(result.nullifier).toBe('0x00')
+    })
+
+    it('accepts null proof when requireProof is false (explicit)', async () => {
+      const result = await verifyMembershipProof(null, { requireProof: false })
+      expect(result.valid).toBe(true)
+    })
+
     it('returns invalid for malformed proof payload', async () => {
       const result = await verifyMembershipProof({ garbage: true })
       expect(result.valid).toBe(false)

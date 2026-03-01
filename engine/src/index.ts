@@ -30,6 +30,7 @@ export interface Env {
   X402_RECEIVER_ADDRESS?: string    // wallet to receive x402 payments
   X402_FACILITATOR_URL?: string     // default: https://www.x402.org/facilitator
   ENGINE_ADMIN_KEY?: string
+  ENGINE_REQUIRE_PROOFS?: string    // 'true' to reject null ZK proofs (default: false)
 }
 
 const app = new Hono<{ Bindings: Env }>()

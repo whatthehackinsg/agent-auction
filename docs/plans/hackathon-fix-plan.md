@@ -29,6 +29,7 @@
 
 ## Step 2: Add Access Control to MockIdentityRegistry
 **Effort: Small | Why: Prevents "anyone can steal funds" attack**
+**Status: DROPPED** — superseded by `auction-design-hm3` (ERC-8004 migration replaces MockIdentityRegistry entirely)
 
 `MockIdentityRegistry.register()` is open — anyone can register as owner of any agentId and call `withdraw()` on AuctionEscrow to steal funds.
 
@@ -45,29 +46,40 @@
 
 ## Step 3: Fix Hash Mismatch (Trust the Proof)
 **Effort: Medium | Why: Unblocks ZK working end-to-end**
+**Status: DONE** (ticket `auction-design-1vy`)
 
-Engine computes keccak256 nullifiers, circuits compute Poseidon nullifiers — they never match. Fix: engine stops computing nullifiers and trusts the ZK-proven nullifier from the agent.
+Engine computes keccak256 nullifiers, circuits compute Poseidon nullifiers — they never match. Fix: engine trusts the ZK-proven Poseidon nullifier from the proof's `publicSignals[2]` when available, falls back to keccak for backward compat.
 
-**Changes:**
+**What was implemented:**
 - `engine/src/lib/crypto.ts`:
-  - Remove `deriveNullifier()` function (keccak256-based, lines ~72-96)
-  - Keep `verifyMembershipProof()` — it already returns the nullifier from proof public signals
-  - Update `computePayloadHash()` to accept nullifier (bytes32) instead of agentId (uint256)
+  - `verifyMembershipProof()` now accepts `{ requireProof, expectedRegistryRoot }` options
+  - When `requireProof=true`, null proofs are rejected (controlled by `ENGINE_REQUIRE_PROOFS` env)
+  - When `expectedRegistryRoot` provided, cross-checks against proof's `publicSignals[0]`
+  - `deriveNullifier()` kept but marked `@deprecated` — used only as fallback when no proof
 - `engine/src/handlers/actions.ts`:
-  - JOIN handler: get nullifier from `verifyMembershipProof()` return value, not from `deriveNullifier()`
-  - BID handler: get nullifier from action request (agent includes it)
-  - Store nonces as `nonce:{nullifier}:{actionType}` instead of `nonce:{agentId}:{actionType}`
-- `agent-client/src/auction.ts`:
-  - `joinAuction()`: compute Poseidon nullifier locally using `packages/crypto` (has circomlibjs)
-  - `deriveJoinNullifier()`: replace keccak256 version with Poseidon version (import from packages/crypto)
-  - Include nullifier in action request payload
+  - `handleJoin()`: uses ZK nullifier from proof when available, keccak fallback otherwise
+  - Added `ValidationContext` type threading `requireProofs` + `expectedRegistryRoot`
+  - `ValidationMutation` now includes `zkNullifier?: string`
+- `engine/src/types/engine.ts`: `AuctionEvent` now includes `zkNullifier?: string`
+- `engine/src/index.ts`: Added `ENGINE_REQUIRE_PROOFS` to `Env`
+- `engine/src/auction-room.ts`: Threads env config through to validation, stores `zkNullifier` in DO events
+- `engine/test/`: 4 new tests for requireProof and zkNullifier tracking (37 total, all pass)
 
-**Verify:** Engine crypto tests pass, agent-client can generate and send nullifier that engine accepts
+**Design decisions:**
+- Event hash chain stays keccak256 (CF Workers compatible, not ZK-verified in-engine)
+- No per-auction `hashAlgo` field (supersedes old Poseidon upgrade plan)
+- `computePayloadHash()` unchanged — still uses agentId (changed in Phase 2 sealed-identity)
+- Nonce keys still use agentId (changed in Phase 2 sealed-identity)
 
 ---
 
 ## Step 4: Mandatory ZK + Hide Identity Behind Nullifiers
 **Effort: Large | Why: Core privacy differentiator actually works**
+**Status: DESCOPED to Phase 2 (post-hackathon)** — ticket `auction-design-e3b` (P2)
+
+Blast radius too large for hackathon: touches payloadHash, D1 schema, nonces, winner logic, replay bundle, CRE settlement, WebSocket, frontend. Instead, Step 3 (done) provides Layer 1 (ZK authorization) + Layer 2 (store zkNullifier alongside agentId). Full sealed-identity routing is Phase 2.
+
+Original plan kept below for reference:
 
 This is the biggest change — replace plaintext agentId with nullifier throughout the off-chain pipeline. On-chain contracts keep agentId (needed for ERC-8004 ownership).
 
@@ -165,10 +177,9 @@ After 5 failed retries, settlement is silently abandoned. Funds locked forever.
 
 ## Step 6: Wire x402 or Remove
 **Effort: Small | Why: No dead code in demo**
+**Decision: Wire in** (ticket `auction-design-1lz`)
 
 x402 policy code is fully implemented but middleware is never applied to HTTP routes.
-
-**Decision needed: wire in or remove?**
 
 **If wire in:**
 - `engine/src/index.ts` → apply `applyX402Gate` middleware to `/auctions/:id/manifest` and `/auctions/:id/events` routes
@@ -203,21 +214,21 @@ x402 policy code is fully implemented but middleware is never applied to HTTP ro
 
 ---
 
-## Execution Order & Dependencies
+## Execution Order & Dependencies (Updated 2026-03-01)
 
 ```
-Step 1 (Remove 4337)          ← independent, do first
-Step 2 (MockIdentity ACL)     ← independent, do second
-Step 3 (Hash mismatch)        ← unblocks Step 4
-Step 4 (Mandatory ZK + hide)  ← depends on Step 3, largest change
-Step 5 (Settlement retry)     ← independent
-Step 6 (x402 decision)        ← independent
-Step 7 (PrivacyRegistry)      ← bundle with Step 4
+Step 1 (Remove 4337)          ← ticket ltn [P0], independent
+Step 2 (MockIdentity ACL)     ← DROPPED (superseded by hm3 ERC-8004 migration)
+Step 3 (Hash mismatch)        ← ticket 1vy [P0], DONE ✓
+Step 4 (Sealed-identity)      ← ticket e3b [P2], DESCOPED to post-hackathon
+Step 5 (Settlement retry)     ← ticket kzz [P1], independent
+Step 6 (Wire x402)            ← ticket 1lz [P1], independent
+Step 7 (PrivacyRegistry)      ← ticket 8d6 [P1], depends on hm3 + 1vy
 ```
 
-Steps 1, 2, 5, 6 can run in parallel (independent).
-Step 3 must complete before Step 4.
-Step 7 should be done alongside Step 4.
+Parallel: Steps 1, 5, 6.
+Sequential: Step 1 (ltn) → hm3 (ERC-8004) → Step 7 (8d6).
+Sequential: Step 3 (1vy, done) → Step 7 (8d6).
 
 ## Verification Checklist
 - [ ] `forge build` — contracts compile

@@ -31,6 +31,7 @@ export interface AuctionEvent {
   wallet: string;                 // 0x-prefixed address
   amount: string;                 // uint256 as string — USDC base units (6 decimals)
   createdAt: number;              // Unix timestamp (seconds)
+  zkNullifier?: string;           // ZK-proven Poseidon nullifier (Layer 2 privacy-ready)
 }
 
 // ─── Agent Actions ───────────────────────────────────────────────────
