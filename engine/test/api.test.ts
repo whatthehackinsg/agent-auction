@@ -314,7 +314,7 @@ describe('API routes (Hono)', () => {
     expect(rooms._calls.some((c) => c.url.includes('/cancel'))).toBe(true)
   })
 
-  it('GET /auctions/:id/events returns ordered events from D1', async () => {
+  it('GET /auctions/:id/events returns ordered events from D1 (admin auth)', async () => {
     const auctionId = randomAuctionId()
 
     await db
@@ -333,7 +333,7 @@ describe('API routes (Hono)', () => {
 
     const res = await app.request(
       `http://localhost/auctions/${auctionId}/events`,
-      {},
+      { headers: { 'X-ENGINE-ADMIN-KEY': TEST_ADMIN_KEY } },
       env,
     )
     expect(res.status).toBe(200)
@@ -343,7 +343,49 @@ describe('API routes (Hono)', () => {
     expect(json.events[1].seq).toBe(2)
   })
 
-  it('manifest/events endpoints are open when x402 mode is off', async () => {
+  it('GET /auctions/:id/events returns 403 without auth', async () => {
+    const auctionId = randomAuctionId()
+
+    const res = await app.request(
+      `http://localhost/auctions/${auctionId}/events`,
+      {},
+      env,
+    )
+    expect(res.status).toBe(403)
+    const json = await res.json()
+    expect(json.error).toContain('participant token or admin key')
+  })
+
+  it('GET /auctions/:id/events allows participant access via participantToken', async () => {
+    const auctionId = randomAuctionId()
+    const agentId = '42'
+
+    // Insert a JOIN event to establish participation
+    await db
+      .prepare(
+        'INSERT INTO events (auction_id, seq, prev_hash, event_hash, payload_hash, action_type, agent_id, wallet, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(auctionId, 1, '0x' + '00'.repeat(32), '0x' + '11'.repeat(32), '0x' + '22'.repeat(32), 'JOIN', agentId, '0x' + '11'.repeat(20), '0')
+      .run()
+
+    await db
+      .prepare(
+        'INSERT INTO events (auction_id, seq, prev_hash, event_hash, payload_hash, action_type, agent_id, wallet, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(auctionId, 2, '0x' + '11'.repeat(32), '0x' + '33'.repeat(32), '0x' + '44'.repeat(32), 'BID', agentId, '0x' + '11'.repeat(20), '100')
+      .run()
+
+    const res = await app.request(
+      `http://localhost/auctions/${auctionId}/events?participantToken=${agentId}`,
+      {},
+      env,
+    )
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.events).toHaveLength(2)
+  })
+
+  it('manifest endpoint is open when x402 mode is off; events requires auth', async () => {
     const auctionId = randomAuctionId()
     await db
       .prepare(
@@ -352,32 +394,54 @@ describe('API routes (Hono)', () => {
       .bind(auctionId, '0x' + 'aa'.repeat(32), 1, '1', '0', Math.floor(Date.now() / 1000) + 60)
       .run()
 
-    const eventsRes = await app.request(`http://localhost/auctions/${auctionId}/events`, {}, env)
-    expect(eventsRes.status).toBe(200)
+    // Events require auth (admin or participant) regardless of x402
+    const eventsNoAuth = await app.request(`http://localhost/auctions/${auctionId}/events`, {}, env)
+    expect(eventsNoAuth.status).toBe(403)
+
+    // Events with admin key should work
+    const eventsAdmin = await app.request(
+      `http://localhost/auctions/${auctionId}/events`,
+      { headers: { 'X-ENGINE-ADMIN-KEY': TEST_ADMIN_KEY } },
+      env,
+    )
+    expect(eventsAdmin.status).toBe(200)
 
     const manifestRes = await app.request(`http://localhost/auctions/${auctionId}/manifest`, {}, env)
     expect(manifestRes.status).toBe(200)
   })
 
-  it('manifest/events endpoints return 402 when x402 mode is on and no payment provided', async () => {
+  it('discovery routes return 402 when x402 discovery is enabled and no payment provided', async () => {
     const auctionId = randomAuctionId()
+    await db
+      .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(auctionId, '0x' + 'ab'.repeat(32), 1, '1', '0', Math.floor(Date.now() / 1000) + 60)
+      .run()
+
     env.X402_MODE = 'on'
     env.X402_RECEIVER_ADDRESS = '0x' + '11'.repeat(20)
+    env.ENGINE_X402_DISCOVERY = 'true'
 
-    const manifestRes = await app.request(`http://localhost/auctions/${auctionId}/manifest`, {}, env)
-    expect(manifestRes.status).toBe(402)
+    const listRes = await app.request('http://localhost/auctions', {}, env)
+    expect(listRes.status).toBe(402)
 
-    const eventsRes = await app.request(`http://localhost/auctions/${auctionId}/events`, {}, env)
-    expect(eventsRes.status).toBe(402)
+    const detailRes = await app.request(`http://localhost/auctions/${auctionId}`, {}, env)
+    expect(detailRes.status).toBe(402)
 
     delete env.X402_MODE
     delete env.X402_RECEIVER_ADDRESS
+    delete env.ENGINE_X402_DISCOVERY
   })
 
-  it('manifest/events endpoints reject duplicate payment-signature receipt hash', async () => {
+  it('discovery routes reject duplicate payment-signature receipt hash', async () => {
     const auctionId = randomAuctionId()
+    await db
+      .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(auctionId, '0x' + 'ab'.repeat(32), 1, '1', '0', Math.floor(Date.now() / 1000) + 60)
+      .run()
+
     env.X402_MODE = 'on'
     env.X402_RECEIVER_ADDRESS = '0x' + '11'.repeat(20)
+    env.ENGINE_X402_DISCOVERY = 'true'
 
     const paymentSignature = 'base64-mock-payload'
     const receiptHash = await sha256Hex(paymentSignature)
@@ -387,7 +451,7 @@ describe('API routes (Hono)', () => {
       .run()
 
     const res = await app.request(
-      `http://localhost/auctions/${auctionId}/manifest`,
+      `http://localhost/auctions/${auctionId}`,
       { headers: { 'PAYMENT-SIGNATURE': paymentSignature } },
       env,
     )
@@ -397,19 +461,105 @@ describe('API routes (Hono)', () => {
 
     delete env.X402_MODE
     delete env.X402_RECEIVER_ADDRESS
+    delete env.ENGINE_X402_DISCOVERY
   })
 
-  it('x402 mode on fails closed when receiver address is missing', async () => {
+  it('discovery gate passes through when receiver address is missing', async () => {
     const auctionId = randomAuctionId()
+    await db
+      .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(auctionId, '0x' + 'ab'.repeat(32), 1, '1', '0', Math.floor(Date.now() / 1000) + 60)
+      .run()
+
     env.X402_MODE = 'on'
+    env.ENGINE_X402_DISCOVERY = 'true'
     delete env.X402_RECEIVER_ADDRESS
 
-    const res = await app.request(`http://localhost/auctions/${auctionId}/manifest`, {}, env)
-    expect(res.status).toBe(500)
-    const json = await res.json()
-    expect(json.error).toContain('X402_RECEIVER_ADDRESS')
+    // No receiver → platformConfig.enabled=false → gate passes through → 200
+    const res = await app.request(`http://localhost/auctions/${auctionId}`, {}, env)
+    expect(res.status).toBe(200)
 
     delete env.X402_MODE
+    delete env.ENGINE_X402_DISCOVERY
+  })
+
+  it('admin key bypasses x402 on discovery routes', async () => {
+    const auctionId = randomAuctionId()
+    await db
+      .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(auctionId, '0x' + 'ab'.repeat(32), 1, '1', '0', Math.floor(Date.now() / 1000) + 60)
+      .run()
+
+    env.X402_MODE = 'on'
+    env.X402_RECEIVER_ADDRESS = '0x' + '11'.repeat(20)
+    env.ENGINE_X402_DISCOVERY = 'true'
+
+    // Without admin key → 402
+    const gatedRes = await app.request(`http://localhost/auctions/${auctionId}`, {}, env)
+    expect(gatedRes.status).toBe(402)
+
+    // With admin key → bypasses x402 → 200
+    const bypassRes = await app.request(
+      `http://localhost/auctions/${auctionId}`,
+      { headers: { 'X-ENGINE-ADMIN-KEY': TEST_ADMIN_KEY } },
+      env,
+    )
+    expect(bypassRes.status).toBe(200)
+
+    delete env.X402_MODE
+    delete env.X402_RECEIVER_ADDRESS
+    delete env.ENGINE_X402_DISCOVERY
+  })
+
+  it('discovery routes are free when ENGINE_X402_DISCOVERY is not set', async () => {
+    const auctionId = randomAuctionId()
+    await db
+      .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(auctionId, '0x' + 'ab'.repeat(32), 1, '1', '0', Math.floor(Date.now() / 1000) + 60)
+      .run()
+
+    env.X402_MODE = 'on'
+    env.X402_RECEIVER_ADDRESS = '0x' + '11'.repeat(20)
+    // ENGINE_X402_DISCOVERY not set → gate passes through
+    delete env.ENGINE_X402_DISCOVERY
+
+    const listRes = await app.request('http://localhost/auctions', {}, env)
+    expect(listRes.status).toBe(200)
+
+    const detailRes = await app.request(`http://localhost/auctions/${auctionId}`, {}, env)
+    expect(detailRes.status).toBe(200)
+
+    delete env.X402_MODE
+    delete env.X402_RECEIVER_ADDRESS
+  })
+
+  it('POST to /auctions bypasses x402 gate (only GET gated)', async () => {
+    env.X402_MODE = 'on'
+    env.X402_RECEIVER_ADDRESS = '0x' + '11'.repeat(20)
+    env.ENGINE_X402_DISCOVERY = 'true'
+
+    const auctionId = randomAuctionId()
+    const deadline = Math.floor(Date.now() / 1000) + 60
+
+    const res = await app.request(
+      'http://localhost/auctions',
+      {
+        method: 'POST',
+        headers: adminHeaders,
+        body: JSON.stringify({
+          auctionId,
+          manifestHash: '0x' + 'a2'.repeat(32),
+          reservePrice: '1000000',
+          deadline,
+        }),
+      },
+      env,
+    )
+    expect(res.status).toBe(201)
+
+    delete env.X402_MODE
+    delete env.X402_RECEIVER_ADDRESS
+    delete env.ENGINE_X402_DISCOVERY
   })
 
   it('GET /auctions/:id/replay returns canonical replay bytes', async () => {
@@ -825,48 +975,7 @@ describe('API routes (Hono)', () => {
     expect(json.error).toContain('closed')
   })
 
-  // ── Per-Auction x402 Policy: Real Scenarios ────────────────────────
-
-  // Scenario 1: Admin creates a premium auction that charges even on a free platform.
-  // Both manifest and events endpoints must return 402.
-  it('premium auction (mode=on) charges on both manifest AND events even when platform is off', async () => {
-    const auctionId = randomAuctionId()
-    const receiverAddr = '0x' + '44'.repeat(20)
-
-    await db
-      .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline, x402_policy_json) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .bind(
-        auctionId,
-        '0x' + 'ab'.repeat(32),
-        1,
-        '1',
-        '0',
-        Math.floor(Date.now() / 1000) + 60,
-        JSON.stringify({ mode: 'on', receiverAddress: receiverAddr }),
-      )
-      .run()
-
-    // Platform is off
-    delete env.X402_MODE
-    delete env.X402_RECEIVER_ADDRESS
-
-    const manifestRes = await app.request(
-      `http://localhost/auctions/${auctionId}/manifest`,
-      {},
-      env,
-    )
-    expect(manifestRes.status).toBe(402)
-    // x402 middleware sets PAYMENT-REQUIRED header with payment requirements
-    expect(manifestRes.headers.get('PAYMENT-REQUIRED')).toBeTruthy()
-
-    const eventsRes = await app.request(
-      `http://localhost/auctions/${auctionId}/events`,
-      {},
-      env,
-    )
-    expect(eventsRes.status).toBe(402)
-    expect(eventsRes.headers.get('PAYMENT-REQUIRED')).toBeTruthy()
-  })
+  // ── Discovery x402 Gate Scenarios ────────────────────────────────
 
   // Scenario 2: Admin creates a free demo auction exempt from platform-wide charges.
   // Manifest serves freely; other auctions still charge.
@@ -900,171 +1009,29 @@ describe('API routes (Hono)', () => {
     const manifestJson = await manifestRes.json()
     expect(manifestJson.title).toBe('Free Demo Auction')
 
-    // Events also free
-    const eventsRes = await app.request(
+    // Events endpoint requires auth (admin or participant) regardless of x402;
+    // x402 gate is bypassed (mode=off), so the route handler runs and checks auth.
+    const eventsNoAuth = await app.request(
       `http://localhost/auctions/${freeAuctionId}/events`,
       {},
       env,
     )
-    expect(eventsRes.status).toBe(200)
+    expect(eventsNoAuth.status).toBe(403)
+
+    // With admin key, events should be accessible
+    const eventsAdmin = await app.request(
+      `http://localhost/auctions/${freeAuctionId}/events`,
+      { headers: { 'X-ENGINE-ADMIN-KEY': TEST_ADMIN_KEY } },
+      env,
+    )
+    expect(eventsAdmin.status).toBe(200)
 
     delete env.X402_MODE
     delete env.X402_RECEIVER_ADDRESS
   })
 
-  // Scenario 3: Two auctions coexist with different policies under the same platform.
-  // Auction A charges (mode=on), Auction B is free (mode=off).
-  it('two auctions coexist: A charges, B is free, on same platform', async () => {
-    const paidAuctionId = randomAuctionId()
-    const freeAuctionId = randomAuctionId()
-    const receiverAddr = '0x' + '66'.repeat(20)
-
-    await db
-      .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline, x402_policy_json) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .bind(paidAuctionId, '0x' + 'ab'.repeat(32), 1, '1', '0', Math.floor(Date.now() / 1000) + 60,
-        JSON.stringify({ mode: 'on', receiverAddress: receiverAddr }))
-      .run()
-
-    await db
-      .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline, title, x402_policy_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(freeAuctionId, '0x' + 'cd'.repeat(32), 1, '1', '0', Math.floor(Date.now() / 1000) + 60, 'Free',
-        JSON.stringify({ mode: 'off' }))
-      .run()
-
-    // Platform is off — policy differences are purely per-auction
-    delete env.X402_MODE
-    delete env.X402_RECEIVER_ADDRESS
-
-    const paidRes = await app.request(`http://localhost/auctions/${paidAuctionId}/manifest`, {}, env)
-    expect(paidRes.status).toBe(402)
-
-    const freeRes = await app.request(`http://localhost/auctions/${freeAuctionId}/manifest`, {}, env)
-    expect(freeRes.status).toBe(200)
-  })
-
-  // Scenario 4: Auction with no x402 policy inherits platform ON → 402.
-  it('auction with no x402Policy inherits platform ON → 402', async () => {
-    const auctionId = randomAuctionId()
-
-    await db
-      .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(auctionId, '0x' + 'ab'.repeat(32), 1, '1', '0', Math.floor(Date.now() / 1000) + 60)
-      .run()
-
-    env.X402_MODE = 'on'
-    env.X402_RECEIVER_ADDRESS = '0x' + '77'.repeat(20)
-
-    const res = await app.request(`http://localhost/auctions/${auctionId}/manifest`, {}, env)
-    expect(res.status).toBe(402)
-
-    delete env.X402_MODE
-    delete env.X402_RECEIVER_ADDRESS
-  })
-
-  // Scenario 5: Full lifecycle — create auction with policy via POST → gate enforced
-  // → admin PATCHes policy → gate changes.
-  it('full lifecycle: create with mode=on, verify 402, PATCH to off, verify 200', async () => {
-    const auctionId = randomAuctionId()
-    const deadline = Math.floor(Date.now() / 1000) + 60
-    const receiverAddr = '0x' + '88'.repeat(20)
-
-    // Platform is off — auction-level override is the only gate
-    delete env.X402_MODE
-    delete env.X402_RECEIVER_ADDRESS
-
-    // Step 1: Create auction with mode=on via POST /auctions
-    const createRes = await app.request(
-      'http://localhost/auctions',
-      {
-        method: 'POST',
-        headers: adminHeaders,
-        body: JSON.stringify({
-          auctionId,
-          manifestHash: '0x' + 'a1'.repeat(32),
-          reservePrice: '1000000',
-          deadline,
-          x402Policy: { mode: 'on', priceManifest: '$0.005', receiverAddress: receiverAddr },
-        }),
-      },
-      env,
-    )
-    expect(createRes.status).toBe(201)
-    const createJson = await createRes.json()
-    expect(createJson.x402Policy.mode).toBe('on')
-    expect(createJson.x402Policy.priceManifest).toBe('$0.005')
-
-    // Step 2: Verify manifest is gated (402)
-    const gatedRes = await app.request(
-      `http://localhost/auctions/${auctionId}/manifest`,
-      {},
-      env,
-    )
-    expect(gatedRes.status).toBe(402)
-
-    // Step 3: Admin PATCHes policy to off
-    const patchRes = await app.request(
-      `http://localhost/auctions/${auctionId}/x402-policy`,
-      {
-        method: 'PATCH',
-        headers: adminHeaders,
-        body: JSON.stringify({ mode: 'off' }),
-      },
-      env,
-    )
-    expect(patchRes.status).toBe(200)
-
-    // Step 4: Verify manifest is now free (200)
-    const freeRes = await app.request(
-      `http://localhost/auctions/${auctionId}/manifest`,
-      {},
-      env,
-    )
-    expect(freeRes.status).toBe(200)
-    const manifestJson = await freeRes.json()
-    expect(manifestJson.auctionId).toBe(auctionId)
-  })
-
-  // Scenario 6: Receipt dedup works with per-auction override active.
-  // A replay of the same payment-signature is rejected with 409 even
-  // when the per-auction policy is in effect (not just platform mode).
-  it('receipt dedup still rejects replayed payment-signature under per-auction policy', async () => {
-    const auctionId = randomAuctionId()
-    const receiverAddr = '0x' + '99'.repeat(20)
-
-    await db
-      .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline, x402_policy_json) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .bind(
-        auctionId,
-        '0x' + 'ab'.repeat(32),
-        1,
-        '1',
-        '0',
-        Math.floor(Date.now() / 1000) + 60,
-        JSON.stringify({ mode: 'on', receiverAddress: receiverAddr }),
-      )
-      .run()
-
-    delete env.X402_MODE
-    delete env.X402_RECEIVER_ADDRESS
-
-    // Pre-insert a receipt to simulate a previously used payment
-    const paymentSignature = 'per-auction-payment-sig-' + auctionId.slice(0, 8)
-    const receiptHash = await sha256Hex(paymentSignature)
-    await db
-      .prepare('INSERT INTO x402_receipts (receipt_hash, used_at) VALUES (?, ?)')
-      .bind(receiptHash, Math.floor(Date.now() / 1000))
-      .run()
-
-    // Replay the same payment → 409
-    const res = await app.request(
-      `http://localhost/auctions/${auctionId}/manifest`,
-      { headers: { 'PAYMENT-SIGNATURE': paymentSignature } },
-      env,
-    )
-    expect(res.status).toBe(409)
-    const json = await res.json()
-    expect(json.error).toContain('duplicate PAYMENT-SIGNATURE')
-  })
+  // Per-auction x402 policies (CRUD) are still stored but no longer gate discovery routes.
+  // The discovery gate uses platform-level ENGINE_X402_DISCOVERY toggle only.
 
   // Scenario 7: POST /auctions without x402Policy is backward compatible.
   // No policy stored, no x402Policy in response.

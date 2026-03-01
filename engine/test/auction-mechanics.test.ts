@@ -55,8 +55,15 @@ function createMockWebSocket() {
   }
 }
 
-function createMockState(webSockets: WebSocket[] = []) {
+function createMockState(webSockets: WebSocket[] = [], defaultTag?: string) {
   const storage = createMockStorage()
+  const socketTagMap = new Map<WebSocket, string[]>()
+
+  // Pre-register sockets with the given default tag
+  for (const ws of webSockets) {
+    socketTagMap.set(ws, defaultTag ? [defaultTag] : [])
+  }
+
   const state = {
     storage,
     id: {
@@ -67,8 +74,14 @@ function createMockState(webSockets: WebSocket[] = []) {
     blockConcurrencyWhile: async <T>(callback: () => Promise<T>): Promise<T> => {
       return callback()
     },
-    acceptWebSocket: () => {},
-    getWebSockets: () => webSockets,
+    acceptWebSocket: (_ws: unknown, _tags?: string[]) => {},
+    getWebSockets: (tag?: string) => {
+      if (!tag) return webSockets
+      return webSockets.filter(ws => {
+        const tags = socketTagMap.get(ws) ?? []
+        return tags.includes(tag)
+      })
+    },
     waitUntil: () => {},
     _storage: storage,
   }
@@ -113,7 +126,7 @@ describe('Auction mechanics (Task 4c2)', () => {
       .run()
 
     const socket = createMockWebSocket()
-    const state = createMockState([socket.ws])
+    const state = createMockState([socket.ws], 'participant')
     await state._storage.put('auctionId', auctionId)
 
     const env = {
@@ -174,7 +187,7 @@ describe('Auction mechanics (Task 4c2)', () => {
       .run()
 
     const socket = createMockWebSocket()
-    const state = createMockState([socket.ws])
+    const state = createMockState([socket.ws], 'participant')
     await state._storage.put('auctionId', auctionId)
 
     const env = {
@@ -233,7 +246,7 @@ describe('Auction mechanics (Task 4c2)', () => {
       .run()
 
     const socket = createMockWebSocket()
-    const state = createMockState([socket.ws])
+    const state = createMockState([socket.ws], 'participant')
     await state._storage.put('auctionId', auctionId)
 
     const env = {
@@ -283,7 +296,7 @@ describe('Auction mechanics (Task 4c2)', () => {
 
     const winnerWallet = randomWallet()
     const socket = createMockWebSocket()
-    const state = createMockState([socket.ws])
+    const state = createMockState([socket.ws], 'participant')
     await state._storage.put('auctionId', auctionId)
 
     const env = {

@@ -31,7 +31,7 @@ import { registerPrompts } from './prompts.js'
 // ── Configuration ────────────────────────────────────────────────────
 
 const config = loadConfig()
-const engine = new EngineClient(config.engineUrl)
+const engine = new EngineClient(config.engineUrl, config.engineAdminKey)
 
 /** Per-action-type nonce tracker: "JOIN:<agentId>" | "BID:<agentId>" → next nonce */
 const nonceTracker = new Map<string, number>()

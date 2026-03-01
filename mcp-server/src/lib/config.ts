@@ -17,6 +17,8 @@ export interface ServerConfig {
   agentId: string | null
   /** MCP server port */
   port: number
+  /** Engine admin key — bypasses x402 gates on engine calls */
+  engineAdminKey: string | null
 }
 
 export function loadConfig(): ServerConfig {
@@ -24,6 +26,7 @@ export function loadConfig(): ServerConfig {
   const rawKey = process.env.AGENT_PRIVATE_KEY ?? null
   const agentId = process.env.AGENT_ID ?? null
   const port = parseInt(process.env.MCP_PORT ?? '3100', 10)
+  const engineAdminKey = process.env.ENGINE_ADMIN_KEY ?? null
 
   let agentPrivateKey: Hex | null = null
   if (rawKey) {
@@ -33,7 +36,7 @@ export function loadConfig(): ServerConfig {
     agentPrivateKey = rawKey as Hex
   }
 
-  return { engineUrl, agentPrivateKey, agentId, port }
+  return { engineUrl, agentPrivateKey, agentId, port, engineAdminKey }
 }
 
 /**

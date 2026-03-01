@@ -119,6 +119,13 @@ export class AuctionRoom implements DurableObject {
   private winnerWallet: string = ZERO_WALLET
   private winningBidAmount: string = '0'
 
+  /** Aggregate bidding activity tracking */
+  private bidCount: number = 0
+  private lastEventTimestamp: number = 0
+  private uniqueBidderSet: Set<string> = new Set()
+  private uniqueBidderCount: number = 0
+  private reservePrice: string = '0'
+
   constructor(state: DurableObjectState, env: Env) {
     this.state = state
     this.env = env
@@ -146,6 +153,10 @@ export class AuctionRoom implements DurableObject {
         winnerAgentId,
         winnerWallet,
         winningBidAmount,
+        bidCountVal,
+        lastEventTimestampVal,
+        uniqueBiddersVal,
+        reservePriceVal,
       ] = await Promise.all([
         this.state.storage.get<number>('seqCounter'),
         this.state.storage.get<string>('chainHead'),
@@ -167,6 +178,10 @@ export class AuctionRoom implements DurableObject {
         this.state.storage.get<string>('winnerAgentId'),
         this.state.storage.get<string>('winnerWallet'),
         this.state.storage.get<string>('winningBidAmount'),
+        this.state.storage.get<number>('bidCount'),
+        this.state.storage.get<number>('lastEventTimestamp'),
+        this.state.storage.get<string[]>('uniqueBidders'),
+        this.state.storage.get<string>('reservePrice'),
       ])
       this.seqCounter = seq ?? 0
       this.chainHead = head ?? ZERO_HASH_HEX
@@ -209,6 +224,12 @@ export class AuctionRoom implements DurableObject {
       this.winnerAgentId = winnerAgentId ?? '0'
       this.winnerWallet = (winnerWallet ?? ZERO_WALLET) as `0x${string}`
       this.winningBidAmount = winningBidAmount ?? '0'
+      this.bidCount = bidCountVal ?? 0
+      this.lastEventTimestamp = lastEventTimestampVal ?? 0
+      const savedBidders = uniqueBiddersVal ?? []
+      this.uniqueBidderSet = new Set(savedBidders)
+      this.uniqueBidderCount = this.uniqueBidderSet.size
+      this.reservePrice = reservePriceVal ?? '0'
     })
   }
 
@@ -237,7 +258,7 @@ export class AuctionRoom implements DurableObject {
       case '/stream':
         return this.handleStream(request)
       case '/snapshot':
-        return this.handleSnapshot()
+        return this.handleSnapshot(request)
       case '/close':
         return this.handleClose(request)
       case '/cancel':
@@ -339,6 +360,18 @@ export class AuctionRoom implements DurableObject {
         maxExtensions: this.maxExtensions,
       }
       await this.state.storage.put('roomConfig', this.roomConfig)
+
+      // Load reserve price from D1 for aggregate calculations
+      if (this.auctionId) {
+        const row = await this.env.AUCTION_DB
+          .prepare('SELECT reserve_price FROM auctions WHERE auction_id = ?')
+          .bind(this.auctionId)
+          .first<{ reserve_price: string }>()
+        if (row?.reserve_price) {
+          this.reservePrice = row.reserve_price
+          await this.state.storage.put('reservePrice', this.reservePrice)
+        }
+      }
 
       // Ensure status is OPEN after init.
       if (this.auctionStatus !== 1) {
@@ -454,32 +487,40 @@ export class AuctionRoom implements DurableObject {
     return Response.json(result.results ?? [])
   }
 
-  /** GET /stream — WebSocket upgrade using Hibernatable API */
+  /** GET /stream — WebSocket upgrade using Hibernatable API (two-tier: public vs participant) */
   private handleStream(request: Request): Response {
     const upgradeHeader = request.headers.get('Upgrade')
     if (upgradeHeader !== 'websocket') {
       return new Response('Expected WebSocket upgrade', { status: 426 })
     }
 
+    const url = new URL(request.url)
+    const participantToken = url.searchParams.get('participantToken')
+
     const pair = new WebSocketPair()
     const [client, server] = Object.values(pair)
 
-    // Accept via Hibernatable API — enables DO hibernation between messages
-    this.state.acceptWebSocket(server)
+    // Tag the WebSocket with participant status for two-tier broadcast
+    const tags = participantToken ? ['participant'] : ['public']
+    this.state.acceptWebSocket(server, tags)
 
     return new Response(null, { status: 101, webSocket: client })
   }
 
-  /** GET /snapshot — return current room state */
-  private handleSnapshot(): Response {
+  /** GET /snapshot — return current room state (masked for public, raw for internal) */
+  private handleSnapshot(request?: Request): Response {
     const serverNow = Math.floor(Date.now() / 1000)
+
+    // Internal requests (from close/settlement logic) get raw highestBidder
+    const isInternal = request?.headers?.get('X-Internal') === 'true'
+
     const snapshot: RoomSnapshot = {
       auctionId: this.auctionId,
       currentSeq: this.seqCounter,
       headHash: this.chainHead,
       participantCount: this.participantCount,
       highestBid: this.highestBid,
-      highestBidder: this.highestBidder,
+      highestBidder: isInternal ? this.highestBidder : this.maskAgentId(this.highestBidder),
       startedAt: this.startedAt,
       deadline: this.deadline,
       status: this.auctionStatus,
@@ -494,6 +535,14 @@ export class AuctionRoom implements DurableObject {
       winnerAgentId: this.winnerAgentId,
       winnerWallet: this.winnerWallet,
       winningBidAmount: this.winningBidAmount,
+      // Aggregate fields
+      bidCount: this.bidCount,
+      lastActivitySec: this.lastEventTimestamp > 0 ? serverNow - this.lastEventTimestamp : 0,
+      competitionLevel: this.getCompetitionLevel(),
+      uniqueBidders: this.uniqueBidderCount,
+      priceIncreasePct: this.computePriceIncreasePct(),
+      snipeWindowActive: this.deadline > 0 && this.auctionStatus === 1 && (this.deadline - serverNow) <= this.snipeWindowSec && (this.deadline - serverNow) > 0,
+      extensionsRemaining: Math.max(this.maxExtensions - this.extensionCount, 0),
     }
     return Response.json(snapshot)
   }
@@ -522,9 +571,18 @@ export class AuctionRoom implements DurableObject {
     if (action.type === ActionType.BID) {
       this.highestBid = action.amount
       this.highestBidder = action.agentId
+      this.bidCount += 1
+      this.uniqueBidderSet.add(action.agentId)
+      this.uniqueBidderCount = this.uniqueBidderSet.size
       await this.state.storage.put('highestBid', this.highestBid)
       await this.state.storage.put('highestBidder', this.highestBidder)
+      await this.state.storage.put('bidCount', this.bidCount)
+      await this.state.storage.put('uniqueBidders', [...this.uniqueBidderSet])
     }
+
+    // Track last event timestamp for all actions
+    this.lastEventTimestamp = Math.floor(Date.now() / 1000)
+    await this.state.storage.put('lastEventTimestamp', this.lastEventTimestamp)
 
     // Compute payload hash from action fields
     const payloadHash = computePayloadHash(
@@ -1061,7 +1119,7 @@ export class AuctionRoom implements DurableObject {
 
   // ─── Broadcast ───────────────────────────────────────────────────────
 
-  /** Broadcast an event to all connected WebSocket clients */
+  /** Broadcast an event to all connected WebSocket clients (two-tier: full for participants, masked for public) */
   private broadcastEvent(event: {
     seq?: number
     eventHash?: string
@@ -1077,19 +1135,43 @@ export class AuctionRoom implements DurableObject {
     extensionsRemaining?: number
     reason?: string
   }): void {
-    const message = JSON.stringify({
+    // Full event for participants
+    const fullMessage = JSON.stringify({
       type: 'event',
       seq: event.seq ?? this.seqCounter,
       eventHash: event.eventHash ?? this.chainHead,
       ...event,
     })
-    const sockets = this.state.getWebSockets()
-    for (const ws of sockets) {
-      try {
-        ws.send(message)
-      } catch {
-        // Ignore errors from closed/errored sockets
-      }
+
+    // Masked event for public viewers (strip wallet, mask agentId)
+    const maskedEvent: Record<string, unknown> = {
+      type: 'event',
+      seq: event.seq ?? this.seqCounter,
+      eventHash: event.eventHash ?? this.chainHead,
+      actionType: event.actionType,
+      amount: event.amount,
+      timestamp: event.timestamp,
+      agentId: this.maskAgentId(event.agentId),
+    }
+    // Include non-sensitive fields when present
+    if (event.deadline !== undefined) maskedEvent.deadline = event.deadline
+    if (event.oldDeadline !== undefined) maskedEvent.oldDeadline = event.oldDeadline
+    if (event.extensionCount !== undefined) maskedEvent.extensionCount = event.extensionCount
+    if (event.maxExtensions !== undefined) maskedEvent.maxExtensions = event.maxExtensions
+    if (event.extensionsRemaining !== undefined) maskedEvent.extensionsRemaining = event.extensionsRemaining
+    if (event.reason !== undefined) maskedEvent.reason = event.reason
+    const publicMessage = JSON.stringify(maskedEvent)
+
+    // Send full events to participant sockets
+    const participantSockets = this.state.getWebSockets('participant')
+    for (const ws of participantSockets) {
+      try { ws.send(fullMessage) } catch { /* ignore */ }
+    }
+
+    // Send masked events to public sockets
+    const publicSockets = this.state.getWebSockets('public')
+    for (const ws of publicSockets) {
+      try { ws.send(publicMessage) } catch { /* ignore */ }
     }
   }
 
@@ -1103,6 +1185,31 @@ export class AuctionRoom implements DurableObject {
         // Ignore errors on closed sockets
       }
     }
+  }
+
+  // ─── Aggregate Helpers ──────────────────────────────────────────────
+
+  /** Mask an agentId for public display (e.g. "12345" → "Agent ●●●●45") */
+  private maskAgentId(agentId: string): string {
+    if (agentId === '0') return '0'
+    const suffix = agentId.length >= 2 ? agentId.slice(-2) : agentId
+    return `Agent ●●●●${suffix}`
+  }
+
+  /** Derive competition level from bid count */
+  private getCompetitionLevel(): 'low' | 'medium' | 'high' {
+    if (this.bidCount > 10) return 'high'
+    if (this.bidCount >= 3) return 'medium'
+    return 'low'
+  }
+
+  /** Compute price increase percentage above reserve price */
+  private computePriceIncreasePct(): number {
+    const reserve = BigInt(this.reservePrice || '0')
+    const highest = BigInt(this.highestBid || '0')
+    if (reserve === 0n || highest === 0n) return 0
+    if (highest <= reserve) return 0
+    return Number(((highest - reserve) * 10000n) / reserve) / 100
   }
 
   // ─── Accessors (for testing) ────────────────────────────────────────

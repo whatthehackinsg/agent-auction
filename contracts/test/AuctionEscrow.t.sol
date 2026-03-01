@@ -818,7 +818,9 @@ contract AuctionEscrowTest is Test {
         escrow.configureCRE(bytes32(0), bytes10("bad-config"), address(0x2222222222222222222222222222222222222222));
 
         vm.expectRevert(AuctionEscrow.InvalidCREConfig.selector);
-        escrow.configureCRE(keccak256("settlement-workflow"), bytes10(0), address(0x2222222222222222222222222222222222222222));
+        escrow.configureCRE(
+            keccak256("settlement-workflow"), bytes10(0), address(0x2222222222222222222222222222222222222222)
+        );
 
         vm.expectRevert(AuctionEscrow.InvalidCREConfig.selector);
         escrow.configureCRE(keccak256("settlement-workflow"), bytes10("validname"), address(0));
@@ -900,6 +902,179 @@ contract AuctionEscrowTest is Test {
 
         // 6. Registry shows SETTLED
         assertEq(uint256(registry.getAuctionState(auctionId)), uint256(IAuctionTypes.AuctionState.SETTLED));
+    }
+
+    /* ── Commission tests ─────────────────────────────────────────── */
+
+    /// @dev Test 1: Settlement deducts commission (250 bps = 2.5%)
+    function test_settlement_deductsCommission() public {
+        // Set 2.5% commission
+        escrow.setCommissionBps(250);
+
+        _recordBond(auctionId, winnerAgentId, address(0xAAAA), bondAmount);
+        _closeAuction();
+        forwarder.forwardReport(address(escrow), _buildReport());
+
+        // 100 USDC bond * 2.5% = 2.5 USDC commission
+        uint256 expectedCommission = (bondAmount * 250) / 10_000; // 2.5e6
+        uint256 expectedPayout = bondAmount - expectedCommission; // 97.5e6
+
+        assertEq(escrow.platformBalance(), expectedCommission, "Platform balance should be 2.5 USDC");
+        assertEq(escrow.withdrawable(winnerAgentId), expectedPayout, "Winner withdrawable should be 97.5 USDC");
+        assertEq(escrow.totalWithdrawable(), expectedPayout, "Total withdrawable should be 97.5 USDC");
+    }
+
+    /// @dev Test 2: Default 0 bps means full refund (backward compat)
+    function test_settlement_zeroCommission() public {
+        // commissionBps defaults to 0 — no need to set
+        assertEq(escrow.commissionBps(), 0);
+
+        _recordBond(auctionId, winnerAgentId, address(0xAAAA), bondAmount);
+        _closeAuction();
+        forwarder.forwardReport(address(escrow), _buildReport());
+
+        assertEq(escrow.platformBalance(), 0, "Platform balance should be 0");
+        assertEq(escrow.withdrawable(winnerAgentId), bondAmount, "Winner should get full bond back");
+    }
+
+    /// @dev Test 3: setCommissionBps reverts if > MAX_COMMISSION_BPS
+    function test_setCommissionBps_capped() public {
+        vm.expectRevert(AuctionEscrow.CommissionTooHigh.selector);
+        escrow.setCommissionBps(1001); // > 1000 (10%)
+
+        // Exactly 1000 should succeed
+        escrow.setCommissionBps(1000);
+        assertEq(escrow.commissionBps(), 1000);
+    }
+
+    /// @dev Test 4: Non-owner cannot change commission rate
+    function test_setCommissionBps_onlyOwner() public {
+        vm.prank(address(0xDEAD));
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", address(0xDEAD)));
+        escrow.setCommissionBps(250);
+    }
+
+    /// @dev Test 5: Admin withdraws accumulated platform balance
+    function test_platformWithdraw() public {
+        address platformAddr = makeAddr("platform");
+        escrow.setPlatformWallet(platformAddr);
+        escrow.setCommissionBps(250); // 2.5%
+
+        _recordBond(auctionId, winnerAgentId, address(0xAAAA), bondAmount);
+        _closeAuction();
+        forwarder.forwardReport(address(escrow), _buildReport());
+
+        uint256 expectedCommission = (bondAmount * 250) / 10_000; // 2.5e6
+        assertEq(escrow.platformBalance(), expectedCommission);
+
+        escrow.withdrawPlatformBalance();
+
+        assertEq(escrow.platformBalance(), 0, "Platform balance should be 0 after withdrawal");
+        assertEq(usdc.balanceOf(platformAddr), expectedCommission, "Platform wallet should receive commission");
+    }
+
+    /// @dev Test 6: Commission rate changeable between auctions
+    function test_commissionBps_changeableAnytime() public {
+        // Auction A: 0% commission
+        assertEq(escrow.commissionBps(), 0);
+        _recordBond(auctionId, winnerAgentId, address(0xAAAA), bondAmount);
+        _closeAuction();
+        forwarder.forwardReport(address(escrow), _buildReport());
+
+        assertEq(escrow.withdrawable(winnerAgentId), bondAmount, "Auction A: full bond, no commission");
+        assertEq(escrow.platformBalance(), 0, "Auction A: no platform balance");
+
+        // Withdraw auction A proceeds to clear designatedWallet
+        escrow.withdraw(winnerAgentId);
+
+        // Set 200 bps (2%) for auction B
+        escrow.setCommissionBps(200);
+
+        // Create and settle auction B
+        bytes32 auctionId2 = keccak256("auction-commission-2");
+        vm.prank(sequencer);
+        registry.createAuction(
+            auctionId2, keccak256("manifest2"), keccak256("room2"), 100e6, 10e6, block.timestamp + 1 days
+        );
+
+        bytes32 txHash2 = keccak256(abi.encode(auctionId2, winnerAgentId, "bond"));
+        escrow.recordBond(auctionId2, winnerAgentId, address(0xAAAA), bondAmount, txHash2, 0);
+
+        // Close auction B
+        IAuctionTypes.AuctionSettlementPacket memory packet2 = IAuctionTypes.AuctionSettlementPacket({
+            auctionId: auctionId2,
+            manifestHash: keccak256("manifest2"),
+            finalLogHash: keccak256("finalLog2"),
+            replayContentHash: keccak256("replayContent2"),
+            winnerAgentId: winnerAgentId,
+            winnerWallet: winnerWallet,
+            winningBidAmount: 200e6,
+            closeTimestamp: uint64(block.timestamp)
+        });
+        bytes32 structHash2 = keccak256(
+            abi.encode(
+                registry.SETTLEMENT_TYPEHASH(),
+                packet2.auctionId,
+                packet2.manifestHash,
+                packet2.finalLogHash,
+                packet2.replayContentHash,
+                packet2.winnerAgentId,
+                packet2.winnerWallet,
+                packet2.winningBidAmount,
+                packet2.closeTimestamp
+            )
+        );
+        bytes32 digest2 = keccak256(abi.encodePacked("\x19\x01", registry.DOMAIN_SEPARATOR(), structHash2));
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(sequencerPk, digest2);
+        registry.recordResult(packet2, abi.encodePacked(r2, s2, v2));
+
+        // Settle auction B through forwarder
+        bytes memory report2 = abi.encode(auctionId2, winnerAgentId, winnerWallet, 200e6);
+        forwarder.forwardReport(address(escrow), report2);
+
+        uint256 expectedCommission2 = (bondAmount * 200) / 10_000; // 2e6
+        uint256 expectedPayout2 = bondAmount - expectedCommission2; // 98e6
+
+        assertEq(escrow.withdrawable(winnerAgentId), expectedPayout2, "Auction B: 2% commission deducted");
+        assertEq(escrow.platformBalance(), expectedCommission2, "Auction B: platform got 2% commission");
+    }
+
+    /// @dev Test 7: withdrawPlatformBalance reverts when balance is 0
+    function test_platformWithdraw_revertsWhenEmpty() public {
+        escrow.setPlatformWallet(makeAddr("platform"));
+
+        vm.expectRevert(AuctionEscrow.NoPlatformBalance.selector);
+        escrow.withdrawPlatformBalance();
+    }
+
+    /// @dev Test 8: withdrawPlatformBalance reverts when platformWallet not set
+    function test_platformWithdraw_revertsNoWallet() public {
+        // Accumulate some platform balance
+        escrow.setCommissionBps(250);
+        _recordBond(auctionId, winnerAgentId, address(0xAAAA), bondAmount);
+        _closeAuction();
+        forwarder.forwardReport(address(escrow), _buildReport());
+
+        // platformWallet is still address(0) — should revert
+        vm.expectRevert(AuctionEscrow.ZeroAddress.selector);
+        escrow.withdrawPlatformBalance();
+    }
+
+    /// @dev Test 9: checkSolvency includes platformBalance
+    function test_solvency_includesPlatformBalance() public {
+        escrow.setCommissionBps(250);
+
+        _recordBond(auctionId, winnerAgentId, address(0xAAAA), bondAmount);
+        _closeAuction();
+        forwarder.forwardReport(address(escrow), _buildReport());
+
+        // After settlement: totalBonded=0, totalWithdrawable=97.5e6, platformBalance=2.5e6
+        // Total accounted = 100e6 which matches the bond amount
+        assertTrue(escrow.checkSolvency(), "Should be solvent - escrow has 1000e6 USDC");
+
+        // Verify the math: platformBalance + totalWithdrawable == bondAmount
+        uint256 expectedCommission = (bondAmount * 250) / 10_000;
+        assertEq(escrow.platformBalance() + escrow.totalWithdrawable(), bondAmount, "Commission + payout = bond");
     }
 
     /// @dev FIX TEST: Full E2E flow for cancelled auction

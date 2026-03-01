@@ -123,4 +123,17 @@ export interface RoomSnapshot {
   winnerAgentId: string;          // Final winner agentId if terminal CLOSE
   winnerWallet: string;           // Final winner wallet if terminal CLOSE
   winningBidAmount: string;       // Final winning amount if terminal CLOSE
+
+  // Aggregate bidding activity
+  bidCount: number;                    // total BID events
+  uniqueBidders: number;               // distinct agents who bid
+  lastActivitySec: number;             // seconds since last event
+  competitionLevel: 'low' | 'medium' | 'high';
+
+  // Price movement
+  priceIncreasePct: number;            // % above reserve price (0 if no reserve known)
+
+  // Snipe window intel
+  snipeWindowActive: boolean;          // currently in snipe window?
+  extensionsRemaining: number;         // maxExtensions - extensionCount
 }

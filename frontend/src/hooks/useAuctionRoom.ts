@@ -11,39 +11,20 @@ export interface AuctionEvent {
   agentId: string
   amount: string
   timestamp: number
+  wallet?: string // may be present from WS, stripped for display
 }
 
-/**
- * D1 rows from GET /auctions/:id/events use snake_case column names.
- * We normalize them to the camelCase AuctionEvent shape used by WS.
- */
-interface D1EventRow {
-  seq: number
-  event_hash: string
-  action_type: string
-  agent_id: string
-  amount: string
-  created_at: number
-  [key: string]: unknown
-}
-
-function normalizeD1Event(row: D1EventRow): AuctionEvent {
-  return {
-    type: 'event',
-    seq: Number(row.seq),
-    eventHash: row.event_hash,
-    actionType: row.action_type,
-    agentId: row.agent_id,
-    amount: row.amount,
-    timestamp: Number(row.created_at ?? 0),
-  }
+function maskAgentId(agentId: string): string {
+  if (agentId === '0') return '0'
+  if (agentId.startsWith('Agent ●●●●')) return agentId
+  const suffix = agentId.length >= 2 ? agentId.slice(-2) : agentId
+  return `Agent ●●●●${suffix}`
 }
 
 export function useAuctionRoom(auctionId: string | undefined) {
   const [events, setEvents] = useState<AuctionEvent[]>([])
   const [isConnected, setIsConnected] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
-  const [historyLoaded, setHistoryLoaded] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const shouldReconnectRef = useRef(true)
@@ -52,49 +33,6 @@ export function useAuctionRoom(auctionId: string | undefined) {
     if (!auctionId) return null
     const base = API_BASE_URL.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:')
     return `${base}/auctions/${auctionId}/stream`
-  }, [auctionId])
-
-  // ── Fetch historical events from REST on mount ──────────────────
-  useEffect(() => {
-    if (!auctionId) {
-      setHistoryLoaded(false)
-      return
-    }
-
-    let cancelled = false
-
-    async function loadHistory() {
-      try {
-        const res = await fetch(`${API_BASE_URL}/auctions/${auctionId}/events`)
-        if (!res.ok) return
-        const data = (await res.json()) as { events?: D1EventRow[] }
-        if (cancelled || !data.events || data.events.length === 0) return
-
-        const normalized = data.events.map(normalizeD1Event)
-        setEvents((prev) => {
-          // Merge: keep existing WS events that may have arrived while fetching,
-          // add historical events that are not already present (by seq).
-          const seqSet = new Set(prev.map((e) => e.seq))
-          const merged = [...prev]
-          for (const evt of normalized) {
-            if (!seqSet.has(evt.seq)) {
-              merged.push(evt)
-              seqSet.add(evt.seq)
-            }
-          }
-          return merged.sort((a, b) => a.seq - b.seq)
-        })
-      } catch {
-        // Non-fatal: WS will still deliver live events.
-      } finally {
-        if (!cancelled) setHistoryLoaded(true)
-      }
-    }
-
-    loadHistory()
-    return () => {
-      cancelled = true
-    }
   }, [auctionId])
 
   // ── WebSocket connection ────────────────────────────────────────
@@ -114,14 +52,18 @@ export function useAuctionRoom(auctionId: string | undefined) {
     ws.onmessage = (ev) => {
       try {
         const message = JSON.parse(ev.data as string) as AuctionEvent
-        if (message.type !== 'event') {
-          return
+        if (message.type !== 'event') return
+
+        // Mask agent identity for public display
+        const maskedMessage: AuctionEvent = {
+          ...message,
+          agentId: maskAgentId(message.agentId),
+          wallet: undefined, // strip wallet for display
         }
+
         setEvents((prev) => {
-          if (prev.some((e) => e.seq === message.seq)) {
-            return prev
-          }
-          return [...prev, message].sort((a, b) => a.seq - b.seq)
+          if (prev.some((e) => e.seq === maskedMessage.seq)) return prev
+          return [...prev, maskedMessage].sort((a, b) => a.seq - b.seq)
         })
       } catch {
         // Ignore malformed messages.
@@ -150,7 +92,6 @@ export function useAuctionRoom(auctionId: string | undefined) {
 
   useEffect(() => {
     setEvents([])
-    setHistoryLoaded(false)
     if (!auctionId) {
       shouldReconnectRef.current = false
       setIsConnected(false)
@@ -186,7 +127,6 @@ export function useAuctionRoom(auctionId: string | undefined) {
     events,
     isConnected,
     isConnecting,
-    historyLoaded,
     connect,
     latestEvent: events[events.length - 1] ?? null,
     highestBid: highestBidEvent ? BigInt(highestBidEvent.amount) : BigInt(0),

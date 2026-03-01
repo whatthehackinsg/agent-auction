@@ -6,6 +6,8 @@ import { HTTPFacilitatorClient } from '@x402/core/server'
 type X402Config = {
   receiverAddress: `0x${string}`
   facilitatorUrl: string
+  discoveryPrice?: string
+  detailPrice?: string
 }
 
 const DEFAULT_FACILITATOR_URL = 'https://www.x402.org/facilitator'
@@ -20,24 +22,24 @@ export function createX402Middleware(config: X402Config): MiddlewareHandler {
 
   return paymentMiddleware(
     {
-      'GET /auctions/[id]/manifest': {
+      'GET /auctions': {
         accepts: [{
           scheme: 'exact',
-          price: '$0.001',
+          price: config.discoveryPrice ?? '$0.001',
           network: 'eip155:84532',
           payTo: config.receiverAddress,
         }],
-        description: 'Auction manifest',
+        description: 'Auction discovery list',
         mimeType: 'application/json',
       },
-      'GET /auctions/[id]/events': {
+      'GET /auctions/[id]': {
         accepts: [{
           scheme: 'exact',
-          price: '$0.0001',
+          price: config.detailPrice ?? '$0.001',
           network: 'eip155:84532',
           payTo: config.receiverAddress,
         }],
-        description: 'Auction event log',
+        description: 'Auction detail with snapshot',
         mimeType: 'application/json',
       },
     },
@@ -50,7 +52,7 @@ export function createX402Middleware(config: X402Config): MiddlewareHandler {
  * Returns null if the path doesn't match the expected pattern.
  */
 export function extractAuctionIdFromPath(path: string): string | null {
-  const match = path.match(/^\/auctions\/([^/]+)\/(manifest|events)/)
+  const match = path.match(/^\/auctions\/([^/]+)(?:\/(manifest|events))?$/)
   return match ? match[1] : null
 }
 

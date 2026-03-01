@@ -15,6 +15,12 @@ export interface AuctionDetailResponse {
     highestBidder: string
     startedAt: number
     deadline: number
+    bidCount?: number
+    uniqueBidders?: number
+    competitionLevel?: 'low' | 'medium' | 'high'
+    priceIncreasePct?: number
+    snipeWindowActive?: boolean
+    extensionsRemaining?: number
   }
 }
 

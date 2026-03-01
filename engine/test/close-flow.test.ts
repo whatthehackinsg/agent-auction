@@ -56,8 +56,8 @@ function createMockState() {
     blockConcurrencyWhile: async <T>(callback: () => Promise<T>): Promise<T> => {
       return callback()
     },
-    acceptWebSocket: () => {},
-    getWebSockets: () => [] as unknown[],
+    acceptWebSocket: (_ws: unknown, _tags?: string[]) => {},
+    getWebSockets: (_tag?: string) => [] as unknown[],
     waitUntil: () => {},
     _storage: storage,
   }

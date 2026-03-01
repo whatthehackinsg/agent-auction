@@ -67,6 +67,13 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
     /// @dev auctionId → settled flag
     mapping(bytes32 => bool) public auctionSettled;
 
+    /* ── Commission storage ────────────────────────────────────── */
+
+    uint16 public commissionBps; // global rate, e.g., 250 = 2.5% (admin-settable, starts at 0)
+    uint16 public constant MAX_COMMISSION_BPS = 1000; // cap at 10%
+    uint256 public platformBalance; // accumulated commission
+    address public platformWallet; // where commission withdraws to
+
     /* ── Events ─────────────────────────────────────────────────── */
 
     event BondRecorded(bytes32 indexed auctionId, uint256 indexed agentId, address depositor, uint256 amount);
@@ -80,6 +87,9 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
     event IdentityRegistryUpdated(address indexed identityRegistry);
     event AdminUpdated(address indexed admin);
     event CREConfigured(bytes32 workflowId, bytes10 workflowName, address author);
+    event CommissionBpsUpdated(uint16 oldBps, uint16 newBps);
+    event CommissionCollected(bytes32 indexed auctionId, uint256 amount, uint16 bps);
+    event PlatformWithdrawal(address indexed to, uint256 amount);
 
     /* ── Errors ─────────────────────────────────────────────────── */
 
@@ -100,6 +110,8 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
     error SolvencyViolation();
     error UnauthorizedWithdraw();
     error DesignatedWalletConflict(); // FIX: new error for cross-auction wallet misrouting
+    error CommissionTooHigh();
+    error NoPlatformBalance();
 
     /* ── Modifiers ──────────────────────────────────────────────── */
 
@@ -179,6 +191,33 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
         emit CREConfigured(workflowId_, name_, author_);
     }
 
+    /* ── Commission configuration ────────────────────────────────── */
+
+    /// @notice Set the global commission rate (basis points)
+    function setCommissionBps(uint16 newBps) external onlyOwner {
+        if (newBps > MAX_COMMISSION_BPS) revert CommissionTooHigh();
+        uint16 oldBps = commissionBps;
+        commissionBps = newBps;
+        emit CommissionBpsUpdated(oldBps, newBps);
+    }
+
+    /// @notice Set the platform wallet address
+    function setPlatformWallet(address wallet_) external onlyOwner {
+        if (wallet_ == address(0)) revert ZeroAddress();
+        platformWallet = wallet_;
+    }
+
+    /// @notice Withdraw accumulated platform commission balance
+    function withdrawPlatformBalance() external onlyOwner nonReentrant {
+        uint256 amount = platformBalance;
+        if (amount == 0) revert NoPlatformBalance();
+        address to = platformWallet;
+        if (to == address(0)) revert ZeroAddress();
+        platformBalance = 0;
+        USDC.safeTransfer(to, amount);
+        emit PlatformWithdrawal(to, amount);
+    }
+
     /* ── Bond recording ─────────────────────────────────────────── */
 
     /// @notice Record a bond deposit (called by admin/platform after observing on-chain transfer)
@@ -211,7 +250,9 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
         totalBonded += amount;
 
         // FIX: Enforce solvency invariant after recording
-        if (USDC.balanceOf(address(this)) < totalBonded + totalWithdrawable) revert SolvencyViolation();
+        if (USDC.balanceOf(address(this)) < totalBonded + totalWithdrawable + platformBalance) {
+            revert SolvencyViolation();
+        }
 
         emit BondRecorded(auctionId, agentId, depositor, amount);
     }
@@ -244,9 +285,7 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
 
     function _setCREConfigured() internal {
         isCREConfigured =
-            expectedWorkflowId != bytes32(0)
-                && expectedWorkflowName != bytes10(0)
-                && expectedAuthor != address(0);
+            expectedWorkflowId != bytes32(0) && expectedWorkflowName != bytes10(0) && expectedAuthor != address(0);
     }
 
     /// @dev Decode and execute settlement: release winner bond, mark settled
@@ -259,14 +298,22 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
         if (auctionSettled[auctionId]) revert AlreadySettled();
         auctionSettled[auctionId] = true;
 
-        // Release winner's bond to their withdrawable balance
+        // Release winner's bond to their withdrawable balance (minus commission)
         BondRecord storage winnerBond = bonds[auctionId][winnerAgentId];
         if (winnerBond.amount > 0) {
             uint256 releaseAmount = winnerBond.amount;
+            uint256 commission = (releaseAmount * commissionBps) / 10_000;
+            uint256 payout = releaseAmount - commission;
+
             winnerBond.refunded = true;
             totalBonded -= releaseAmount;
-            withdrawable[winnerAgentId] += releaseAmount;
-            totalWithdrawable += releaseAmount;
+            withdrawable[winnerAgentId] += payout;
+            totalWithdrawable += payout;
+            platformBalance += commission;
+
+            if (commission > 0) {
+                emit CommissionCollected(auctionId, commission, commissionBps);
+            }
 
             // FIX: Conflict detection — revert if designated wallet already set to a DIFFERENT address
             if (designatedWallet[winnerAgentId] != address(0) && designatedWallet[winnerAgentId] != winnerWallet) {
@@ -384,9 +431,9 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
         return bond.amount;
     }
 
-    /// @notice Solvency check: USDC balance >= totalBonded + totalWithdrawable
+    /// @notice Solvency check: USDC balance >= totalBonded + totalWithdrawable + platformBalance
     function checkSolvency() external view returns (bool) {
-        return USDC.balanceOf(address(this)) >= totalBonded + totalWithdrawable;
+        return USDC.balanceOf(address(this)) >= totalBonded + totalWithdrawable + platformBalance;
     }
 
     /// @notice Get the designated withdrawal wallet for an agent

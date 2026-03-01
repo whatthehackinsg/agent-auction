@@ -2,7 +2,10 @@
  * get_auction_details — Get full details for a specific auction.
  *
  * GET /auctions/:id -> returns D1 row + Durable Object room snapshot
- * including highest bid, time remaining, participant count, etc.
+ * including highest bid, time remaining, participant count, and aggregate stats.
+ *
+ * Note: The snapshot now returns masked bidder identity (e.g., "Agent ●●●●42")
+ * and aggregate competition data instead of raw agent IDs.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -29,6 +32,14 @@ interface RoomSnapshot {
   winnerAgentId: string
   winnerWallet: string
   winningBidAmount: string
+  // Aggregate fields (new)
+  bidCount?: number
+  uniqueBidders?: number
+  lastActivitySec?: number
+  competitionLevel?: 'low' | 'medium' | 'high'
+  priceIncreasePct?: number
+  snipeWindowActive?: boolean
+  extensionsRemaining?: number
 }
 
 interface AuctionRow {
@@ -66,7 +77,8 @@ export function registerDetailsTool(server: McpServer, engine: EngineClient): vo
     {
       title: 'Get Auction Details',
       description:
-        'Get full details for a specific auction including current snapshot, highest bid, time remaining, participant count, and winner info if closed.',
+        'Get full details for a specific auction including current snapshot, highest bid (masked bidder), ' +
+        'time remaining, participant count, competition level, and winner info if closed.',
       inputSchema: z.object({
         auctionId: z.string().describe('The 0x-prefixed bytes32 auction ID'),
       }),
@@ -99,7 +111,7 @@ export function registerDetailsTool(server: McpServer, engine: EngineClient): vo
           participantCount: snapshot.participantCount,
           currentSeq: snapshot.currentSeq,
           highestBid: snapshot.highestBid,
-          highestBidder: snapshot.highestBidder,
+          highestBidder: snapshot.highestBidder, // now masked by engine
           timeRemainingSec: snapshot.timeRemainingSec,
           serverNow: snapshot.serverNow,
           deadline: snapshot.deadline,
@@ -111,6 +123,14 @@ export function registerDetailsTool(server: McpServer, engine: EngineClient): vo
           winnerAgentId: snapshot.winnerAgentId,
           winnerWallet: snapshot.winnerWallet,
           winningBidAmount: snapshot.winningBidAmount,
+          // Aggregate fields
+          bidCount: snapshot.bidCount,
+          uniqueBidders: snapshot.uniqueBidders,
+          lastActivitySec: snapshot.lastActivitySec,
+          competitionLevel: snapshot.competitionLevel,
+          priceIncreasePct: snapshot.priceIncreasePct,
+          snipeWindowActive: snapshot.snipeWindowActive,
+          extensionsRemaining: snapshot.extensionsRemaining,
         },
       }
 

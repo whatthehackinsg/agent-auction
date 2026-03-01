@@ -51,10 +51,16 @@ function createBrokenWebSocket() {
   } as unknown as WebSocket
 }
 
-/** Create a mock DurableObjectState with configurable WebSockets */
-function createMockState(webSockets: WebSocket[] = []) {
+/** Create a mock DurableObjectState with configurable WebSockets and tag support */
+function createMockState(webSockets: WebSocket[] = [], defaultTag?: string) {
   const storage = createMockStorage()
   const acceptedWebSockets: unknown[] = []
+  const socketTagMap = new Map<WebSocket, string[]>()
+
+  // Pre-register sockets with the given default tag
+  for (const ws of webSockets) {
+    socketTagMap.set(ws, defaultTag ? [defaultTag] : [])
+  }
 
   const state = {
     storage,
@@ -66,10 +72,17 @@ function createMockState(webSockets: WebSocket[] = []) {
     blockConcurrencyWhile: async <T>(callback: () => Promise<T>): Promise<T> => {
       return callback()
     },
-    acceptWebSocket: (ws: unknown) => {
+    acceptWebSocket: (ws: unknown, tags?: string[]) => {
       acceptedWebSockets.push(ws)
+      socketTagMap.set(ws as WebSocket, tags ?? [])
     },
-    getWebSockets: () => webSockets,
+    getWebSockets: (tag?: string) => {
+      if (!tag) return webSockets
+      return webSockets.filter(ws => {
+        const tags = socketTagMap.get(ws) ?? []
+        return tags.includes(tag)
+      })
+    },
     waitUntil: () => {},
     _acceptedWebSockets: acceptedWebSockets,
     _storage: storage,
@@ -125,7 +138,7 @@ describe('WebSocket Broadcast', () => {
     const ws2 = createMockWebSocket()
     const ws3 = createMockWebSocket()
 
-    const state = createMockState([ws1.ws, ws2.ws, ws3.ws])
+    const state = createMockState([ws1.ws, ws2.ws, ws3.ws], 'participant')
     const env = createMockEnv()
     await state._storage.put('auctionId', '0x' + 'aa'.repeat(32))
 
@@ -146,7 +159,7 @@ describe('WebSocket Broadcast', () => {
     const brokenWs = createBrokenWebSocket()
     const goodWs = createMockWebSocket()
 
-    const state = createMockState([brokenWs, goodWs.ws])
+    const state = createMockState([brokenWs, goodWs.ws], 'participant')
     const env = createMockEnv()
     await state._storage.put('auctionId', '0x' + 'aa'.repeat(32))
 
@@ -165,7 +178,7 @@ describe('WebSocket Broadcast', () => {
   it('broadcast message has correct format with type, seq, eventHash, etc.', async () => {
     const ws = createMockWebSocket()
 
-    const state = createMockState([ws.ws])
+    const state = createMockState([ws.ws], 'participant')
     const env = createMockEnv()
     await state._storage.put('auctionId', '0x' + 'aa'.repeat(32))
 
@@ -217,7 +230,7 @@ describe('WebSocket Broadcast', () => {
   it('multiple clients all receive identical broadcast messages', async () => {
     const clients = Array.from({ length: 5 }, () => createMockWebSocket())
 
-    const state = createMockState(clients.map(c => c.ws))
+    const state = createMockState(clients.map(c => c.ws), 'participant')
     const env = createMockEnv()
     await state._storage.put('auctionId', '0x' + 'aa'.repeat(32))
 
@@ -258,7 +271,7 @@ describe('WebSocket Broadcast', () => {
   it('sequential ingestAction calls broadcast sequential events', async () => {
     const ws = createMockWebSocket()
 
-    const state = createMockState([ws.ws])
+    const state = createMockState([ws.ws], 'participant')
     const env = createMockEnv()
     await state._storage.put('auctionId', '0x' + 'aa'.repeat(32))
 

@@ -105,6 +105,9 @@ export default function ReplayPage() {
         <h1 className="font-mono text-xl font-bold text-[#EEEEF5] md:text-3xl">
           {auctionId ? truncateHex(auctionId, 14, 10) : 'unknown-auction'}
         </h1>
+        <p className="mt-2 font-mono text-xs text-[#9B9BB8]">
+          {'// post-auction verification tool — shows full event log for audit purposes'}
+        </p>
       </section>
 
       {isLoading ? (
