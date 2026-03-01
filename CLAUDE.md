@@ -154,6 +154,7 @@ Each module has its own `AGENTS.md` with local constraints. Apply root `AGENTS.m
 | AuctionEscrow (v2) | `0x20944f46AB83F7eA40923D7543AF742Da829743c` |
 | KeystoneForwarder (real) | `0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5` |
 | AgentPrivacyRegistry | `0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff` |
+| NftEscrow | `0xa05C5AF6a07D5e1abDd2c93EFdcb95D306766a94` |
 | MockUSDC | `0xfEE786495d165b16dc8e68B6F8281193e041737d` |
 
 Deployer/Sequencer: `0x633ec0e633AA4d8BbCCEa280331A935747416737`.
