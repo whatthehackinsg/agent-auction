@@ -73,30 +73,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ZKFN-01 | — | Pending |
-| ZKFN-02 | — | Pending |
-| ZKFN-03 | — | Pending |
-| ZKFN-04 | — | Pending |
-| AGZK-01 | — | Pending |
-| AGZK-02 | — | Pending |
-| AGZK-03 | — | Pending |
-| AGZK-04 | — | Pending |
-| MCPE-01 | — | Pending |
-| MCPE-02 | — | Pending |
-| MCPE-03 | — | Pending |
-| MCPE-04 | — | Pending |
-| MCPE-05 | — | Pending |
-| FRNT-01 | — | Pending |
-| FRNT-02 | — | Pending |
-| FRNT-03 | — | Pending |
-| DEMO-01 | — | Pending |
-| DEMO-02 | — | Pending |
+| ZKFN-01 | Phase 1 | Pending |
+| ZKFN-02 | Phase 1 | Pending |
+| ZKFN-03 | Phase 1 | Pending |
+| ZKFN-04 | Phase 1 | Pending |
+| AGZK-01 | Phase 3 | Pending |
+| AGZK-02 | Phase 3 | Pending |
+| AGZK-03 | Phase 3 | Pending |
+| AGZK-04 | Phase 3 | Pending |
+| MCPE-01 | Phase 2 | Pending |
+| MCPE-02 | Phase 2 | Pending |
+| MCPE-03 | Phase 2 | Pending |
+| MCPE-04 | Phase 2 | Pending |
+| MCPE-05 | Phase 2 | Pending |
+| FRNT-01 | Phase 4 | Pending |
+| FRNT-02 | Phase 4 | Pending |
+| FRNT-03 | Phase 4 | Pending |
+| DEMO-01 | Phase 4 | Pending |
+| DEMO-02 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18 (roadmap pending)
+- Mapped to phases: 18
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-02*
-*Last updated: 2026-03-02 after initial definition*
+*Last updated: 2026-03-02 — traceability populated after roadmap creation*
