@@ -7,16 +7,15 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
-  if (!ADMIN_KEY) {
-    return NextResponse.json({ error: 'admin key not configured' }, { status: 500 })
-  }
-
-  const { path } = await params
-  const target = `${ENGINE_URL}/${path.join('/')}`
-
-  const body = await req.text()
-
   try {
+    if (!ADMIN_KEY) {
+      return NextResponse.json({ error: 'admin key not configured' }, { status: 500 })
+    }
+
+    const { path } = await params
+    const target = `${ENGINE_URL}/${path.join('/')}`
+    const body = await req.text()
+
     const res = await fetch(target, {
       method: 'POST',
       headers: {
@@ -33,7 +32,8 @@ export async function POST(
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    return NextResponse.json({ error: `engine unreachable: ${msg}` }, { status: 502 })
+    console.error('[admin-proxy] POST error:', msg)
+    return NextResponse.json({ error: msg }, { status: 502 })
   }
 }
 
@@ -41,14 +41,14 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
-  if (!ADMIN_KEY) {
-    return NextResponse.json({ error: 'admin key not configured' }, { status: 500 })
-  }
-
-  const { path } = await params
-  const target = `${ENGINE_URL}/${path.join('/')}`
-
   try {
+    if (!ADMIN_KEY) {
+      return NextResponse.json({ error: 'admin key not configured' }, { status: 500 })
+    }
+
+    const { path } = await params
+    const target = `${ENGINE_URL}/${path.join('/')}`
+
     const res = await fetch(target, {
       method: 'DELETE',
       headers: { 'X-ENGINE-ADMIN-KEY': ADMIN_KEY },
@@ -61,6 +61,7 @@ export async function DELETE(
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    return NextResponse.json({ error: `engine unreachable: ${msg}` }, { status: 502 })
+    console.error('[admin-proxy] DELETE error:', msg)
+    return NextResponse.json({ error: msg }, { status: 502 })
   }
 }

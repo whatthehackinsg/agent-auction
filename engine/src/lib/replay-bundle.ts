@@ -9,7 +9,7 @@ import {
   serializeReplayBundle as sharedSerialize,
   computeContentHashBytes,
   type AuctionEvent as SharedAuctionEvent,
-} from '@agent-auction/crypto'
+} from '@agent-auction/crypto/replay-bundle'
 import { type AuctionEvent } from '../types/engine'
 
 /**

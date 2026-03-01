@@ -9,6 +9,14 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./poseidon-chain": {
+      "import": "./src/poseidon-chain.js",
+      "types": "./dist/poseidon-chain.d.ts"
+    },
+    "./replay-bundle": {
+      "import": "./src/replay-bundle.js",
+      "types": "./dist/replay-bundle.d.ts"
     }
   },
   "scripts": {

@@ -19,8 +19,7 @@ import {
 import { EIP712_DOMAIN } from './addresses'
 import {
   computeEventHash as poseidonComputeEventHash,
-  computePayloadHash as cryptoComputePayloadHash,
-} from '@agent-auction/crypto'
+} from '@agent-auction/crypto/poseidon-chain'
 
 // snarkjs is lazy-imported to avoid ffjavascript's URL.createObjectURL() at
 // module init time — that API doesn't exist in Cloudflare Workers.

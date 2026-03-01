@@ -13,8 +13,9 @@
 
 /** Compute SHA-256 using Web Crypto (universal) or Node crypto (fallback) */
 async function sha256(data: Uint8Array): Promise<Uint8Array> {
-  if (typeof globalThis.crypto?.subtle?.digest === "function") {
-    const buf = await globalThis.crypto.subtle.digest("SHA-256", data);
+  const g = globalThis as unknown as { crypto?: { subtle?: { digest?: (alg: string, data: BufferSource) => Promise<ArrayBuffer> } } };
+  if (typeof g.crypto?.subtle?.digest === "function") {
+    const buf = await g.crypto.subtle.digest("SHA-256", data);
     return new Uint8Array(buf);
   }
   // Node.js fallback
@@ -101,11 +102,11 @@ export function serializeReplayBundle(
   for (const e of sorted) {
     const token = resolveToken(e.actionType);
     const line = [
-      `event:seq=${fmtU256(e.seq)}`,
+      `event:seq=${fmtU256(BigInt(e.seq))}`,
       `type=${token}`,
-      `agent_id=${fmtU256(e.agentId)}`,
+      `agent_id=${fmtU256(BigInt(e.agentId))}`,
       `wallet=${fmtHex(e.wallet, 40)}`,
-      `amount=${fmtU256(e.amount)}`,
+      `amount=${fmtU256(BigInt(e.amount))}`,
       `prev_hash=${fmtHex(e.prevHash, 64)}`,
       `event_hash=${fmtHex(e.eventHash, 64)}`,
       `payload_hash=${fmtHex(e.payloadHash, 64)}`,
