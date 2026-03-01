@@ -20,6 +20,10 @@ interface AuctionRow {
   auction_type: string
   max_bid: string | null
   created_at: number
+  item_image_cid: string | null
+  nft_contract: string | null
+  nft_token_id: string | null
+  nft_chain_id: number | null
 }
 
 interface AuctionsResponse {
@@ -73,6 +77,10 @@ export function registerDiscoverTool(server: McpServer, engine: EngineClient): v
         timeRemainingSec: Math.max(a.deadline - now, 0),
         maxBid: a.max_bid,
         createdAt: a.created_at,
+        hasNft: !!(a.nft_contract && a.nft_token_id),
+        itemImageUrl: a.item_image_cid
+          ? `https://gateway.pinata.cloud/ipfs/${a.item_image_cid}`
+          : null,
       }))
 
       return {

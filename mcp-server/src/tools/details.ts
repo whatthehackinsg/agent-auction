@@ -88,6 +88,9 @@ export function registerDetailsTool(server: McpServer, engine: EngineClient): vo
         createdAt: auction.created_at,
         item: {
           imageCid: auction.item_image_cid,
+          imageUrl: auction.item_image_cid
+            ? `https://gateway.pinata.cloud/ipfs/${auction.item_image_cid}`
+            : null,
           nftContract: auction.nft_contract,
           nftTokenId: auction.nft_token_id,
           nftChainId: auction.nft_chain_id,
