@@ -409,9 +409,18 @@ export class AuctionRoom implements DurableObject {
         maxBid = row?.max_bid ?? '0'
       }
 
+      // Read on-chain privacy registry root for ZK proof cross-check
+      let registryRoot: string | undefined
+      if (this.env.ENGINE_REQUIRE_PROOFS === 'true') {
+        const { getPrivacyRegistryRoot } = await import('./lib/identity')
+        const root = await getPrivacyRegistryRoot()
+        if (root) registryRoot = root
+      }
+
       const validationCtx: ValidationContext = {
         requireProofs: this.env.ENGINE_REQUIRE_PROOFS === 'true',
         verifyWallet: this.env.ENGINE_VERIFY_WALLET === 'true',
+        expectedRegistryRoot: registryRoot,
       }
       const validation = await validateAction(
         action,
