@@ -16,7 +16,7 @@ import { randomUUID } from 'node:crypto'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
-import express from 'express'
+import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js'
 
 import { loadConfig } from './lib/config.js'
 import { EngineClient } from './lib/engine.js'
@@ -26,6 +26,7 @@ import { registerJoinTool } from './tools/join.js'
 import { registerBidTool } from './tools/bid.js'
 import { registerBondTools } from './tools/bond.js'
 import { registerEventsTool } from './tools/events.js'
+import { registerPrompts } from './prompts.js'
 
 // ── Configuration ────────────────────────────────────────────────────
 
@@ -54,13 +55,15 @@ function createServer(): McpServer {
   registerBondTools(server, engine, config)
   registerEventsTool(server, engine)
 
+  // Register prompts
+  registerPrompts(server)
+
   return server
 }
 
 // ── Express app ──────────────────────────────────────────────────────
 
-const app = express()
-app.use(express.json())
+const app = createMcpExpressApp()
 
 // Handle MCP POST requests (initialize + ongoing)
 app.post('/mcp', async (req, res) => {
