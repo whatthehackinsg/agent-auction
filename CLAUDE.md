@@ -185,7 +185,7 @@ Deployer/Sequencer: `0x633ec0e633AA4d8BbCCEa280331A935747416737`. Paymaster fund
 <!-- gitnexus:start -->
 # GitNexus MCP
 
-This project is indexed by GitNexus as **auction-design** (43284 symbols, 137501 relationships, 300 execution flows).
+This project is indexed by GitNexus as **auction-design** (43330 symbols, 137630 relationships, 300 execution flows).
 
 GitNexus provides a knowledge graph over this codebase — call chains, blast radius, execution flows, and semantic search.
 

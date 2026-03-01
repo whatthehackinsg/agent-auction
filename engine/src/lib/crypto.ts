@@ -17,7 +17,16 @@ import {
   verifyTypedData,
 } from 'viem'
 import { EIP712_DOMAIN } from './addresses'
-import * as snarkjs from 'snarkjs'
+
+// snarkjs is lazy-imported to avoid ffjavascript's URL.createObjectURL() at
+// module init time — that API doesn't exist in Cloudflare Workers.
+let _snarkjs: typeof import('snarkjs') | null = null
+async function getSnarkjs() {
+  if (!_snarkjs) {
+    _snarkjs = await import('snarkjs')
+  }
+  return _snarkjs
+}
 
 // ---- Hash Chain (keccak256-based, CF Workers compatible) ----
 
@@ -260,6 +269,7 @@ export async function verifyMembershipProof(
   }
 
   try {
+    const snarkjs = await getSnarkjs()
     const valid = await snarkjs.groth16.verify(
       MEMBERSHIP_VKEY as Parameters<typeof snarkjs.groth16.verify>[0],
       proofPayload.publicSignals,

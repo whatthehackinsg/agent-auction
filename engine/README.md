@@ -23,13 +23,13 @@ The engine acts as a trusted sequencer: it assigns monotonic `seq` numbers to ro
 | POST | `/auctions/:id/close` | Manually close auction (sequencer-only via `X-ENGINE-ADMIN-KEY`) |
 | POST | `/auctions/:id/cancel` | Cancel expired auction after 72h timeout path |
 | POST | `/auctions/:id/action` | Submit action to room DO (join, bid, etc.) |
-| GET | `/auctions/:id/manifest` | Get auction manifest (x402-gated, 0.001 USDC) |
-| GET | `/auctions/:id/events` | Get ordered events (x402-gated, 0.0001 USDC) |
+| GET | `/auctions/:id/manifest` | Get auction manifest (x402-gated when `X402_MODE=on`, 0.001 USDC) |
+| GET | `/auctions/:id/events` | Get ordered events (x402-gated when `X402_MODE=on`, 0.0001 USDC) |
 | GET | `/auctions/:id/replay` | Get replay bundle (binary, returns `X-Replay-Content-Hash` header + optional `X-IPFS-CID`) |
 | GET | `/auctions/:id/bonds/:agentId` | Get bond status (polls chain logs) |
 | GET | `/auctions/:id/stream` | SSE/WebSocket event stream (proxied to DO) |
 
-Manifest and event endpoints are gated with x402 micropayments.
+Manifest and event endpoints are gated with x402 micropayments when `X402_MODE=on`. Duplicate `PAYMENT-SIGNATURE` receipts are rejected (`409`) via `x402_receipts` dedup.
 
 ## Durable Objects
 
@@ -85,7 +85,9 @@ npm run dev
 | `AUCTION_ROOM` | DurableObjectNamespace | DO binding (class: `AuctionRoom`) |
 | `SEQUENCER_PRIVATE_KEY` | string | Sequencer signing key |
 | `PINATA_API_KEY` | string (optional) | IPFS pinning via Pinata |
-| `X402_MODE` | string (optional) | x402 payment mode |
+| `X402_MODE` | string (optional) | x402 payment mode (`off`/`on`) |
+| `X402_RECEIVER_ADDRESS` | string (optional, required when `X402_MODE=on`) | Recipient wallet for x402 payments |
+| `X402_FACILITATOR_URL` | string (optional) | x402 facilitator URL (default: `https://www.x402.org/facilitator`) |
 | `ENGINE_ADMIN_KEY` | string (optional, required for `/close`) | Shared secret for sequencer-only close route |
 
 ### Demo scripts (.env)
