@@ -25,6 +25,8 @@ export interface ValidationContext {
   requireProofs?: boolean
   /** On-chain registry root for cross-checking proof's registryRoot. */
   expectedRegistryRoot?: string
+  /** When true, verify wallet matches ERC-8004 ownerOf(agentId) on JOIN. */
+  verifyWallet?: boolean
 }
 
 export interface ValidationMutation {
@@ -225,6 +227,21 @@ export async function handleJoin(
   auctionId: string,
   ctx?: ValidationContext,
 ): Promise<ValidationResult> {
+  // 0. Verify wallet matches ERC-8004 on-chain identity (if enabled)
+  if (ctx?.verifyWallet) {
+    const cached = await storage.get<boolean>(`walletVerified:${action.agentId}`)
+    if (!cached) {
+      const { verifyAgentWallet } = await import('../lib/identity')
+      const { verified } = await verifyAgentWallet(action.agentId, action.wallet)
+      if (!verified) {
+        throw new Error(
+          `Wallet ${action.wallet} does not match on-chain owner for agentId ${action.agentId}`,
+        )
+      }
+      await storage.put(`walletVerified:${action.agentId}`, true)
+    }
+  }
+
   // 1. Verify membership proof — get ZK nullifier from publicSignals[2] if proof exists
   const membership = await verifyMembership(action, ctx)
 

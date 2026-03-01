@@ -22,6 +22,17 @@ const auctionEscrowAbi = [
   { name: 'claimRefund', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'auctionId', type: 'bytes32' }, { name: 'agentId', type: 'uint256' }], outputs: [] },
 ] as const
 
+/** ERC-8004 Identity Registry — agents self-register, engine reads ownerOf / getAgentWallet */
+const erc8004RegistryAbi = [
+  { name: 'ownerOf', type: 'function', stateMutability: 'view', inputs: [{ name: 'tokenId', type: 'uint256' }], outputs: [{ name: '', type: 'address' }] },
+  { name: 'getAgentWallet', type: 'function', stateMutability: 'view', inputs: [{ name: 'agentId', type: 'uint256' }], outputs: [{ name: '', type: 'address' }] },
+] as const
+
+/** AgentPrivacyRegistry — ZK membership Merkle root */
+const agentPrivacyRegistryAbi = [
+  { name: 'getRoot', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bytes32' }] },
+] as const
+
 const erc20Abi = [
   { name: 'transfer', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ name: '', type: 'bool' }] },
   { name: 'approve', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ name: '', type: 'bool' }] },
@@ -65,9 +76,23 @@ export const mockUSDC = getContract({
   client: publicClient,
 })
 
+export const identityRegistry = getContract({
+  address: ADDRESSES.identityRegistry,
+  abi: erc8004RegistryAbi,
+  client: publicClient,
+})
+
+export const agentPrivacyRegistry = getContract({
+  address: ADDRESSES.agentPrivacyRegistry,
+  abi: agentPrivacyRegistryAbi,
+  client: publicClient,
+})
+
 // Export ABIs for use in walletClient write operations
 export {
   auctionRegistryAbi,
   auctionEscrowAbi,
   erc20Abi,
+  erc8004RegistryAbi,
+  agentPrivacyRegistryAbi,
 }

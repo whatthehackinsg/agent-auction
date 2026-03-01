@@ -411,6 +411,7 @@ export class AuctionRoom implements DurableObject {
 
       const validationCtx: ValidationContext = {
         requireProofs: this.env.ENGINE_REQUIRE_PROOFS === 'true',
+        verifyWallet: this.env.ENGINE_VERIFY_WALLET === 'true',
       }
       const validation = await validateAction(
         action,

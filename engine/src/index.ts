@@ -30,6 +30,7 @@ export interface Env {
   X402_FACILITATOR_URL?: string     // default: https://www.x402.org/facilitator
   ENGINE_ADMIN_KEY?: string
   ENGINE_REQUIRE_PROOFS?: string    // 'true' to reject null ZK proofs (default: false)
+  ENGINE_VERIFY_WALLET?: string     // 'true' to verify wallet via ERC-8004 on JOIN (default: false)
 }
 
 const app = new Hono<{ Bindings: Env }>()
@@ -838,6 +839,28 @@ app.get('/auctions/:id/bonds/:agentId', async (c) => {
   const agentId = c.req.param('agentId')
   const status = await getBondStatus(c.env.AUCTION_DB, auctionId, agentId)
   return c.json(status)
+})
+
+// ── Identity verification ─────────────────────────────────────────────
+
+app.post('/verify-identity', async (c) => {
+  const body = (await c.req.json()) as { agentId: string; wallet: string }
+
+  if (!body.agentId || !body.wallet) {
+    return c.json({ error: 'missing required fields: agentId, wallet' }, 400)
+  }
+
+  const { verifyAgentWallet, getPrivacyRegistryRoot } = await import('./lib/identity')
+
+  const { verified, resolvedWallet } = await verifyAgentWallet(body.agentId, body.wallet)
+  const privacyRoot = await getPrivacyRegistryRoot()
+
+  return c.json({
+    verified,
+    resolvedWallet,
+    privacyRegistered: privacyRoot !== null,
+    privacyRoot,
+  })
 })
 
 app.get('/auctions/:id/stream', async (c) => {

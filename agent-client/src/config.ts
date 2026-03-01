@@ -14,11 +14,15 @@ export const X402_ENABLED = process.env.X402_ENABLED !== 'false' // on by defaul
 
 export const ADDRESSES = {
   mockUSDC: '0xfEE786495d165b16dc8e68B6F8281193e041737d',
+  identityRegistry: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
+  /** @deprecated Use identityRegistry (ERC-8004) instead */
   mockIdentityRegistry: '0x68E06c33D4957102362ACffC2BFF9E6b38199318',
+  agentPrivacyRegistry: '0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff',
   auctionRegistry: '0xFEc7a05707AF85C6b248314E20FF8EfF590c3639',
   auctionEscrow: '0x20944f46AB83F7eA40923D7543AF742Da829743c',
 } as const satisfies Record<string, Address>
 
+/** @deprecated Use erc8004Abi for real ERC-8004 registry */
 export const identityAbi = [
   {
     name: 'registerWithId',
@@ -36,6 +40,33 @@ export const identityAbi = [
     stateMutability: 'nonpayable',
     inputs: [{ name: 'owner', type: 'address' }],
     outputs: [{ name: 'agentId', type: 'uint256' }],
+  },
+] as const
+
+/** ERC-8004 Identity Registry ABI — agents self-register */
+export const erc8004Abi = [
+  {
+    name: 'register',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'agentURI', type: 'string' }],
+    outputs: [{ name: 'agentId', type: 'uint256' }],
+  },
+  {
+    name: 'ownerOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    name: 'Registered',
+    type: 'event',
+    inputs: [
+      { name: 'agentId', type: 'uint256', indexed: true },
+      { name: 'owner', type: 'address', indexed: true },
+      { name: 'agentURI', type: 'string', indexed: false },
+    ],
   },
 ] as const
 
