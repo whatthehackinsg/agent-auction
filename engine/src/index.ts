@@ -552,6 +552,21 @@ app.post('/auctions/:id/cancel', async (c) => {
   })
 })
 
+app.post('/admin/auctions/:id/retry-settlement', async (c) => {
+  const denied = requireAdmin(c)
+  if (denied) return denied
+
+  const auctionId = c.req.param('id')
+  const room = roomStub(c.env, auctionId)
+  const res = await room.fetch(
+    makeRoomRequest('/retry-settlement', auctionId, { method: 'POST' }),
+  )
+  return new Response(await res.text(), {
+    status: res.status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+})
+
 app.delete('/auctions/:id', async (c) => {
   const denied = requireAdmin(c)
   if (denied) return denied

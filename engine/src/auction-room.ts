@@ -244,6 +244,12 @@ export class AuctionRoom implements DurableObject {
         return this.handleCancel(request)
       case '/delete':
         return this.handleDelete()
+      case '/retry-settlement': {
+        const result = await this.handleRetrySettlement()
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
       default:
         return new Response(JSON.stringify({ error: 'not found' }), {
           status: 404,
@@ -746,6 +752,34 @@ export class AuctionRoom implements DurableObject {
     return Response.json({ ok: true })
   }
 
+  // ─── Settlement Retry ───────────────────────────────────────────────
+
+  /** Admin-triggered manual retry of on-chain settlement */
+  async handleRetrySettlement(): Promise<{ status: string; retries: number }> {
+    if (!this.auctionId) {
+      return { status: 'error', retries: 0 }
+    }
+    if (this.onChainSettled) {
+      return { status: 'already_settled', retries: this.settlementRetries }
+    }
+    if (this.auctionStatus !== 2 && this.auctionStatus !== 3) {
+      // Not CLOSED (2) or SETTLED (3)
+      return { status: 'not_closeable', retries: this.settlementRetries }
+    }
+
+    // Reset retry counter
+    this.settlementRetries = 0
+    await this.state.storage.put('settlementRetries', 0)
+
+    // Re-trigger settlement
+    await this.closeAuction(this.auctionId)
+
+    return {
+      status: this.onChainSettled ? 'settled' : 'retrying',
+      retries: this.settlementRetries,
+    }
+  }
+
   // ─── Auction Close Flow ─────────────────────────────────────────────
 
   /**
@@ -953,6 +987,14 @@ export class AuctionRoom implements DurableObject {
           `[AuctionRoom] on-chain settlement for ${this.auctionId} failed after ${this.settlementRetries} attempts — giving up:`,
           err,
         )
+        // Broadcast failure to connected clients so they know settlement is stuck
+        this.broadcast({
+          type: 'SETTLEMENT_FAILED',
+          auctionId: this.auctionId,
+          attempts: this.settlementRetries,
+          error: err instanceof Error ? err.message : String(err),
+          timestamp: Math.floor(Date.now() / 1000),
+        })
       }
     }
 
@@ -1037,6 +1079,18 @@ export class AuctionRoom implements DurableObject {
         ws.send(message)
       } catch {
         // Ignore errors from closed/errored sockets
+      }
+    }
+  }
+
+  /** Broadcast a JSON message to all connected WebSocket clients */
+  private broadcast(data: unknown): void {
+    const message = JSON.stringify(data)
+    for (const ws of this.state.getWebSockets()) {
+      try {
+        ws.send(message)
+      } catch {
+        // Ignore errors on closed sockets
       }
     }
   }

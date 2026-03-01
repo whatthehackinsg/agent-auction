@@ -29,6 +29,9 @@ function createMockStorage() {
     list: async (): Promise<Map<string, unknown>> => {
       return new Map(store)
     },
+    setAlarm: async (_timestamp: number): Promise<void> => {},
+    getAlarm: async (): Promise<number | null> => null,
+    deleteAll: async (): Promise<void> => { store.clear() },
     // Expose store for test assertions
     _store: store,
   }
@@ -241,6 +244,124 @@ describe('AuctionRoom DO', () => {
     it('returns 426 when Upgrade header is missing', async () => {
       const res = await room.fetch(makeRequest('/stream'))
       expect(res.status).toBe(426)
+    })
+  })
+
+  // ─── POST /retry-settlement ────────────────────────────────────────
+
+  describe('POST /retry-settlement', () => {
+    it('returns error when auctionId is not set', async () => {
+      const res = await room.fetch(makeRequest('/retry-settlement', { method: 'POST' }))
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.status).toBe('error')
+      expect(body.retries).toBe(0)
+    })
+
+    it('returns not_closeable for OPEN auctions (status 1)', async () => {
+      const auctionId = '0x' + 'cc'.repeat(32)
+      // Set auctionId and ensure status is OPEN (1, the default)
+      await room.fetch(makeRequest(`/snapshot?auctionId=${auctionId}`))
+
+      const res = await room.fetch(makeRequest('/retry-settlement', { method: 'POST' }))
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.status).toBe('not_closeable')
+    })
+
+    it('returns already_settled when onChainSettled is true', async () => {
+      const auctionId = '0x' + 'dd'.repeat(32)
+      // Pre-configure state: set auctionId, CLOSED status, and onChainSettled
+      await state.storage.put('auctionId', auctionId)
+      await state.storage.put('auctionStatus', 2)
+      await state.storage.put('onChainSettled', true)
+
+      // Re-create room so it loads the pre-configured state
+      room = new AuctionRoom(state, env)
+      await new Promise((r) => setTimeout(r, 0))
+
+      const res = await room.fetch(makeRequest('/retry-settlement', { method: 'POST' }))
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.status).toBe('already_settled')
+    })
+
+    it('resets retry counter for CLOSED auctions', async () => {
+      const auctionId = '0x' + 'ee'.repeat(32)
+      const wallet = '0x' + 'ff'.repeat(20)
+      // Pre-configure state: CLOSED status with exhausted retries and a highest bid
+      await state.storage.put('auctionId', auctionId)
+      await state.storage.put('auctionStatus', 2)
+      await state.storage.put('onChainSettled', false)
+      await state.storage.put('settlementRetries', 5)
+      await state.storage.put('terminalType', 'CLOSE')
+      await state.storage.put('winnerAgentId', '1')
+      await state.storage.put('winnerWallet', wallet)
+      await state.storage.put('winningBidAmount', '100')
+      await state.storage.put('chainHead', '0x' + 'ab'.repeat(32))
+
+      // D1 mock that returns auction row and bid events so closeAuction reaches
+      // the settlement try/catch (ensureAuctionOnChain will throw since it's real)
+      const mockDb = {
+        prepare: (sql: string) => ({
+          bind: () => ({
+            first: async () => {
+              if (sql.includes('SELECT manifest_hash')) {
+                return {
+                  manifest_hash: '0x' + 'aa'.repeat(32),
+                  reserve_price: '0',
+                  deposit_amount: '0',
+                  deadline: Math.floor(Date.now() / 1000) + 60,
+                  auction_type: 'english',
+                  max_bid: null,
+                }
+              }
+              return null
+            },
+            all: async () => {
+              if (sql.includes('SELECT seq')) {
+                return {
+                  results: [{
+                    seq: 1,
+                    prev_hash: '0x' + '00'.repeat(32),
+                    event_hash: '0x' + 'cc'.repeat(32),
+                    payload_hash: '0x' + 'dd'.repeat(32),
+                    action_type: 'BID',
+                    agent_id: '1',
+                    wallet,
+                    amount: '100',
+                    created_at: Math.floor(Date.now() / 1000),
+                  }],
+                }
+              }
+              return { results: [] }
+            },
+            run: async () => ({ success: true }),
+          }),
+        }),
+      } as unknown as D1Database
+
+      const envWithDb = { ...env, AUCTION_DB: mockDb }
+      room = new AuctionRoom(state, envWithDb)
+      await new Promise((r) => setTimeout(r, 0))
+
+      // Verify initial retry counter is loaded from storage
+      const initialRetries = await state.storage.get<number>('settlementRetries')
+      expect(initialRetries).toBe(5)
+
+      const res = await room.fetch(makeRequest('/retry-settlement', { method: 'POST' }))
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Record<string, unknown>
+
+      // closeAuction will find the auction and bids, then try ensureAuctionOnChain
+      // which fails (no real chain), caught by settlement retry logic.
+      // After reset to 0 and one failed attempt, retries = 1.
+      expect(body.status).toBe('retrying')
+      expect(body.retries).toBe(1)
+
+      // Verify retry counter was reset then incremented by the failed attempt
+      const retries = await state.storage.get<number>('settlementRetries')
+      expect(retries).toBe(1)
     })
   })
 })
