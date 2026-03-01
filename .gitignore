@@ -23,6 +23,9 @@ contracts/out/
 contracts/cache/
 contracts/broadcast/
 
+# Wrangler local dev state
+.wrangler/
+
 # CRE build artifacts
 .cre_build_tmp.*
 
