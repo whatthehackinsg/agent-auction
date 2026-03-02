@@ -18,6 +18,9 @@ export {
   type ActionTypeValue,
 } from "./nullifier.js";
 
+// Signal index constants for ZK circuit public signals
+export * from './signal-indices.js';
+
 // ZK proof verification
 export {
   verifyMembershipProof,
