@@ -13,6 +13,7 @@ import {
   toBytes,
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
+import { MEMBERSHIP_SIGNALS } from '@agent-auction/crypto'
 
 // ── Constants ────────────────────────────────────────────────────────────
 
@@ -90,6 +91,13 @@ export class ActionSigner {
 
   /**
    * Sign a JOIN action and return the full payload for POST /auctions/:id/action.
+   *
+   * When proofPayload is provided, uses the Poseidon nullifier from the ZK proof
+   * (publicSignals[MEMBERSHIP_SIGNALS.NULLIFIER]) — this MUST match what the engine
+   * extracts from the proof to produce a valid EIP-712 signature.
+   *
+   * When proofPayload is absent, falls back to the keccak256 nullifier for
+   * backward-compatible non-ZK joins.
    */
   async signJoin(params: {
     auctionId: Hex
@@ -97,6 +105,7 @@ export class ActionSigner {
     bondAmount: bigint
     nonce: number
     deadlineSec?: number
+    proofPayload?: { proof: unknown; publicSignals: string[] }
   }): Promise<{
     type: 'JOIN'
     agentId: string
@@ -105,10 +114,18 @@ export class ActionSigner {
     nonce: number
     deadline: string
     signature: Hex
-    proof: null
+    proof: unknown | null
   }> {
     const deadline = BigInt(Math.floor(Date.now() / 1000) + (params.deadlineSec ?? 300))
-    const nullifier = deriveJoinNullifier(this.account.address, params.auctionId)
+
+    let nullifier: bigint
+    if (params.proofPayload) {
+      // Use Poseidon nullifier from ZK proof — must match what engine extracts
+      nullifier = BigInt(params.proofPayload.publicSignals[MEMBERSHIP_SIGNALS.NULLIFIER])
+    } else {
+      // Legacy keccak256 fallback for non-ZK joins
+      nullifier = deriveJoinNullifier(this.account.address, params.auctionId)
+    }
 
     const signature = await this.account.signTypedData({
       domain: EIP712_DOMAIN,
@@ -131,7 +148,7 @@ export class ActionSigner {
       nonce: params.nonce,
       deadline: deadline.toString(),
       signature,
-      proof: null,
+      proof: params.proofPayload ?? null,
     }
   }
 
