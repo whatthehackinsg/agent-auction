@@ -32,6 +32,9 @@ contracts/broadcast/
 # Package build output
 packages/crypto/dist/
 
+# Test agent private state (contains agentSecret, nullifiers — never commit)
+packages/crypto/test-agents/*.json
+
 # Misc
 my-video/
 skills-lock.json
