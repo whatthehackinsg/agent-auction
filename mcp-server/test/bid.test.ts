@@ -1,0 +1,236 @@
+/**
+ * Integration tests for place_bid ZK proof pass-through.
+ *
+ * Tests:
+ * 1. Bid range proof passes through to engine POST body
+ * 2. signBid() always returns proof: undefined (BID EIP-712 has no nullifier)
+ * 3. Tool attaches proof after signing via object spread
+ * 4. Structured ZK error codes for bid failure cases
+ */
+
+import { describe, it, expect } from 'vitest'
+import fs from 'node:fs'
+import { ActionSigner } from '../src/lib/signer.js'
+import type { EngineClient } from '../src/lib/engine.js'
+import type { ServerConfig } from '../src/lib/config.js'
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { registerBidTool } from '../src/tools/bid.js'
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+/** Hardhat account #0 — standard test key, NOT a secret */
+const TEST_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+
+const TEST_AUCTION_ID = ('0x' + '00'.repeat(31) + '01') as `0x${string}`
+const TEST_AGENT_ID = '1'
+
+// ── Fixtures ──────────────────────────────────────────────────────────────────
+
+const bidrangeFixture = JSON.parse(
+  fs.readFileSync(new URL('./fixtures/bidrange-proof.json', import.meta.url), 'utf-8'),
+) as { proof: unknown; publicSignals: string[] }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function makeConfig(overrides?: Partial<ServerConfig>): ServerConfig {
+  return {
+    engineUrl: 'http://localhost:8787',
+    agentPrivateKey: TEST_PRIVATE_KEY,
+    agentId: TEST_AGENT_ID,
+    port: 3100,
+    engineAdminKey: null,
+    agentStateFile: null,
+    baseSepoliaRpc: null,
+    ...overrides,
+  }
+}
+
+/**
+ * Create a mock MCP server that captures the tool handler callback.
+ */
+function makeCapturingMcpServer() {
+  let capturedHandler: ((params: Record<string, unknown>) => Promise<unknown>) | null = null
+
+  const mockServer = {
+    registerTool: (
+      _name: string,
+      _definition: unknown,
+      handler: (params: Record<string, unknown>) => Promise<unknown>,
+    ) => {
+      capturedHandler = handler
+    },
+  } as unknown as McpServer
+
+  return {
+    mockServer,
+    getHandler: () => {
+      if (!capturedHandler) throw new Error('registerTool was not called')
+      return capturedHandler
+    },
+  }
+}
+
+/**
+ * Create a mock EngineClient that captures POST body payloads.
+ */
+function makeCapturingEngine(overrides?: {
+  postImpl?: (path: string, body: unknown) => Promise<unknown>
+  getImpl?: (path: string) => Promise<unknown>
+}) {
+  const capturedPayloads: unknown[] = []
+
+  const mockEngine = {
+    post: async (path: string, body: unknown) => {
+      capturedPayloads.push(body)
+      if (overrides?.postImpl) {
+        return overrides.postImpl(path, body)
+      }
+      return { seq: 1, eventHash: '0xabc', prevHash: '0x000' }
+    },
+    get: async (path: string) => {
+      if (overrides?.getImpl) {
+        return overrides.getImpl(path)
+      }
+      return { reservePrice: '50', maxBid: '500' }
+    },
+  } as unknown as EngineClient
+
+  return { mockEngine, capturedPayloads }
+}
+
+// ── Tests: place_bid proof pass-through ──────────────────────────────────────
+
+describe('place_bid proof pass-through', () => {
+  it('sends bid range proof in engine POST body when proofPayload provided', async () => {
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+    const { mockEngine, capturedPayloads } = makeCapturingEngine()
+    const config = makeConfig()
+    const nonceTracker = new Map<string, number>()
+
+    registerBidTool(mockServer, mockEngine, config, nonceTracker)
+    const handler = getHandler()
+
+    await handler({
+      auctionId: TEST_AUCTION_ID,
+      amount: '100000000',
+      proofPayload: bidrangeFixture,
+    })
+
+    expect(capturedPayloads).toHaveLength(1)
+    const payload = capturedPayloads[0] as Record<string, unknown>
+    expect(payload.proof).not.toBeNull()
+    expect(payload.proof).toEqual(bidrangeFixture)
+
+    // publicSignals should have 4 entries for bid range proof
+    const proofData = payload.proof as { publicSignals: string[] }
+    expect(proofData.publicSignals).toHaveLength(4)
+  })
+
+  it('sends proof: null when no proof provided', async () => {
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+    const { mockEngine, capturedPayloads } = makeCapturingEngine()
+    const config = makeConfig()
+    const nonceTracker = new Map<string, number>()
+
+    registerBidTool(mockServer, mockEngine, config, nonceTracker)
+    const handler = getHandler()
+
+    await handler({
+      auctionId: TEST_AUCTION_ID,
+      amount: '100000000',
+      // No proofPayload, no generateProof
+    })
+
+    expect(capturedPayloads).toHaveLength(1)
+    const payload = capturedPayloads[0] as Record<string, unknown>
+    expect(payload.proof).toBeNull()
+  })
+
+  it('proof attached after signing (not part of BID EIP-712 signature)', async () => {
+    const signer = new ActionSigner(TEST_PRIVATE_KEY)
+
+    // signBid() itself does NOT include proof — BID EIP-712 has no nullifier field
+    const bidPayload = await signer.signBid({
+      auctionId: TEST_AUCTION_ID,
+      agentId: TEST_AGENT_ID,
+      amount: 100_000_000n,
+      nonce: 0,
+    })
+
+    // signBid() return type has no proof field — only tool attaches it after
+    expect((bidPayload as Record<string, unknown>).proof).toBeUndefined()
+
+    // Tool attaches proof after signing via spread:
+    // { ...payload, proof: resolvedProof ?? null }
+    // Verify the tool does attach proof to engine payload
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+    const { mockEngine, capturedPayloads } = makeCapturingEngine()
+    const config = makeConfig()
+    const nonceTracker = new Map<string, number>()
+
+    registerBidTool(mockServer, mockEngine, config, nonceTracker)
+    const handler = getHandler()
+
+    await handler({
+      auctionId: TEST_AUCTION_ID,
+      amount: '100000000',
+      proofPayload: bidrangeFixture,
+    })
+
+    const enginePayload = capturedPayloads[0] as Record<string, unknown>
+    // Engine payload HAS proof (attached after signing)
+    expect(enginePayload.proof).toEqual(bidrangeFixture)
+    // Engine payload also has the BID EIP-712 fields
+    expect(enginePayload.type).toBe('BID')
+    expect(enginePayload.signature).toMatch(/^0x[0-9a-f]+$/i)
+  })
+})
+
+// ── Tests: place_bid structured errors ───────────────────────────────────────
+
+describe('place_bid structured errors', () => {
+  it('returns PROOF_INVALID for engine bid range rejection', async () => {
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+    const { mockEngine } = makeCapturingEngine({
+      postImpl: async () => {
+        throw new Error('Engine POST failed (400): Invalid bid range proof')
+      },
+    })
+    const config = makeConfig()
+    const nonceTracker = new Map<string, number>()
+
+    registerBidTool(mockServer, mockEngine, config, nonceTracker)
+    const handler = getHandler()
+
+    const result = (await handler({
+      auctionId: TEST_AUCTION_ID,
+      amount: '100000000',
+      proofPayload: bidrangeFixture,
+    })) as { content: Array<{ text: string }> }
+
+    const body = JSON.parse(result.content[0].text)
+    expect(body.success).toBe(false)
+    expect(body.error.code).toBe('PROOF_INVALID')
+  })
+
+  it('returns AGENT_NOT_REGISTERED when generateProof=true but no AGENT_STATE_FILE', async () => {
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+    const { mockEngine } = makeCapturingEngine()
+    // agentStateFile explicitly null
+    const config = makeConfig({ agentStateFile: null })
+    const nonceTracker = new Map<string, number>()
+
+    registerBidTool(mockServer, mockEngine, config, nonceTracker)
+    const handler = getHandler()
+
+    const result = (await handler({
+      auctionId: TEST_AUCTION_ID,
+      amount: '100000000',
+      generateProof: true,
+    })) as { content: Array<{ text: string }> }
+
+    const body = JSON.parse(result.content[0].text)
+    expect(body.success).toBe(false)
+    expect(body.error.code).toBe('AGENT_NOT_REGISTERED')
+  })
+})
