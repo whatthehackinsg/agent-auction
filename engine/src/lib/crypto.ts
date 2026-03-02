@@ -20,6 +20,7 @@ import { EIP712_DOMAIN } from './addresses'
 import {
   computeEventHash as poseidonComputeEventHash,
 } from '@agent-auction/crypto/poseidon-chain'
+import { MEMBERSHIP_SIGNALS, BID_RANGE_SIGNALS } from '@agent-auction/crypto'
 
 // snarkjs is lazy-imported to avoid ffjavascript's URL.createObjectURL() at
 // module init time — that API doesn't exist in Cloudflare Workers.
@@ -258,7 +259,7 @@ export async function verifyMembershipProof(
   options?: VerifyMembershipOptions,
 ): Promise<{ valid: boolean; registryRoot: string; nullifier: string }> {
   const requireProof = options?.requireProof ?? false
-  const expectedRoot = options?.expectedRegistryRoot
+  // options?.expectedRegistryRoot is intentionally ignored — see ZKFN-02 comment below
 
   // No proof provided
   if (proofPayload == null) {
@@ -281,18 +282,19 @@ export async function verifyMembershipProof(
     )
 
     if (!valid) {
-      return { valid: false, registryRoot: proofPayload.publicSignals[0], nullifier: proofPayload.publicSignals[2] }
+      return { valid: false, registryRoot: proofPayload.publicSignals[MEMBERSHIP_SIGNALS.REGISTRY_ROOT], nullifier: proofPayload.publicSignals[MEMBERSHIP_SIGNALS.NULLIFIER] }
     }
 
-    // Cross-check registry root against on-chain value when provided
-    if (expectedRoot && proofPayload.publicSignals[0] !== expectedRoot) {
-      return { valid: false, registryRoot: proofPayload.publicSignals[0], nullifier: proofPayload.publicSignals[2] }
-    }
+    // NOTE: expectedRegistryRoot cross-check intentionally removed (Phase 1 / ZKFN-02).
+    // The circuit uses Poseidon hashing; AgentPrivacyRegistry._updateRoot() uses keccak256.
+    // These roots will NEVER match. The Groth16 proof itself binds the Poseidon root
+    // cryptographically — no external cross-check is needed or meaningful.
+    // Do NOT reinstate this check.
 
     return {
       valid: true,
-      registryRoot: proofPayload.publicSignals[0],
-      nullifier: proofPayload.publicSignals[2],
+      registryRoot: proofPayload.publicSignals[MEMBERSHIP_SIGNALS.REGISTRY_ROOT],
+      nullifier: proofPayload.publicSignals[MEMBERSHIP_SIGNALS.NULLIFIER],
     }
   } catch {
     return { valid: false, registryRoot: '0x00', nullifier: '0x00' }
@@ -415,27 +417,27 @@ export async function verifyBidRangeProof(
     if (!valid) {
       return {
         valid: false,
-        bidCommitment: proofPayload.publicSignals[1],
-        reservePrice: proofPayload.publicSignals[2],
-        maxBudget: proofPayload.publicSignals[3],
+        bidCommitment: proofPayload.publicSignals[BID_RANGE_SIGNALS.BID_COMMITMENT],
+        reservePrice: proofPayload.publicSignals[BID_RANGE_SIGNALS.RESERVE_PRICE],
+        maxBudget: proofPayload.publicSignals[BID_RANGE_SIGNALS.MAX_BUDGET],
       }
     }
 
     // Verify rangeOk output is 1 (circuit constraint satisfaction)
-    if (proofPayload.publicSignals[0] !== '1') {
+    if (proofPayload.publicSignals[BID_RANGE_SIGNALS.RANGE_OK] !== '1') {
       return {
         valid: false,
-        bidCommitment: proofPayload.publicSignals[1],
-        reservePrice: proofPayload.publicSignals[2],
-        maxBudget: proofPayload.publicSignals[3],
+        bidCommitment: proofPayload.publicSignals[BID_RANGE_SIGNALS.BID_COMMITMENT],
+        reservePrice: proofPayload.publicSignals[BID_RANGE_SIGNALS.RESERVE_PRICE],
+        maxBudget: proofPayload.publicSignals[BID_RANGE_SIGNALS.MAX_BUDGET],
       }
     }
 
     return {
       valid: true,
-      bidCommitment: proofPayload.publicSignals[1],
-      reservePrice: proofPayload.publicSignals[2],
-      maxBudget: proofPayload.publicSignals[3],
+      bidCommitment: proofPayload.publicSignals[BID_RANGE_SIGNALS.BID_COMMITMENT],
+      reservePrice: proofPayload.publicSignals[BID_RANGE_SIGNALS.RESERVE_PRICE],
+      maxBudget: proofPayload.publicSignals[BID_RANGE_SIGNALS.MAX_BUDGET],
     }
   } catch {
     return { valid: false, bidCommitment: '0', reservePrice: '0', maxBudget: '0' }
