@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-02T15:43:20.747Z"
+last_updated: "2026-03-02T15:49:40Z"
 progress:
   total_phases: 2
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 ## Current Position
 
 Phase: 2 of 4 (MCP + Engine Wiring)
-Plan: 2 of 4 in current phase (02-01, 02-02, 02-03, 02-04)
-Status: Phase 2 in progress — plans 02-04, 02-01, and 02-02 complete
-Last activity: 2026-03-02 — 02-02 complete (MCP tools join_auction + place_bid extended with ZK proof support)
+Plan: 3 of 4 in current phase (02-01, 02-02, 02-03, 02-04)
+Status: Phase 2 in progress — plans 02-04, 02-01, 02-02, and 02-03 complete
+Last activity: 2026-03-02 — 02-03 complete (MCP test infrastructure: vitest, proof fixtures, 14 mcp tests, 2 engine positive-case tests)
 
-Progress: [█████░░░░░] 43%
+Progress: [██████░░░░] 57%
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Progress: [█████░░░░░] 43%
 
 *Updated after each plan completion*
 | Phase 02-mcp-engine-wiring P02 | 10 | 2 tasks | 2 files |
+| Phase 02-mcp-engine-wiring P03 | 8 | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,9 @@ Recent decisions affecting current work:
 - BidRange maxBudget=0 substituted with BigInt(2**48) sentinel — circuit constraint requires non-zero maxBudget
 - [Phase 02-mcp-engine-wiring]: BID EIP-712 type has no nullifier field — bid proof attached after signBid() via object spread, not passed into signer
 - [Phase 02-mcp-engine-wiring]: zkError() helper duplicated in join.ts and bid.ts for tool self-containment rather than extracted to shared module
+- Fixtures generated once via one-off .mjs script using same test values as packages/crypto/tests/circuits.test.ts, committed as JSON for fast test execution without snarkjs fullProve at test time
+- Capturing mock MCP server intercepts registerTool() to expose handler callback directly — no MCP transport overhead in tests
+- engine/test/fixtures/ created as independent copy — engine tests self-contained, no cross-module path dependency
 
 ### Pending Todos
 
@@ -89,5 +93,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 02-02-PLAN.md — MCP tools join_auction and place_bid extended with ZK proof support
+Stopped at: Completed 02-03-PLAN.md — MCP server test infrastructure: vitest, proof fixtures, 14 mcp tests, 2 engine positive-case tests
 Resume file: None
