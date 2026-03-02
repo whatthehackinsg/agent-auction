@@ -463,7 +463,7 @@ export class AuctionRoom implements DurableObject {
         maxBid,
         validationCtx,
       )
-      const result = await this.ingestAction(validation.action, validation.mutation.zkNullifier)
+      const result = await this.ingestAction(validation.action, validation.mutation.zkNullifier, validation.mutation.bidCommitment)
       await commitValidationMutation(validation.mutation, this.state.storage)
       return Response.json(result)
     } catch (err) {
@@ -553,7 +553,7 @@ export class AuctionRoom implements DurableObject {
    * Ingest a validated action into the append-only event log.
    * Assigns monotonic seq, computes hash chain, persists to DO storage + D1.
    */
-  async ingestAction(action: ValidatedAction, zkNullifier?: string): Promise<{
+  async ingestAction(action: ValidatedAction, zkNullifier?: string, bidCommitment?: string): Promise<{
     seq: number
     eventHash: string
     prevHash: string
@@ -619,6 +619,7 @@ export class AuctionRoom implements DurableObject {
       amount: action.amount,
       createdAt: Math.floor(Date.now() / 1000),
       ...(zkNullifier ? { zkNullifier } : {}),
+      ...(bidCommitment ? { bidCommitment } : {}),
     } satisfies AuctionEvent)
 
     // Persist to D1
