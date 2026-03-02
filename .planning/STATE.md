@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 Phase: 1 of 4 (ZK Foundation)
 Plan: 3 of 3 in current phase (01-01, 01-02, 01-03 complete)
 Status: Phase 1 complete
-Last activity: 2026-03-02 — Completed 01-03: register test agents on Base Sepolia
+Last activity: 2026-03-02 — Completed 01-02: circuit E2E proof generation + verification tests
 
 Progress: [███░░░░░░░] 25%
 
@@ -30,8 +30,8 @@ Progress: [███░░░░░░░] 25%
 | 01-zk-foundation | 3 | ~2.25h | ~45 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2 min), 01-02 (research), 01-03 (~2h)
-- Trend: —
+- Last 5 plans: 01-01 (2 min), 01-03 (~2h), 01-02 (2 min)
+- Trend: Fast execution when implementation is clear
 
 *Updated after each plan completion*
 
@@ -51,6 +51,9 @@ Recent decisions affecting current work:
 - Pre-existing build errors in packages/crypto (snarkjs types, ethers Uint8Array) are out of scope for plan 01-01
 - test-agents/*.json files contain agentSecret + nullifiers — added to .gitignore; README.md explains local regeneration
 - AgentPrivacyRegistry root 0xca223b34b59d6362ccffa90e04ebaa12ea40bb6d5ef3d9b611e2231126cc50f2 is the stable anchor for Phase 2 ZK membership proof generation — Phase 2 should call getRoot() dynamically, not hardcode
+- Circuit tests use fs.readFileSync to load vkeys from circuits/keys/*.json (no engine import) — validates full disk→verify pipeline
+- BidRange out-of-range: Circom constraint violation causes fullProve to throw (not return RANGE_OK=0) — test uses rejects.toThrow()
+- vitest discovers packages/crypto/tests/ via **/*.test.ts glob without config changes
 
 ### Pending Todos
 
@@ -65,5 +68,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 01-03-PLAN.md — register test agents on Base Sepolia
+Stopped at: Completed 01-02-PLAN.md — circuit E2E proof generation + verification tests
 Resume file: None

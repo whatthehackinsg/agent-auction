@@ -9,7 +9,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### ZK Foundation
 
-- [ ] **ZKFN-01**: Circuit test harness wired and passing for both RegistryMembership and BidRange circuits via `npm test`
+- [x] **ZKFN-01**: Circuit test harness wired and passing for both RegistryMembership and BidRange circuits via `npm test`
 - [x] **ZKFN-02**: Keccak/Poseidon Merkle root mismatch resolved so engine cross-check passes with real circuit proofs
 - [x] **ZKFN-03**: AgentPrivacyRegistry Merkle root populated with test agent commitments on Base Sepolia
 - [x] **ZKFN-04**: Public signal index constants defined and shared across proof generator, engine verifier, and MCP server
@@ -73,7 +73,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ZKFN-01 | Phase 1 | Pending |
+| ZKFN-01 | Phase 1 | Complete |
 | ZKFN-02 | Phase 1 | Complete |
 | ZKFN-03 | Phase 1 | Complete |
 | ZKFN-04 | Phase 1 | Complete |
