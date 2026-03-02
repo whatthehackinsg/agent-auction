@@ -32,6 +32,7 @@ export interface AuctionEvent {
   amount: string;                 // uint256 as string — USDC base units (6 decimals)
   createdAt: number;              // Unix timestamp (seconds)
   zkNullifier?: string;           // ZK-proven Poseidon nullifier (Layer 2 privacy-ready)
+  bidCommitment?: string;         // ZK-proven bid commitment from BidRange proof (Poseidon hash)
 }
 
 // ─── Agent Actions ───────────────────────────────────────────────────

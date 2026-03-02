@@ -38,6 +38,8 @@ export interface ValidationMutation {
   nullifierHash?: string
   /** ZK-proven Poseidon nullifier (from proof publicSignals[2]). */
   zkNullifier?: string
+  /** ZK-proven bid commitment from BidRange proof publicSignals[BID_RANGE_SIGNALS.BID_COMMITMENT]. */
+  bidCommitment?: string
 }
 
 export interface ValidationResult {
@@ -372,6 +374,7 @@ export async function handleBid(
       agentId: action.agentId,
       actionType: ActionType.BID,
       nonce: action.nonce,
+      ...(bidRangeResult.bidCommitment !== '0' ? { bidCommitment: bidRangeResult.bidCommitment } : {}),
     },
   }
 }
