@@ -25,9 +25,9 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 - [x] **MCPE-01**: MCP `join_auction` tool accepts and forwards ZK membership proof payload to engine
 - [x] **MCPE-02**: MCP `place_bid` tool accepts and forwards ZK bid range proof payload to engine
-- [ ] **MCPE-03**: EIP-712 signer supports Poseidon nullifier path (not just keccak) for ZK-enabled joins
+- [x] **MCPE-03**: EIP-712 signer supports Poseidon nullifier path (not just keccak) for ZK-enabled joins
 - [x] **MCPE-04**: Engine verifies real ZK proofs end-to-end with `ENGINE_REQUIRE_PROOFS=true`
-- [ ] **MCPE-05**: MCP server can optionally generate proofs on behalf of agents (hybrid mode — server-side fullProve with agent-provided secrets)
+- [x] **MCPE-05**: MCP server can optionally generate proofs on behalf of agents (hybrid mode — server-side fullProve with agent-provided secrets)
 
 ### Frontend Display
 
@@ -82,10 +82,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AGZK-03 | Phase 3 | Pending |
 | AGZK-04 | Phase 3 | Pending |
 | MCPE-01 | Phase 2 | Complete |
-| MCPE-02 | Phase 2 | In progress (engine side complete — 02-04; MCP tool wiring pending — 02-02) |
-| MCPE-03 | Phase 2 | Pending |
+| MCPE-02 | Phase 2 | Complete |
+| MCPE-03 | Phase 2 | Complete |
 | MCPE-04 | Phase 2 | Complete |
-| MCPE-05 | Phase 2 | Pending |
+| MCPE-05 | Phase 2 | Complete |
 | FRNT-01 | Phase 4 | Pending |
 | FRNT-02 | Phase 4 | Pending |
 | FRNT-03 | Phase 4 | Pending |

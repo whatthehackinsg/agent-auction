@@ -48,8 +48,8 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md — Foundation: crypto dependency, config env vars, signer nullifier switch, proof-generator module (MCPE-03, MCPE-05)
-- [ ] 02-02-PLAN.md — Tool wiring: extend join_auction and place_bid Zod schemas with proof params + structured errors (MCPE-01, MCPE-02)
-- [ ] 02-03-PLAN.md — Integration tests: vitest setup, proof fixtures, signer + tool tests (MCPE-04)
+- [x] 02-02-PLAN.md — Tool wiring: extend join_auction and place_bid Zod schemas with proof params + structured errors (MCPE-01, MCPE-02)
+- [x] 02-03-PLAN.md — Integration tests: vitest setup, proof fixtures, signer + tool tests (MCPE-04)
 - [x] 02-04-PLAN.md — Engine bidCommitment threading: AuctionEvent + ValidationMutation + ingestAction (MCPE-02)
 
 ### Phase 3: Agent-Client ZK Integration
