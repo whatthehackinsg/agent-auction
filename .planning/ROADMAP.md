@@ -28,7 +28,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Engine no longer rejects real ZK proofs due to keccak/Poseidon root cross-check (cross-check removed or fixed)
   3. `AgentPrivacyRegistry.getRoot()` on Base Sepolia returns a non-zero Poseidon Merkle root containing test agent commitments
   4. Named signal index constants exist in `packages/crypto/src/signal-indices.ts` and are imported by engine verifier
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Signal index constants (ZKFN-04) + remove engine cross-check (ZKFN-02)
+- [ ] 01-02-PLAN.md — Circuit proof generation and verification tests (ZKFN-01)
+- [ ] 01-03-PLAN.md — Test agent registration script and on-chain execution (ZKFN-03)
 
 ### Phase 2: MCP + Engine Wiring
 **Goal**: MCP `join_auction` and `place_bid` tools accept ZK proof payloads, the EIP-712 signer uses the Poseidon nullifier when proofs are present, and the engine verifies real proofs end-to-end
@@ -71,7 +76,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. ZK Foundation | 0/TBD | Not started | - |
+| 1. ZK Foundation | 0/3 | Not started | - |
 | 2. MCP + Engine Wiring | 0/TBD | Not started | - |
 | 3. Agent-Client ZK Integration | 0/TBD | Not started | - |
 | 4. Frontend + Demo | 0/TBD | Not started | - |
