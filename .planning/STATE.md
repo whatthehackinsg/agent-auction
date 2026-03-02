@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-02T15:38:11Z"
+last_updated: "2026-03-02T15:43:20.747Z"
 progress:
-  total_phases: 4
+  total_phases: 2
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 Phase: 2 of 4 (MCP + Engine Wiring)
 Plan: 2 of 4 in current phase (02-01, 02-02, 02-03, 02-04)
-Status: Phase 2 in progress — plans 02-04 and 02-01 complete
-Last activity: 2026-03-02 — 02-01 complete (MCP ZK infrastructure: proof-generator, signer Poseidon branch, ServerConfig)
+Status: Phase 2 in progress — plans 02-04, 02-01, and 02-02 complete
+Last activity: 2026-03-02 — 02-02 complete (MCP tools join_auction + place_bid extended with ZK proof support)
 
-Progress: [████░░░░░░] 36%
+Progress: [█████░░░░░] 43%
 
 ## Performance Metrics
 
@@ -48,6 +48,7 @@ Progress: [████░░░░░░] 36%
 - Trend: Fast execution when implementation is clear
 
 *Updated after each plan completion*
+| Phase 02-mcp-engine-wiring P02 | 10 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Recent decisions affecting current work:
 - Added ethers as direct mcp-server dependency (readRegistryRoot requires ethers.Provider, not rpcUrl string directly)
 - signJoin() Poseidon nullifier gated on proofPayload presence — keccak256 fallback preserved for non-ZK joins (backward compatible)
 - BidRange maxBudget=0 substituted with BigInt(2**48) sentinel — circuit constraint requires non-zero maxBudget
+- [Phase 02-mcp-engine-wiring]: BID EIP-712 type has no nullifier field — bid proof attached after signBid() via object spread, not passed into signer
+- [Phase 02-mcp-engine-wiring]: zkError() helper duplicated in join.ts and bid.ts for tool self-containment rather than extracted to shared module
 
 ### Pending Todos
 
@@ -86,5 +89,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 02-01-PLAN.md — MCP ZK infrastructure: proof-generator.ts, signer Poseidon branch, ServerConfig ZK fields
+Stopped at: Completed 02-02-PLAN.md — MCP tools join_auction and place_bid extended with ZK proof support
 Resume file: None
