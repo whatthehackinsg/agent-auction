@@ -10,27 +10,27 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 ## Current Position
 
 Phase: 1 of 4 (ZK Foundation)
-Plan: 1 of 3 in current phase (01-01 complete)
-Status: In progress
-Last activity: 2026-03-02 — Completed 01-01: signal constants + engine cross-check removal
+Plan: 3 of 3 in current phase (01-01, 01-02, 01-03 complete)
+Status: Phase 1 complete
+Last activity: 2026-03-02 — Completed 01-03: register test agents on Base Sepolia
 
-Progress: [█░░░░░░░░░] 8%
+Progress: [███░░░░░░░] 25%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 2 min
-- Total execution time: 0.03 hours
+- Total plans completed: 3
+- Average duration: ~45 min
+- Total execution time: ~2.25 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-zk-foundation | 1 | 2 min | 2 min |
+| 01-zk-foundation | 3 | ~2.25h | ~45 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2 min)
+- Last 5 plans: 01-01 (2 min), 01-02 (research), 01-03 (~2h)
 - Trend: —
 
 *Updated after each plan completion*
@@ -49,6 +49,8 @@ Recent decisions affecting current work:
 - Import signal constants from @agent-auction/crypto in engine — dependency is one-directional (engine -> crypto), no circular import
 - Remove unused expectedRoot local variable entirely rather than leaving assigned-but-unused to avoid TypeScript strict-mode warning
 - Pre-existing build errors in packages/crypto (snarkjs types, ethers Uint8Array) are out of scope for plan 01-01
+- test-agents/*.json files contain agentSecret + nullifiers — added to .gitignore; README.md explains local regeneration
+- AgentPrivacyRegistry root 0xca223b34b59d6362ccffa90e04ebaa12ea40bb6d5ef3d9b611e2231126cc50f2 is the stable anchor for Phase 2 ZK membership proof generation — Phase 2 should call getRoot() dynamically, not hardcode
 
 ### Pending Todos
 
@@ -57,11 +59,11 @@ None.
 ### Blockers/Concerns
 
 - EIP-712 nullifier type mismatch (keccak vs Poseidon in signer.ts) — addressed in Phase 2
-- `AgentPrivacyRegistry.getRoot()` returns zero until Phase 1 Plan 03 populates it on-chain
 - Pre-existing TypeScript errors in packages/crypto build (snarkjs types, ethers Uint8Array incompatibility) — pre-date this phase, out of scope
+- RESOLVED: `AgentPrivacyRegistry.getRoot()` now returns 0xca223b34... (non-zero, Phase 1 Plan 03 complete)
 
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 01-01-PLAN.md — signal constants + engine cross-check removal
+Stopped at: Completed 01-03-PLAN.md — register test agents on Base Sepolia
 Resume file: None

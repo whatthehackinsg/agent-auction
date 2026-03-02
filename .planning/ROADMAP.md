@@ -12,7 +12,7 @@ This milestone closes the "last mile" ZK integration on a fully operational brow
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: ZK Foundation** - Fix hash mismatch, wire circuit test harness, populate on-chain Merkle root
+- [x] **Phase 1: ZK Foundation** - Fix hash mismatch, wire circuit test harness, populate on-chain Merkle root
 - [ ] **Phase 2: MCP + Engine Wiring** - Extend MCP tool schemas to accept ZK proofs and validate engine E2E
 - [ ] **Phase 3: Agent-Client ZK Integration** - Wire real Groth16 proof generation into the agent-client flow
 - [ ] **Phase 4: Frontend + Demo** - Surface ZK verification status in UI and confirm live Base Sepolia demo
@@ -32,8 +32,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 Plans:
 - [x] 01-01-PLAN.md — Signal index constants (ZKFN-04) + remove engine cross-check (ZKFN-02)
-- [ ] 01-02-PLAN.md — Circuit proof generation and verification tests (ZKFN-01)
-- [ ] 01-03-PLAN.md — Test agent registration script and on-chain execution (ZKFN-03)
+- [x] 01-02-PLAN.md — Circuit proof generation and verification tests (ZKFN-01)
+- [x] 01-03-PLAN.md — Test agent registration script and on-chain execution (ZKFN-03)
 
 ### Phase 2: MCP + Engine Wiring
 **Goal**: MCP `join_auction` and `place_bid` tools accept ZK proof payloads, the EIP-712 signer uses the Poseidon nullifier when proofs are present, and the engine verifies real proofs end-to-end
@@ -76,7 +76,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. ZK Foundation | 1/3 | In progress | - |
+| 1. ZK Foundation | 3/3 | Complete | 2026-03-02 |
 | 2. MCP + Engine Wiring | 0/TBD | Not started | - |
 | 3. Agent-Client ZK Integration | 0/TBD | Not started | - |
 | 4. Frontend + Demo | 0/TBD | Not started | - |
