@@ -19,6 +19,10 @@ export interface ServerConfig {
   port: number
   /** Engine admin key — bypasses x402 gates on engine calls */
   engineAdminKey: string | null
+  /** Path to agent-N.json for server-side ZK proof generation */
+  agentStateFile: string | null
+  /** Base Sepolia RPC URL for on-chain registry root reads */
+  baseSepoliaRpc: string | null
 }
 
 export function loadConfig(): ServerConfig {
@@ -27,6 +31,8 @@ export function loadConfig(): ServerConfig {
   const agentId = process.env.AGENT_ID ?? null
   const port = parseInt(process.env.MCP_PORT ?? '3100', 10)
   const engineAdminKey = process.env.ENGINE_ADMIN_KEY ?? null
+  const agentStateFile = process.env.AGENT_STATE_FILE ?? null
+  const baseSepoliaRpc = process.env.BASE_SEPOLIA_RPC ?? null
 
   let agentPrivateKey: Hex | null = null
   if (rawKey) {
@@ -36,7 +42,7 @@ export function loadConfig(): ServerConfig {
     agentPrivateKey = rawKey as Hex
   }
 
-  return { engineUrl, agentPrivateKey, agentId, port, engineAdminKey }
+  return { engineUrl, agentPrivateKey, agentId, port, engineAdminKey, agentStateFile, baseSepoliaRpc }
 }
 
 /**

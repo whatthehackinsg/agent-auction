@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@agent-auction/crypto": "file:../packages/crypto",
     "@modelcontextprotocol/sdk": "^1.27.0",
     "express": "^5.1.0",
     "viem": "^2.46.2",
