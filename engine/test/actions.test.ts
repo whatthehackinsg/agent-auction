@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import fs from 'node:fs'
 import { ActionType, type ActionRequest } from '../src/types/engine'
 import {
   checkNonce,
@@ -200,6 +201,23 @@ describe('handleJoin', () => {
     ).rejects.toThrow('Invalid membership proof')
   })
 
+  it('accepts join when requireProofs=true and valid membership proof provided', async () => {
+    const proofFixture = JSON.parse(
+      fs.readFileSync(new URL('./fixtures/membership-proof.json', import.meta.url), 'utf-8'),
+    )
+    const action = makeAction({
+      type: ActionType.JOIN,
+      nonce: 0,
+      proof: proofFixture,
+    })
+    // Note: ENGINE_ALLOW_INSECURE_STUBS=true bypasses EIP-712 sig check,
+    // so only the proof verification path is tested here
+    const result = await handleJoin(action, storage, TEST_AUCTION_ID, { requireProofs: true })
+    expect(result.action.type).toBe(ActionType.JOIN)
+    expect(result.mutation.zkNullifier).toBeDefined()
+    expect(result.mutation.zkNullifier).not.toBe('0x00')
+  })
+
   it('returns zkNullifier=undefined when no proof provided', async () => {
     const action = makeAction({ type: ActionType.JOIN, nonce: 0 })
     const result = await handleJoin(action, storage, TEST_AUCTION_ID)
@@ -301,6 +319,23 @@ describe('handleBid', () => {
     await expect(
       handleBid(action, storage, TEST_AUCTION_ID, '1000000', '0', { requireProofs: true }),
     ).rejects.toThrow('Invalid bid range proof')
+  })
+
+  it('accepts bid when requireProofs=true and valid bid range proof provided', async () => {
+    const proofFixture = JSON.parse(
+      fs.readFileSync(new URL('./fixtures/bidrange-proof.json', import.meta.url), 'utf-8'),
+    )
+    const action = makeAction({
+      type: ActionType.BID,
+      nonce: 0,
+      amount: '2000000',
+      proof: proofFixture,
+    })
+    const result = await handleBid(action, storage, TEST_AUCTION_ID, '1000000', '0', {
+      requireProofs: true,
+    })
+    expect(result.action.type).toBe(ActionType.BID)
+    expect(result.action.proof).toBeDefined()
   })
 
   it('rejects bid with malformed proof', async () => {
