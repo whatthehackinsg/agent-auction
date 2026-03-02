@@ -82,7 +82,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AGZK-03 | Phase 3 | Pending |
 | AGZK-04 | Phase 3 | Pending |
 | MCPE-01 | Phase 2 | Pending |
-| MCPE-02 | Phase 2 | Pending |
+| MCPE-02 | Phase 2 | In progress (engine side complete — 02-04; MCP tool wiring pending — 02-02) |
 | MCPE-03 | Phase 2 | Pending |
 | MCPE-04 | Phase 2 | Pending |
 | MCPE-05 | Phase 2 | Pending |

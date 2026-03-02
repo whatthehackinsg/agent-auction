@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-02T04:52:04.583Z"
+last_updated: "2026-03-02T15:38:00Z"
 progress:
-  total_phases: 1
+  total_phases: 4
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 7
+  completed_plans: 4
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Working ZK proofs that actually verify on-chain — agents prove registry membership and bid range without revealing identity, demonstrated end-to-end on Base Sepolia.
-**Current focus:** Phase 1 — ZK Foundation
+**Current focus:** Phase 2 — MCP + Engine Wiring
 
 ## Current Position
 
-Phase: 1 of 4 (ZK Foundation)
-Plan: 3 of 3 in current phase (01-01, 01-02, 01-03 complete)
-Status: Phase 1 complete
-Last activity: 2026-03-02 — Completed 01-02: circuit E2E proof generation + verification tests
+Phase: 2 of 4 (MCP + Engine Wiring)
+Plan: 1 of 4 in current phase (02-01, 02-02, 02-03, 02-04)
+Status: Phase 2 in progress — plan 02-04 complete
+Last activity: 2026-03-02 — 02-04 complete (bidCommitment threading in engine)
 
-Progress: [███░░░░░░░] 25%
+Progress: [████░░░░░░] 29%
 
 ## Performance Metrics
 
@@ -41,6 +41,7 @@ Progress: [███░░░░░░░] 25%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-zk-foundation | 3 | ~2.25h | ~45 min |
+| 02-mcp-engine-wiring | 1 (02-04) | ~7 min | ~7 min |
 
 **Recent Trend:**
 - Last 5 plans: 01-01 (2 min), 01-03 (~2h), 01-02 (2 min)
@@ -67,6 +68,7 @@ Recent decisions affecting current work:
 - Circuit tests use fs.readFileSync to load vkeys from circuits/keys/*.json (no engine import) — validates full disk→verify pipeline
 - BidRange out-of-range: Circom constraint violation causes fullProve to throw (not return RANGE_OK=0) — test uses rejects.toThrow()
 - vitest discovers packages/crypto/tests/ via **/*.test.ts glob without config changes
+- Only populate bidCommitment when bidRangeResult.bidCommitment !== '0' — keeps events clean for no-proof bids (backward compat)
 
 ### Pending Todos
 
@@ -81,5 +83,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 01-02-PLAN.md — circuit E2E proof generation + verification tests
+Stopped at: Completed 02-04-PLAN.md — bidCommitment threaded through engine types, handler, and auction-room
 Resume file: None
