@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-02T15:38:00Z"
+last_updated: "2026-03-02T15:38:11Z"
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 7
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 ## Current Position
 
 Phase: 2 of 4 (MCP + Engine Wiring)
-Plan: 1 of 4 in current phase (02-01, 02-02, 02-03, 02-04)
-Status: Phase 2 in progress — plan 02-04 complete
-Last activity: 2026-03-02 — 02-04 complete (bidCommitment threading in engine)
+Plan: 2 of 4 in current phase (02-01, 02-02, 02-03, 02-04)
+Status: Phase 2 in progress — plans 02-04 and 02-01 complete
+Last activity: 2026-03-02 — 02-01 complete (MCP ZK infrastructure: proof-generator, signer Poseidon branch, ServerConfig)
 
-Progress: [████░░░░░░] 29%
+Progress: [████░░░░░░] 36%
 
 ## Performance Metrics
 
@@ -69,6 +69,9 @@ Recent decisions affecting current work:
 - BidRange out-of-range: Circom constraint violation causes fullProve to throw (not return RANGE_OK=0) — test uses rejects.toThrow()
 - vitest discovers packages/crypto/tests/ via **/*.test.ts glob without config changes
 - Only populate bidCommitment when bidRangeResult.bidCommitment !== '0' — keeps events clean for no-proof bids (backward compat)
+- Added ethers as direct mcp-server dependency (readRegistryRoot requires ethers.Provider, not rpcUrl string directly)
+- signJoin() Poseidon nullifier gated on proofPayload presence — keccak256 fallback preserved for non-ZK joins (backward compatible)
+- BidRange maxBudget=0 substituted with BigInt(2**48) sentinel — circuit constraint requires non-zero maxBudget
 
 ### Pending Todos
 
@@ -83,5 +86,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 02-04-PLAN.md — bidCommitment threaded through engine types, handler, and auction-room
+Stopped at: Completed 02-01-PLAN.md — MCP ZK infrastructure: proof-generator.ts, signer Poseidon branch, ServerConfig ZK fields
 Resume file: None
