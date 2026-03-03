@@ -7,6 +7,7 @@ import {
   keccak256,
   toBytes,
 } from 'viem'
+import { MEMBERSHIP_SIGNALS } from '@agent-auction/crypto'
 import { baseSepolia } from 'viem/chains'
 import {
   ADDRESSES,
@@ -206,10 +207,20 @@ export async function joinAuction(params: {
   bondAmount: bigint
   nonce: number
   signer: WalletSignerAdapter
+  proofPayload?: { proof: unknown; publicSignals: string[] }
 }): Promise<EngineActionResponse> {
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 300) // 5 min
   const wallet = await params.signer.getAddress()
-  const nullifier = deriveJoinNullifier(wallet, params.auctionId)
+
+  let nullifier: bigint
+  if (params.proofPayload) {
+    // Poseidon nullifier from ZK proof — MUST match what engine extracts
+    nullifier = BigInt(params.proofPayload.publicSignals[MEMBERSHIP_SIGNALS.NULLIFIER])
+  } else {
+    // Legacy keccak256 fallback for non-ZK joins
+    nullifier = deriveJoinNullifier(wallet, params.auctionId)
+  }
+
   const signature = await params.signer.signTypedData({
     domain: EIP712_DOMAIN,
     types: JOIN_TYPES,
@@ -231,7 +242,7 @@ export async function joinAuction(params: {
     nonce: params.nonce,
     deadline: deadline.toString(),
     signature,
-    proof: null,
+    proof: params.proofPayload ?? null,
   }
 
   const maxAttempts = 30
@@ -266,6 +277,7 @@ export async function placeBid(params: {
   amount: bigint
   nonce: number
   signer: WalletSignerAdapter
+  proofPayload?: { proof: unknown; publicSignals: string[] }
 }): Promise<EngineActionResponse> {
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 300)
   const wallet = await params.signer.getAddress()
@@ -292,6 +304,7 @@ export async function placeBid(params: {
       nonce: params.nonce,
       deadline: deadline.toString(),
       signature,
+      proof: params.proofPayload ?? null,
     }),
   })
 }

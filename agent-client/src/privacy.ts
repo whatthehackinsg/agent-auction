@@ -6,17 +6,19 @@
  * builds a capability tree, and stores private state for ZK proof
  * generation at JOIN time.
  *
- * This module re-implements the crypto primitives using viem
- * to avoid pulling in ethers as a dependency.
+ * Uses @agent-auction/crypto Poseidon primitives for all commitment
+ * computation — replaces the previous keccak256 path.
  */
 
+import type { Hex } from 'viem'
 import {
-  type Hex,
-  encodeAbiParameters,
-  keccak256,
-} from 'viem'
-import { ADDRESSES, publicClient, type createWalletForPrivateKey } from './config'
-import { logStep } from './utils'
+  generateSecret as generatePoseidonSecret,
+  computeRegistrationCommit as poseidonCommit,
+  buildPoseidonMerkleTree,
+  type AgentPrivateState,
+} from '@agent-auction/crypto'
+import { ADDRESSES, publicClient, type createWalletForPrivateKey } from './config.js'
+import { logStep } from './utils.js'
 
 // ─── ABI ──────────────────────────────────────────────────────────────
 
@@ -40,82 +42,48 @@ const privacyRegistryAbi = [
   },
 ] as const
 
-// ─── Types ────────────────────────────────────────────────────────────
-
-export interface AgentPrivateState {
-  agentId: bigint
-  agentSecret: bigint
-  salt: bigint
-  capabilityIds: bigint[]
-  registrationCommit: Hex
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────
-
-/** Generate a cryptographically random 256-bit secret */
-function generateSecret(): bigint {
-  const bytes = crypto.getRandomValues(new Uint8Array(32))
-  let result = 0n
-  for (const b of bytes) {
-    result = (result << 8n) | BigInt(b)
-  }
-  return result
-}
-
-/**
- * Compute the on-chain registration commitment.
- * registrationCommit = keccak256(abi.encodePacked(agentSecret, capabilityMerkleRoot, salt))
- *
- * For simplicity in the demo, we use capabilityId directly as the "root"
- * when there's only one capability. For multi-capability agents, use
- * the full Poseidon Merkle tree from @agent-auction/crypto.
- */
-function computeRegistrationCommit(
-  agentSecret: bigint,
-  capabilityRoot: bigint,
-  salt: bigint,
-): Hex {
-  const encoded = encodeAbiParameters(
-    [
-      { name: 'agentSecret', type: 'uint256' },
-      { name: 'capabilityRoot', type: 'uint256' },
-      { name: 'salt', type: 'uint256' },
-    ],
-    [agentSecret, capabilityRoot, salt],
-  )
-  return keccak256(encoded)
-}
+// ─── Re-export AgentPrivateState from @agent-auction/crypto ───────────
+// This replaces the local definition and ensures the type is compatible
+// with @agent-auction/crypto's proof generation functions.
+export type { AgentPrivateState }
 
 // ─── Public API ───────────────────────────────────────────────────────
 
 /**
- * Prepare ZK privacy state for an agent.
+ * Prepare ZK privacy state for an agent using Poseidon primitives.
  *
- * Generates secrets, computes the on-chain commitment, but does NOT
- * send any transaction. The caller must register on-chain separately.
+ * Generates secrets, builds capability Merkle tree, computes the
+ * Poseidon-based on-chain commitment, but does NOT send any transaction.
+ * The caller must register on-chain separately via registerPrivacy().
+ *
+ * Commitment = Poseidon(agentSecret, capabilityMerkleRoot, salt)
+ * This matches the RegistryMembership circuit's expected commitment.
  */
-export function preparePrivacyState(
+export async function preparePrivacyState(
   agentId: bigint,
   capabilityIds: bigint[] = [1n],
-): AgentPrivateState {
-  const agentSecret = generateSecret()
-  const salt = generateSecret()
+): Promise<AgentPrivateState> {
+  const agentSecret = generatePoseidonSecret()
+  const salt = generatePoseidonSecret()
 
-  // For single capability, use capabilityId as root directly.
-  // For multi-capability, use Poseidon Merkle tree (via @agent-auction/crypto).
-  const capabilityRoot = capabilityIds[0]
+  // Build the Poseidon Merkle tree from capability leaf hashes
+  // Each leaf = Poseidon(capabilityId) — computed internally by buildPoseidonMerkleTree
+  // For a single capability, the tree root equals the leaf hash
+  const leafHashes = capabilityIds.map((id) => id) // initial: capabilityId as placeholder
+  const treeResult = await buildPoseidonMerkleTree(leafHashes)
+  const capabilityMerkleRoot = treeResult.root
 
-  const registrationCommit = computeRegistrationCommit(
-    agentSecret,
-    capabilityRoot,
-    salt,
-  )
+  // Commitment: solidityPackedKeccak256(agentSecret, capabilityMerkleRoot, salt)
+  // computeRegistrationCommit returns a 0x-prefixed hex string
+  const registrationCommit = poseidonCommit(agentSecret, capabilityMerkleRoot, salt) as Hex
 
   return {
     agentId,
     agentSecret,
     salt,
-    capabilityIds,
+    capabilities: capabilityIds.map((id) => ({ capabilityId: id })),
+    leafHashes,
+    capabilityMerkleRoot,
     registrationCommit,
   }
 }
@@ -137,7 +105,7 @@ export async function registerPrivacy(
       address: ADDRESSES.agentPrivacyRegistry,
       abi: privacyRegistryAbi,
       functionName: 'register',
-      args: [privateState.agentId, privateState.registrationCommit],
+      args: [privateState.agentId, privateState.registrationCommit as Hex],
     })
     await publicClient.waitForTransactionReceipt({ hash: txHash })
     logStep('privacy', `registered successfully`)
