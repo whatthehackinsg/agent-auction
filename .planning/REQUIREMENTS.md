@@ -33,12 +33,12 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 - [x] **FRNT-01**: Frontend shows ZK proof verification badge on bids and joins (not just string masking)
 - [x] **FRNT-02**: Frontend shows nullifier consumed indicator for verified participants
-- [ ] **FRNT-03**: Frontend includes privacy explainer panel explaining ZK guarantees to spectators
+- [x] **FRNT-03**: Frontend includes privacy explainer panel explaining ZK guarantees to spectators
 
 ### Live Demo
 
-- [ ] **DEMO-01**: Full E2E on Base Sepolia: agent registers → generates proofs → joins auction → bids with range proof → auction settles via CRE
-- [ ] **DEMO-02**: Demo narrative includes CCIP Private Transactions as future vision for closing on-chain privacy gap (bonds, settlement calldata)
+- [x] **DEMO-01**: Full E2E on Base Sepolia: agent registers → generates proofs → joins auction → bids with range proof → auction settles via CRE
+- [x] **DEMO-02**: Demo narrative includes CCIP Private Transactions as future vision for closing on-chain privacy gap (bonds, settlement calldata)
 
 ## v2 Requirements
 
@@ -88,9 +88,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MCPE-05 | Phase 2 | Complete |
 | FRNT-01 | Phase 4 | Complete |
 | FRNT-02 | Phase 4 | Complete |
-| FRNT-03 | Phase 4 | Pending |
-| DEMO-01 | Phase 4 | Pending |
-| DEMO-02 | Phase 4 | Pending |
+| FRNT-03 | Phase 4 | Complete |
+| DEMO-01 | Phase 4 | Complete |
+| DEMO-02 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 18 total
