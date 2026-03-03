@@ -8,6 +8,7 @@ import { StatusPill } from '@/components/auction/StatusPill'
 import { PixelPanel } from '@/components/landing/PixelPanel'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { useAuctions } from '@/hooks/useAuctions'
+import { PlatformStatsSection } from '@/components/landing/sections/PlatformStatsSection'
 import { formatCountdown, formatUsdc, statusLabel, truncateHex } from '@/lib/format'
 import { resolveImageUrl } from '@/lib/ipfs'
 
@@ -24,6 +25,7 @@ export default function AuctionsPage() {
 
   return (
     <AuctionShell>
+      <PlatformStatsSection className="mb-6" />
       <section className="mb-6">
         <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#5d7ab0]">
           [ :: LIVE_AUCTIONS :: ]

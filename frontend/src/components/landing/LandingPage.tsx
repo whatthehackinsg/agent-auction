@@ -12,6 +12,7 @@ import { CRESection } from "./sections/CRESection";
 import { TechStackSection } from "./sections/TechStackSection";
 import { DeployedSection } from "./sections/DeployedSection";
 import { CTASection } from "./sections/CTASection";
+import { PlatformStatsSection } from "./sections/PlatformStatsSection";
 
 const menuItems: PixelMenuItem[] = [
   { label: "AUCTIONS", href: "/auctions" },
@@ -42,6 +43,7 @@ export function LandingPage() {
           </header>
 
           <HeroSection />
+          <PlatformStatsSection />
           <ProblemSection />
           <ArchitectureSection />
           <LifecycleSection />

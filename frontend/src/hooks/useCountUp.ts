@@ -7,14 +7,23 @@ export function useCountUp(target: number, duration = 900): number {
   const startRef = useRef<number | null>(null)
   const fromRef = useRef(0)
   const prevTargetRef = useRef(0)
+  // Track current value via ref so effect doesn't need it as a dependency
+  const valueRef = useRef(0)
+
+  // Keep valueRef in sync with state
+  useEffect(() => {
+    valueRef.current = value
+  }, [value])
 
   useEffect(() => {
     // Don't re-animate if target hasn't changed (prevents re-animation on SWR refetch with same data)
     if (target === prevTargetRef.current) return
     prevTargetRef.current = target
 
-    if (target === 0) { setValue(0); return }
-    fromRef.current = value
+    // Cancel any in-flight animation
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+
+    fromRef.current = valueRef.current
     startRef.current = null
 
     const step = (now: number) => {
