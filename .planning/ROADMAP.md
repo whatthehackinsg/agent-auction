@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Agent-Client ZK Integration** - Wire real Groth16 proof generation into the agent-client flow (completed 2026-03-03)
 - [x] **Phase 4: Frontend + Demo** - Surface ZK verification status in UI and confirm live Base Sepolia demo (completed 2026-03-03)
 - [x] **Phase 5: Frontend Key Figures Dashboard** - Platform-wide stat cards on landing and auctions pages (completed 2026-03-03)
-- [ ] **Phase 6: Refine Stats Card UI** - Add shimmer + glow effects to stat cards, tailor auctions page to 3 stats
+- [x] **Phase 6: Refine Stats Card UI** - Add shimmer + glow effects to stat cards, tailor auctions page to 3 stats (completed 2026-03-04)
 
 ## Phase Details
 
@@ -108,7 +108,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 06-01-PLAN.md — Shimmer + glow effects on StatCard, AuctionStatsSection 3-card variant
+- [x] 06-01-PLAN.md — Shimmer + glow effects on StatCard, AuctionStatsSection 3-card variant
 
 ## Progress
 
@@ -122,4 +122,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Agent-Client ZK Integration | 2/2 | Complete   | 2026-03-03 |
 | 4. Frontend + Demo | 2/2 | Complete   | 2026-03-03 |
 | 5. Key Figures Dashboard | 2/2 | Complete   | 2026-03-03 |
-| 6. Refine Stats Card UI | 0/1 | Planned    | — |
+| 6. Refine Stats Card UI | 1/1 | Complete   | 2026-03-04 |

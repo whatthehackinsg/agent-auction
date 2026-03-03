@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 05-02-PLAN.md
-last_updated: "2026-03-03T16:48:28.843Z"
-last_activity: 2026-03-03 — 04-02 complete (ZK activity feed badges, nullifier tags, explainer panels)
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-03-04T06:25:00.000Z"
+last_activity: 2026-03-04 — 06-01 complete (shimmer + glow stat cards, AuctionStatsSection 3-card variant)
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 13
-  completed_plans: 13
+  total_phases: 6
+  completed_phases: 6
+  total_plans: 14
+  completed_plans: 14
   percent: 100
 ---
 
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 ## Current Position
 
-Phase: 4 of 4 (Frontend Demo) — COMPLETE
-Plan: 2 of 2 in phase (04-02 complete — ZK visual display)
+Phase: 6 of 6 (Refine Stats Card UI) — COMPLETE
+Plan: 1 of 1 in phase (06-01 complete — shimmer + glow stat cards, 3-card auctions layout)
 Status: All phases complete — v1.0 milestone achieved
-Last activity: 2026-03-03 — 04-02 complete (ZK activity feed badges, nullifier tags, explainer panels)
+Last activity: 2026-03-04 — 06-01 complete (shimmer + glow stat cards, AuctionStatsSection 3-card variant)
 
 Progress: [██████████] 100%
 
@@ -59,6 +59,7 @@ Progress: [██████████] 100%
 | Phase 04-frontend-demo P02 | 8 | 2 tasks | 2 files |
 | Phase 05-frontend-auction-room-key-figures-dashboard P01 | 7 | 1 tasks | 2 files |
 | Phase 05-frontend-auction-room-key-figures-dashboard P02 | 2 | 2 tasks | 7 files |
+| Phase 06-refine-stats-card-ui P01 | 8 | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -101,13 +102,21 @@ Recent decisions affecting current work:
 - [Phase 05-frontend-auction-room-key-figures-dashboard]: UsdcStatCard is a separate sub-component because it needs both BigInt base-unit conversion and custom displayValue for animated USDC display
 - [Phase 05-frontend-auction-room-key-figures-dashboard]: PlatformStatsSection returns null on error for graceful degradation without breaking parent page
 
+- [Phase 06-refine-stats-card-ui]: glowRgb values derived from existing border hex colors for visual consistency
+- [Phase 06-refine-stats-card-ui]: mask-composite: exclude with 2px padding for border-only shimmer (not full-card overlay)
+- [Phase 06-refine-stats-card-ui]: AuctionStatsSection shows 3 stats: Total Auctions (mint), Active Auctions (rose), USDC Bonded (gold)
+- [Phase 06-refine-stats-card-ui]: UsdcStatCard exported from PlatformStatsSection for reuse rather than duplicated
+
 ### Roadmap Evolution
 
 - Phase 5 added: Frontend auction room key figures dashboard
+- Phase 6 added: Refine stats card UI
 
 ### Pending Todos
 
-None.
+- `.planning/todos/pending/2026-03-03-add-agent-skills-and-finish-mcp-server.md` — Add agent skills and finish MCP server
+- `.planning/todos/pending/2026-03-03-validate-nft-settings-and-run-real-nft-test.md` — Validate NFT settings and run real NFT test
+- `.planning/todos/pending/2026-03-03-audit-onboarding-pipeline-and-erc-8004-details.md` — Audit onboarding pipeline and ERC-8004 details
 
 ### Blockers/Concerns
 
@@ -117,6 +126,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-03T16:48:28.842Z
-Stopped at: Completed 05-02-PLAN.md
+Last session: 2026-03-04T06:25:00.000Z
+Stopped at: Completed 06-01-PLAN.md
 Resume file: None
