@@ -104,4 +104,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. MCP + Engine Wiring | 4/4 | Complete   | 2026-03-02 |
 | 3. Agent-Client ZK Integration | 2/2 | Complete   | 2026-03-03 |
 | 4. Frontend + Demo | 2/2 | Complete   | 2026-03-03 |
-| 5. Key Figures Dashboard | 0/2 | Planning   | — |
+| 5. Key Figures Dashboard | 1/2 | In Progress|  |

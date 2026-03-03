@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Phase 5 context gathered
-last_updated: "2026-03-03T16:19:00.936Z"
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-03-03T16:43:38.452Z"
 last_activity: 2026-03-03 — 04-02 complete (ZK activity feed badges, nullifier tags, explainer panels)
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 13
+  completed_plans: 12
   percent: 100
 ---
 
@@ -57,6 +57,7 @@ Progress: [██████████] 100%
 | Phase 03-agent-client-zk-integration P02 | 8 | 2 tasks | 1 file |
 | Phase 04-frontend-demo P01 | 5 | 2 tasks | 2 files |
 | Phase 04-frontend-demo P02 | 8 | 2 tasks | 2 files |
+| Phase 05-frontend-auction-room-key-figures-dashboard P01 | 7 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,9 @@ Recent decisions affecting current work:
 - agentIds in demo switched from [1001, 1002, 1003] to [1, 2, 3] — must match Merkle tree commitments in test-agent state files
 - In-memory usedNullifiers updated after persistNullifier() so double-join demo detects reuse without disk reload
 - [Phase 04-frontend-demo]: zkNullifier/bidCommitment included in public WebSocket messages — cryptographic hashes, not identity-revealing
+- [Phase 05-frontend-auction-room-key-figures-dashboard]: GET /stats is fully public (no auth, no x402) to support unauthenticated frontend dashboard consumption
+- [Phase 05-frontend-auction-room-key-figures-dashboard]: totalUsdcBonded returned as string (consistent with USDC amount convention across the API)
+- [Phase 05-frontend-auction-room-key-figures-dashboard]: uniqueAgents filtered to action_type IN ('JOIN','BID') to count meaningful participation events only
 
 ### Roadmap Evolution
 
@@ -109,6 +113,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-03T16:19:00.929Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-frontend-auction-room-key-figures-dashboard/05-CONTEXT.md
+Last session: 2026-03-03T16:43:38.450Z
+Stopped at: Completed 05-01-PLAN.md
+Resume file: None
