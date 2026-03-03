@@ -20,14 +20,20 @@ import { EIP712_DOMAIN } from './addresses'
 import {
   computeEventHash as poseidonComputeEventHash,
 } from '@agent-auction/crypto/poseidon-chain'
-import { MEMBERSHIP_SIGNALS, BID_RANGE_SIGNALS } from '@agent-auction/crypto'
+// signal-indices is a pure constants file (no snarkjs dependency) — use sub-path
+// import to avoid pulling in the barrel which transitively loads snarkjs-verify.ts
+// (which has a top-level `import * as snarkjs` that triggers URL.createObjectURL()).
+import { MEMBERSHIP_SIGNALS, BID_RANGE_SIGNALS } from '@agent-auction/crypto/signal-indices'
 
 // snarkjs is lazy-imported to avoid ffjavascript's URL.createObjectURL() at
 // module init time — that API doesn't exist in Cloudflare Workers.
+// The specifier is built at runtime so esbuild cannot statically resolve it
+// and bundle the module (which would trigger URL.createObjectURL at load time).
+const _snarkjsId = ['snark', 'js'].join('') as 'snarkjs'
 let _snarkjs: typeof import('snarkjs') | null = null
 async function getSnarkjs() {
   if (!_snarkjs) {
-    _snarkjs = await import('snarkjs')
+    _snarkjs = await import(_snarkjsId)
   }
   return _snarkjs
 }
