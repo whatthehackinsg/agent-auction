@@ -44,7 +44,7 @@ export function WalletButton() {
           <Modal onClose={() => setOpen(false)}>
             <div className="border-b border-[#1E1E32] px-5 py-3">
               <p className="font-mono text-[9px] uppercase tracking-widest text-[#5E5E7A]">
-                // connected
+                {"// connected"}
               </p>
               <p className="mt-1 font-mono text-xs text-[#EEEEF5] break-all">
                 {addr}
@@ -111,7 +111,7 @@ function Modal({
         {/* Title bar */}
         <div className="flex items-center justify-between border-b border-[#1E1E32] bg-[#06070f] px-4 py-2.5">
           <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-[#5E5E7A]">
-            // wallet
+            {"// wallet"}
           </span>
           <button
             onClick={onClose}

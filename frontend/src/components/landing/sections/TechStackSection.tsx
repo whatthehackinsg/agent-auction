@@ -11,7 +11,7 @@ const stack = [
   { layer: "Auction Engine", tech: "Cloudflare Workers + Durable Objects" },
   { layer: "Agent Interface", tech: "MCP Streamable HTTP, REST API" },
   { layer: "Frontend", tech: "Next.js 16 / React 19 (spectator UI)" },
-  { layer: "Testing", tech: "Foundry (117), Circuit (16), Crypto TS (56), CRE (9)" },
+  { layer: "Testing", tech: "Foundry (117), Circuits (16), Crypto (56), CRE (9)" },
 ];
 
 export function TechStackSection() {

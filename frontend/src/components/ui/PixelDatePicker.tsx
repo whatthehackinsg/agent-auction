@@ -98,14 +98,14 @@ export function PixelDatePicker({
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false) }}
         >
           <div className="w-full max-w-[340px] mx-4 border border-[#1E1E32] bg-[#0A0B14] shadow-[4px_4px_0_0_rgba(58,58,88,0.6)]">
-            {/* Title bar */}
-            <div className="flex items-center justify-between border-b border-[#1E1E32] bg-[#06070f] px-4 py-2.5">
-              <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-[#5E5E7A]">
-                // deadline (UTC)
-              </span>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
+              {/* Title bar */}
+              <div className="flex items-center justify-between border-b border-[#1E1E32] bg-[#06070f] px-4 py-2.5">
+                <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-[#5E5E7A]">
+                  {"// deadline (UTC)"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
                 className="font-mono text-[10px] text-[#5E5E7A] transition-colors hover:text-[#F87171]"
               >
                 [X]

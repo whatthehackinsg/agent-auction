@@ -17,6 +17,10 @@
     "./replay-bundle": {
       "import": "./src/replay-bundle.js",
       "types": "./dist/replay-bundle.d.ts"
+    },
+    "./signal-indices": {
+      "import": "./src/signal-indices.js",
+      "types": "./dist/signal-indices.d.ts"
     }
   },
   "scripts": {

@@ -83,7 +83,7 @@ Each task was committed atomically:
 1. **Task 1: Create hooks and StatCard component** - `c708953` (feat)
 2. **Task 2: Create PlatformStatsSection and wire into pages** - `ae4bae0` (feat)
 
-**Plan metadata:** TBD (docs: complete plan)
+**Plan metadata:** `58ee424` (docs: complete plan)
 
 ## Files Created/Modified
 
