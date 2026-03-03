@@ -11,6 +11,7 @@ export const accentStyles: Record<
     muted: string;
     dim: string;
     chip: string;
+    glowRgb: string;
   }
 > = {
   mint: {
@@ -22,6 +23,7 @@ export const accentStyles: Record<
     muted: "text-[#93a7ba]",
     dim: "text-[#557090]",
     chip: "bg-[#6EE7B7]",
+    glowRgb: "88, 199, 173",
   },
   gold: {
     panel: "bg-[#241b10]/90",
@@ -32,6 +34,7 @@ export const accentStyles: Record<
     muted: "text-[#b4a58a]",
     dim: "text-[#7f6d4f]",
     chip: "bg-[#F5C46E]",
+    glowRgb: "215, 170, 97",
   },
   violet: {
     panel: "bg-[#17132d]/90",
@@ -42,6 +45,7 @@ export const accentStyles: Record<
     muted: "text-[#9c96bb]",
     dim: "text-[#6c6296]",
     chip: "bg-[#A78BFA]",
+    glowRgb: "183, 155, 240",
   },
   rose: {
     panel: "bg-[#25121e]/90",
@@ -52,5 +56,6 @@ export const accentStyles: Record<
     muted: "text-[#b497a3]",
     dim: "text-[#886375]",
     chip: "bg-[#FDA4AF]",
+    glowRgb: "214, 141, 166",
   },
 };

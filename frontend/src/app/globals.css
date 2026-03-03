@@ -111,6 +111,42 @@
   .animate-pixel-spark {
     animation: pixel-spark 1.8s steps(2, end) infinite;
   }
+
+  .animate-stat-shimmer {
+    animation: stat-shimmer 4s ease-in-out infinite;
+  }
+
+  .stat-glow-mint {
+    box-shadow: 0 0 8px 0 rgba(88, 199, 173, 0.12);
+    transition: box-shadow 0.3s ease-in-out;
+  }
+  .stat-glow-mint:hover {
+    box-shadow: 0 0 20px 2px rgba(88, 199, 173, 0.35), inset 0 0 12px 0 rgba(88, 199, 173, 0.08);
+  }
+
+  .stat-glow-gold {
+    box-shadow: 0 0 8px 0 rgba(215, 170, 97, 0.12);
+    transition: box-shadow 0.3s ease-in-out;
+  }
+  .stat-glow-gold:hover {
+    box-shadow: 0 0 20px 2px rgba(215, 170, 97, 0.35), inset 0 0 12px 0 rgba(215, 170, 97, 0.08);
+  }
+
+  .stat-glow-violet {
+    box-shadow: 0 0 8px 0 rgba(183, 155, 240, 0.12);
+    transition: box-shadow 0.3s ease-in-out;
+  }
+  .stat-glow-violet:hover {
+    box-shadow: 0 0 20px 2px rgba(183, 155, 240, 0.35), inset 0 0 12px 0 rgba(183, 155, 240, 0.08);
+  }
+
+  .stat-glow-rose {
+    box-shadow: 0 0 8px 0 rgba(214, 141, 166, 0.12);
+    transition: box-shadow 0.3s ease-in-out;
+  }
+  .stat-glow-rose:hover {
+    box-shadow: 0 0 20px 2px rgba(214, 141, 166, 0.35), inset 0 0 12px 0 rgba(214, 141, 166, 0.08);
+  }
 }
 
 @keyframes bg-drift-slow {
@@ -218,6 +254,11 @@
   }
 }
 
+@keyframes stat-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-bg-drift-slow,
   .animate-grid-breathe,
@@ -227,7 +268,8 @@
   .animate-route-scan,
   .animate-pixel-float,
   .animate-pixel-twinkle,
-  .animate-pixel-spark {
+  .animate-pixel-spark,
+  .animate-stat-shimmer {
     animation: none !important;
   }
 }
