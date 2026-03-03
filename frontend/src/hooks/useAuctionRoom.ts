@@ -12,6 +12,8 @@ export interface AuctionEvent {
   amount: string
   timestamp: number
   wallet?: string // may be present from WS, stripped for display
+  zkNullifier?: string    // Poseidon nullifier from RegistryMembership proof (JOIN events)
+  bidCommitment?: string  // Bid commitment hash from BidRange proof (BID events)
 }
 
 function maskAgentId(agentId: string): string {
