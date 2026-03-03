@@ -11,6 +11,7 @@ import { privateKeyToAccount } from 'viem/accounts'
 export const RPC_URL = process.env.BASE_SEPOLIA_RPC ?? 'https://sepolia.base.org'
 export const ENGINE_URL = process.env.ENGINE_URL ?? 'http://localhost:8787'
 export const X402_ENABLED = process.env.X402_ENABLED !== 'false' // on by default
+export const AGENT_STATE_DIR = process.env.AGENT_STATE_DIR ?? '../packages/crypto/test-agents'
 
 export const ADDRESSES = {
   mockUSDC: '0xfEE786495d165b16dc8e68B6F8281193e041737d',
