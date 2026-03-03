@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: ZK Foundation** - Fix hash mismatch, wire circuit test harness, populate on-chain Merkle root
 - [x] **Phase 2: MCP + Engine Wiring** - Extend MCP tool schemas to accept ZK proofs and validate engine E2E (completed 2026-03-02)
-- [ ] **Phase 3: Agent-Client ZK Integration** - Wire real Groth16 proof generation into the agent-client flow
+- [x] **Phase 3: Agent-Client ZK Integration** - Wire real Groth16 proof generation into the agent-client flow (completed 2026-03-03)
 - [ ] **Phase 4: Frontend + Demo** - Surface ZK verification status in UI and confirm live Base Sepolia demo
 
 ## Phase Details
@@ -84,5 +84,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. ZK Foundation | 3/3 | Complete   | 2026-03-02 |
 | 2. MCP + Engine Wiring | 4/4 | Complete   | 2026-03-02 |
-| 3. Agent-Client ZK Integration | 1/2 | In Progress|  |
+| 3. Agent-Client ZK Integration | 2/2 | Complete   | 2026-03-03 |
 | 4. Frontend + Demo | 0/TBD | Not started | - |

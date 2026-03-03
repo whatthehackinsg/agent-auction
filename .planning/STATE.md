@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-last_updated: "2026-03-03T13:45:00Z"
+last_updated: "2026-03-03T13:51:00Z"
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 9
-  completed_plans: 8
+  completed_plans: 9
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Working ZK proofs that actually verify on-chain — agents prove registry membership and bid range without revealing identity, demonstrated end-to-end on Base Sepolia.
-**Current focus:** Phase 2 — MCP + Engine Wiring
+**Current focus:** Phase 3 complete — Phase 4 pending
 
 ## Current Position
 
-Phase: 3 of 4 (Agent-Client ZK Integration)
-Plan: 1 of 2 in current phase (03-01 complete, 03-02 pending)
-Status: Phase 3 in progress — plan 03-01 complete
-Last activity: 2026-03-03 — 03-01 complete (agent-client ZK wiring: @agent-auction/crypto dep, zk.ts module, proof payloads in joinAuction/placeBid, Poseidon privacy path)
+Phase: 3 of 4 (Agent-Client ZK Integration) — COMPLETE
+Plan: 2 of 2 in phase (03-02 complete — all plans done)
+Status: Phase 3 complete — awaiting Phase 4
+Last activity: 2026-03-03 — 03-02 complete (agent-client demo: real Groth16 proofs, nullifier persistence, double-join prevention, out-of-range bid failure demos)
 
-Progress: [████████░░] 78%
+Progress: [█████████░] 89%
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Progress: [████████░░] 78%
 | Phase 02-mcp-engine-wiring P02 | 10 | 2 tasks | 2 files |
 | Phase 02-mcp-engine-wiring P03 | 8 | 3 tasks | 10 files |
 | Phase 03-agent-client-zk-integration P01 | 3 | 3 tasks | 5 files |
+| Phase 03-agent-client-zk-integration P02 | 8 | 2 tasks | 1 file |
 
 ## Accumulated Context
 
@@ -83,6 +84,8 @@ Recent decisions affecting current work:
 - computeRegistrationCommit from @agent-auction/crypto is synchronous keccak256 (not Poseidon) — matches onboarding.ts; preparePrivacyState uses it without await
 - privacy.ts re-exports AgentPrivateState from @agent-auction/crypto instead of redefining locally — type compatibility with proof generation functions
 - npm install --legacy-peer-deps required in agent-client — permissionless@0.3.4 peerOptional ox@^0.11.3 conflict
+- agentIds in demo switched from [1001, 1002, 1003] to [1, 2, 3] — must match Merkle tree commitments in test-agent state files
+- In-memory usedNullifiers updated after persistNullifier() so double-join demo detects reuse without disk reload
 
 ### Pending Todos
 
@@ -97,5 +100,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 03-01-PLAN.md — agent-client ZK wiring: @agent-auction/crypto dep, zk.ts module, proof payloads in joinAuction/placeBid, Poseidon privacy path
+Stopped at: Completed 03-02-PLAN.md — agent-client demo: real Groth16 proofs end-to-end, nullifier persistence, double-join + out-of-range bid failure demos
 Resume file: None
