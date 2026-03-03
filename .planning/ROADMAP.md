@@ -16,6 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: MCP + Engine Wiring** - Extend MCP tool schemas to accept ZK proofs and validate engine E2E (completed 2026-03-02)
 - [x] **Phase 3: Agent-Client ZK Integration** - Wire real Groth16 proof generation into the agent-client flow (completed 2026-03-03)
 - [x] **Phase 4: Frontend + Demo** - Surface ZK verification status in UI and confirm live Base Sepolia demo (completed 2026-03-03)
+- [ ] **Phase 5: Frontend Key Figures Dashboard** - Platform-wide stat cards on landing and auctions pages
 
 ## Phase Details
 
@@ -75,10 +76,27 @@ Plans:
   4. A complete live run on Base Sepolia completes: agent registers, generates proofs, joins auction, bids with range proof, auction settles via CRE with escrow released
 **Plans**: TBD
 
+### Phase 5: Frontend auction room key figures dashboard
+**Goal:** Platform-wide key figures dashboard showing 6 aggregate stat cards (Total Auctions, Bond Required, Total Bids, Active Auctions, Settled Auctions, Unique Agents) on both the landing page and auctions list page, with count-up animation and real-time polling
+**Depends on:** Phase 4
+**Requirements**: DASH-01, DASH-02, DASH-03, DASH-04, DASH-05, DASH-06
+**Success Criteria** (what must be TRUE):
+  1. `GET /stats` engine endpoint returns all 6 aggregate fields from D1 with no auth required
+  2. Landing page shows 6 stat cards between hero section and problem section
+  3. Auctions list page shows 6 stat cards above the auction cards
+  4. Numbers animate from 0 to final value on page load (~1s ease-out)
+  5. Stats auto-refresh while page is open (15s SWR polling)
+  6. Desktop: 3-column grid; Mobile: 2-column grid
+**Plans**: 2 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Engine GET /stats endpoint with D1 aggregates and tests (DASH-01, DASH-02)
+- [ ] 05-02-PLAN.md — Frontend stat cards, hooks, and page integration (DASH-03, DASH-04, DASH-05, DASH-06)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -86,3 +104,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 2. MCP + Engine Wiring | 4/4 | Complete   | 2026-03-02 |
 | 3. Agent-Client ZK Integration | 2/2 | Complete   | 2026-03-03 |
 | 4. Frontend + Demo | 2/2 | Complete   | 2026-03-03 |
+| 5. Key Figures Dashboard | 0/2 | Planning   | — |
