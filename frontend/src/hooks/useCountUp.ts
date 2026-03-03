@@ -36,7 +36,13 @@ export function useCountUp(target: number, duration = 900): number {
     }
 
     rafRef.current = requestAnimationFrame(step)
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      // Reset so re-mount re-triggers animation (fixes React Strict Mode
+      // double-effect cancelling animation on client-side navigation
+      // when SWR returns cached data immediately)
+      prevTargetRef.current = NaN
+    }
   }, [target, duration])
 
   return value
