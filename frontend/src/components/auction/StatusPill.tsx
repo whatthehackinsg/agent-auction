@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/Badge'
 
 export function StatusPill({ status }: { status: 'NONE' | 'OPEN' | 'CLOSED' | 'SETTLED' | 'CANCELLED' }) {
   if (status === 'OPEN') {
-    return <Badge variant="active">OPEN</Badge>
+    return <Badge variant="active" pulse>OPEN</Badge>
   }
   if (status === 'CLOSED') {
     return <Badge variant="warn">CLOSED</Badge>
