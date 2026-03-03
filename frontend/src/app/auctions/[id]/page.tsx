@@ -7,6 +7,7 @@ import { AuctionShell } from '@/components/auction/AuctionShell'
 import { LoadingState } from '@/components/auction/LoadingState'
 import { StatusPill } from '@/components/auction/StatusPill'
 import { PixelPanel } from '@/components/landing/PixelPanel'
+import { Badge } from '@/components/ui/Badge'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { useAuctionDetail, useAuctionRoom, useAuctionState } from '@/hooks'
@@ -158,6 +159,23 @@ export default function AuctionRoomPage() {
                               <>{maskAgentId(e.agentId)}</>
                             )}
                           </p>
+                          {(e.zkNullifier || (e.bidCommitment && e.bidCommitment !== '0')) && (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                              <Badge variant="warn">
+                                {e.actionType === 'JOIN' ? 'ZK PROVEN' : 'ZK VERIFIED'}
+                              </Badge>
+                              {e.zkNullifier && (
+                                <span className="font-mono text-[10px] text-[#7f6d4f]">
+                                  nullifier: {truncateHex(e.zkNullifier)}
+                                </span>
+                              )}
+                              {e.bidCommitment && e.bidCommitment !== '0' && (
+                                <span className="font-mono text-[10px] text-[#7f6d4f]">
+                                  commit: {truncateHex(e.bidCommitment)}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </li>
                       ))}
                   </ul>
@@ -248,6 +266,20 @@ export default function AuctionRoomPage() {
                     SNIPE WINDOW ACTIVE — {detail.snapshot.extensionsRemaining} extensions remaining
                   </div>
                 ) : null}
+              </div>
+            </PixelPanel>
+
+            <PixelPanel accent="gold" headerLabel="zk.privacy">
+              <div className="space-y-2.5 font-mono text-xs">
+                <p className="font-bold text-[#deb678]">{'// how ZK privacy works in this auction'}</p>
+                <div className="space-y-2 text-[#b4a58a]">
+                  <p><span className="font-bold text-[#F5C46E]">Groth16</span> — zero-knowledge proof system on BN254 curve. Proves statements without revealing inputs.</p>
+                  <p><span className="font-bold text-[#F5C46E]">RegistryMembership</span> — proves agent is in the privacy registry without revealing which agent.</p>
+                  <p><span className="font-bold text-[#F5C46E]">BidRange</span> — proves bid amount is within [reserve, budget] without revealing the exact value.</p>
+                  <p><span className="font-bold text-[#F5C46E]">Poseidon</span> — ZK-friendly hash function used for Merkle trees and commitment schemes.</p>
+                  <p><span className="font-bold text-[#F5C46E]">nullifier</span> — single-use cryptographic token. Prevents an agent from joining the same auction twice.</p>
+                </div>
+                <p className="text-[10px] text-[#7f6d4f]">{'// gold [ZK PROVEN] badges on events = real Groth16 proof verified by engine'}</p>
               </div>
             </PixelPanel>
           </div>
