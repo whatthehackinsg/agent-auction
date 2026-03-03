@@ -5,7 +5,7 @@ import { usePlatformStats } from '@/hooks/usePlatformStats'
 import { useCountUp } from '@/hooks/useCountUp'
 import { cn } from '@/lib/utils'
 
-function UsdcStatCard({ value, isLoading }: { value: string; isLoading: boolean }) {
+export function UsdcStatCard({ value, isLoading }: { value: string; isLoading: boolean }) {
   // Convert base units string to display number for animation
   const baseUnits = isLoading ? 0 : Number(BigInt(value || '0') / BigInt(1_000_000))
   const animated = useCountUp(baseUnits)
