@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-03-03T16:43:38.452Z"
+stopped_at: Completed 05-02-PLAN.md
+last_updated: "2026-03-03T16:48:28.843Z"
 last_activity: 2026-03-03 — 04-02 complete (ZK activity feed badges, nullifier tags, explainer panels)
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 13
-  completed_plans: 12
+  completed_plans: 13
   percent: 100
 ---
 
@@ -58,6 +58,7 @@ Progress: [██████████] 100%
 | Phase 04-frontend-demo P01 | 5 | 2 tasks | 2 files |
 | Phase 04-frontend-demo P02 | 8 | 2 tasks | 2 files |
 | Phase 05-frontend-auction-room-key-figures-dashboard P01 | 7 | 1 tasks | 2 files |
+| Phase 05-frontend-auction-room-key-figures-dashboard P02 | 2 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,9 @@ Recent decisions affecting current work:
 - [Phase 05-frontend-auction-room-key-figures-dashboard]: GET /stats is fully public (no auth, no x402) to support unauthenticated frontend dashboard consumption
 - [Phase 05-frontend-auction-room-key-figures-dashboard]: totalUsdcBonded returned as string (consistent with USDC amount convention across the API)
 - [Phase 05-frontend-auction-room-key-figures-dashboard]: uniqueAgents filtered to action_type IN ('JOIN','BID') to count meaningful participation events only
+- [Phase 05-frontend-auction-room-key-figures-dashboard]: valueRef pattern in useCountUp avoids react-hooks lint error while preserving animation-from-current-value behavior
+- [Phase 05-frontend-auction-room-key-figures-dashboard]: UsdcStatCard is a separate sub-component because it needs both BigInt base-unit conversion and custom displayValue for animated USDC display
+- [Phase 05-frontend-auction-room-key-figures-dashboard]: PlatformStatsSection returns null on error for graceful degradation without breaking parent page
 
 ### Roadmap Evolution
 
@@ -113,6 +117,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-03T16:43:38.450Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-03-03T16:48:28.842Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None

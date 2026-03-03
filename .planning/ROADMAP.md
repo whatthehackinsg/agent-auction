@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: MCP + Engine Wiring** - Extend MCP tool schemas to accept ZK proofs and validate engine E2E (completed 2026-03-02)
 - [x] **Phase 3: Agent-Client ZK Integration** - Wire real Groth16 proof generation into the agent-client flow (completed 2026-03-03)
 - [x] **Phase 4: Frontend + Demo** - Surface ZK verification status in UI and confirm live Base Sepolia demo (completed 2026-03-03)
-- [ ] **Phase 5: Frontend Key Figures Dashboard** - Platform-wide stat cards on landing and auctions pages
+- [x] **Phase 5: Frontend Key Figures Dashboard** - Platform-wide stat cards on landing and auctions pages (completed 2026-03-03)
 
 ## Phase Details
 
@@ -104,4 +104,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. MCP + Engine Wiring | 4/4 | Complete   | 2026-03-02 |
 | 3. Agent-Client ZK Integration | 2/2 | Complete   | 2026-03-03 |
 | 4. Frontend + Demo | 2/2 | Complete   | 2026-03-03 |
-| 5. Key Figures Dashboard | 1/2 | In Progress|  |
+| 5. Key Figures Dashboard | 2/2 | Complete   | 2026-03-03 |
