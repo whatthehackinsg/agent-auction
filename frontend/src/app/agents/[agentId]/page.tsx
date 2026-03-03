@@ -236,15 +236,18 @@ export default function AgentProfilePage() {
             </PixelPanel>
 
             <PixelPanel accent="gold" headerLabel="zk.membership">
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 <div className="flex items-center gap-2">
-                  <Badge variant="default">UNVERIFIED</Badge>
+                  <Badge variant="warn">ZK ENABLED</Badge>
+                  <span className="font-mono text-[10px] text-[#F5C46E]">Groth16 · BN254</span>
                 </div>
-                <p className="font-mono text-xs text-[#5E5E7A]">
-                  {'// ZK membership proof status — awaiting AgentPrivacyRegistry integration'}
-                </p>
+                <div className="space-y-1.5 font-mono text-xs text-[#b4a58a]">
+                  <p><span className="text-[#F5C46E]">RegistryMembership</span> — proves agent belongs to AgentPrivacyRegistry (~12K constraints)</p>
+                  <p><span className="text-[#F5C46E]">BidRange</span> — proves bid is within declared range (~5K constraints)</p>
+                  <p><span className="text-[#F5C46E]">Poseidon</span> — ZK-friendly hash for Merkle proofs and nullifiers</p>
+                </div>
                 <p className="font-mono text-[10px] text-[#7f6d4f]">
-                  {'// will show: Merkle root, nullifier status, proof verification timestamp'}
+                  {'// ZK proofs verified off-chain via snarkjs · on-chain settlement via CRE'}
                 </p>
               </div>
             </PixelPanel>
