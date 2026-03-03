@@ -663,6 +663,8 @@ export class AuctionRoom implements DurableObject {
       amount: action.amount,
       timestamp: receivedAt,
       wallet: action.wallet,
+      ...(zkNullifier ? { zkNullifier } : {}),
+      ...(bidCommitment ? { bidCommitment } : {}),
     })
     if (action.type === ActionType.BID) {
       await this.maybeExtendDeadlineOnBid(receivedAt)
@@ -1135,6 +1137,8 @@ export class AuctionRoom implements DurableObject {
     maxExtensions?: number
     extensionsRemaining?: number
     reason?: string
+    zkNullifier?: string
+    bidCommitment?: string
   }): void {
     // Full event for participants
     const fullMessage = JSON.stringify({
@@ -1161,6 +1165,8 @@ export class AuctionRoom implements DurableObject {
     if (event.maxExtensions !== undefined) maskedEvent.maxExtensions = event.maxExtensions
     if (event.extensionsRemaining !== undefined) maskedEvent.extensionsRemaining = event.extensionsRemaining
     if (event.reason !== undefined) maskedEvent.reason = event.reason
+    if (event.zkNullifier) maskedEvent.zkNullifier = event.zkNullifier
+    if (event.bidCommitment) maskedEvent.bidCommitment = event.bidCommitment
     const publicMessage = JSON.stringify(maskedEvent)
 
     // Send full events to participant sockets
