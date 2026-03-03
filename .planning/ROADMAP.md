@@ -84,5 +84,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. ZK Foundation | 3/3 | Complete   | 2026-03-02 |
 | 2. MCP + Engine Wiring | 4/4 | Complete   | 2026-03-02 |
-| 3. Agent-Client ZK Integration | 0/TBD | Not started | - |
+| 3. Agent-Client ZK Integration | 1/2 | In Progress|  |
 | 4. Frontend + Demo | 0/TBD | Not started | - |

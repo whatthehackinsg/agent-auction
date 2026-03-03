@@ -16,10 +16,10 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Agent ZK Integration
 
-- [ ] **AGZK-01**: Agent-client can generate real RegistryMembership Groth16 proof via snarkjs
-- [ ] **AGZK-02**: Agent-client can generate real BidRange Groth16 proof via snarkjs
-- [ ] **AGZK-03**: Agent private state persisted across sessions (secrets, nullifiers, Merkle witness)
-- [ ] **AGZK-04**: BidRange constraint failures caught and translated to meaningful error messages
+- [x] **AGZK-01**: Agent-client can generate real RegistryMembership Groth16 proof via snarkjs
+- [x] **AGZK-02**: Agent-client can generate real BidRange Groth16 proof via snarkjs
+- [x] **AGZK-03**: Agent private state persisted across sessions (secrets, nullifiers, Merkle witness)
+- [x] **AGZK-04**: BidRange constraint failures caught and translated to meaningful error messages
 
 ### MCP + Engine Wiring
 
@@ -77,10 +77,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ZKFN-02 | Phase 1 | Complete |
 | ZKFN-03 | Phase 1 | Complete |
 | ZKFN-04 | Phase 1 | Complete |
-| AGZK-01 | Phase 3 | Pending |
-| AGZK-02 | Phase 3 | Pending |
-| AGZK-03 | Phase 3 | Pending |
-| AGZK-04 | Phase 3 | Pending |
+| AGZK-01 | Phase 3 | Complete |
+| AGZK-02 | Phase 3 | Complete |
+| AGZK-03 | Phase 3 | Complete |
+| AGZK-04 | Phase 3 | Complete |
 | MCPE-01 | Phase 2 | Complete |
 | MCPE-02 | Phase 2 | Complete |
 | MCPE-03 | Phase 2 | Complete |

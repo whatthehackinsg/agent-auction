@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: unknown
-last_updated: "2026-03-02T15:55:08.735Z"
+status: in_progress
+last_updated: "2026-03-03T13:45:00Z"
 progress:
-  total_phases: 2
+  total_phases: 4
   completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 9
+  completed_plans: 8
 ---
 
 # Project State
@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 ## Current Position
 
-Phase: 2 of 4 (MCP + Engine Wiring)
-Plan: 3 of 4 in current phase (02-01, 02-02, 02-03, 02-04)
-Status: Phase 2 in progress — plans 02-04, 02-01, 02-02, and 02-03 complete
-Last activity: 2026-03-02 — 02-03 complete (MCP test infrastructure: vitest, proof fixtures, 14 mcp tests, 2 engine positive-case tests)
+Phase: 3 of 4 (Agent-Client ZK Integration)
+Plan: 1 of 2 in current phase (03-01 complete, 03-02 pending)
+Status: Phase 3 in progress — plan 03-01 complete
+Last activity: 2026-03-03 — 03-01 complete (agent-client ZK wiring: @agent-auction/crypto dep, zk.ts module, proof payloads in joinAuction/placeBid, Poseidon privacy path)
 
-Progress: [██████░░░░] 57%
+Progress: [████████░░] 78%
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Progress: [██████░░░░] 57%
 *Updated after each plan completion*
 | Phase 02-mcp-engine-wiring P02 | 10 | 2 tasks | 2 files |
 | Phase 02-mcp-engine-wiring P03 | 8 | 3 tasks | 10 files |
+| Phase 03-agent-client-zk-integration P01 | 3 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,9 @@ Recent decisions affecting current work:
 - Fixtures generated once via one-off .mjs script using same test values as packages/crypto/tests/circuits.test.ts, committed as JSON for fast test execution without snarkjs fullProve at test time
 - Capturing mock MCP server intercepts registerTool() to expose handler callback directly — no MCP transport overhead in tests
 - engine/test/fixtures/ created as independent copy — engine tests self-contained, no cross-module path dependency
+- computeRegistrationCommit from @agent-auction/crypto is synchronous keccak256 (not Poseidon) — matches onboarding.ts; preparePrivacyState uses it without await
+- privacy.ts re-exports AgentPrivateState from @agent-auction/crypto instead of redefining locally — type compatibility with proof generation functions
+- npm install --legacy-peer-deps required in agent-client — permissionless@0.3.4 peerOptional ox@^0.11.3 conflict
 
 ### Pending Todos
 
@@ -92,6 +96,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-02
-Stopped at: Completed 02-03-PLAN.md — MCP server test infrastructure: vitest, proof fixtures, 14 mcp tests, 2 engine positive-case tests
+Last session: 2026-03-03
+Stopped at: Completed 03-01-PLAN.md — agent-client ZK wiring: @agent-auction/crypto dep, zk.ts module, proof payloads in joinAuction/placeBid, Poseidon privacy path
 Resume file: None
