@@ -31,8 +31,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Frontend Display
 
-- [ ] **FRNT-01**: Frontend shows ZK proof verification badge on bids and joins (not just string masking)
-- [ ] **FRNT-02**: Frontend shows nullifier consumed indicator for verified participants
+- [x] **FRNT-01**: Frontend shows ZK proof verification badge on bids and joins (not just string masking)
+- [x] **FRNT-02**: Frontend shows nullifier consumed indicator for verified participants
 - [ ] **FRNT-03**: Frontend includes privacy explainer panel explaining ZK guarantees to spectators
 
 ### Live Demo
@@ -86,8 +86,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MCPE-03 | Phase 2 | Complete |
 | MCPE-04 | Phase 2 | Complete |
 | MCPE-05 | Phase 2 | Complete |
-| FRNT-01 | Phase 4 | Pending |
-| FRNT-02 | Phase 4 | Pending |
+| FRNT-01 | Phase 4 | Complete |
+| FRNT-02 | Phase 4 | Complete |
 | FRNT-03 | Phase 4 | Pending |
 | DEMO-01 | Phase 4 | Pending |
 | DEMO-02 | Phase 4 | Pending |

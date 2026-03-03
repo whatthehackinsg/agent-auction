@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-03T13:55:37.595Z"
+last_updated: "2026-03-03T15:37:23.463Z"
 progress:
-  total_phases: 3
+  total_phases: 4
   completed_phases: 3
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 11
+  completed_plans: 10
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Working ZK proofs that actually verify on-chain — agents prove registry membership and bid range without revealing identity, demonstrated end-to-end on Base Sepolia.
-**Current focus:** Phase 3 complete — Phase 4 pending
+**Current focus:** Phase 4 in progress — 04-01 complete (ZK data plumbing)
 
 ## Current Position
 
-Phase: 3 of 4 (Agent-Client ZK Integration) — COMPLETE
-Plan: 2 of 2 in phase (03-02 complete — all plans done)
-Status: Phase 3 complete — awaiting Phase 4
-Last activity: 2026-03-03 — 03-02 complete (agent-client demo: real Groth16 proofs, nullifier persistence, double-join prevention, out-of-range bid failure demos)
+Phase: 4 of 4 (Frontend Demo) — IN PROGRESS
+Plan: 1 of 2 in phase (04-01 complete — 04-02 pending)
+Status: Phase 4 plan 1 complete — awaiting 04-02
+Last activity: 2026-03-03 — 04-01 complete (ZK field data plumbing: engine broadcastEvent + frontend AuctionEvent interface)
 
-Progress: [█████████░] 89%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [█████████░] 89%
 | Phase 02-mcp-engine-wiring P03 | 8 | 3 tasks | 10 files |
 | Phase 03-agent-client-zk-integration P01 | 3 | 3 tasks | 5 files |
 | Phase 03-agent-client-zk-integration P02 | 8 | 2 tasks | 1 file |
+| Phase 04-frontend-demo P01 | 5 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,7 @@ Recent decisions affecting current work:
 - npm install --legacy-peer-deps required in agent-client — permissionless@0.3.4 peerOptional ox@^0.11.3 conflict
 - agentIds in demo switched from [1001, 1002, 1003] to [1, 2, 3] — must match Merkle tree commitments in test-agent state files
 - In-memory usedNullifiers updated after persistNullifier() so double-join demo detects reuse without disk reload
+- [Phase 04-frontend-demo]: zkNullifier/bidCommitment included in public WebSocket messages — cryptographic hashes, not identity-revealing
 
 ### Pending Todos
 
