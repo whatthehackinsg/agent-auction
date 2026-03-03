@@ -17,6 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Agent-Client ZK Integration** - Wire real Groth16 proof generation into the agent-client flow (completed 2026-03-03)
 - [x] **Phase 4: Frontend + Demo** - Surface ZK verification status in UI and confirm live Base Sepolia demo (completed 2026-03-03)
 - [x] **Phase 5: Frontend Key Figures Dashboard** - Platform-wide stat cards on landing and auctions pages (completed 2026-03-03)
+- [ ] **Phase 6: Refine Stats Card UI** - Add shimmer + glow effects to stat cards, tailor auctions page to 3 stats
 
 ## Phase Details
 
@@ -90,13 +91,29 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Engine GET /stats endpoint with D1 aggregates and tests (DASH-01, DASH-02)
-- [ ] 05-02-PLAN.md — Frontend stat cards, hooks, and page integration (DASH-03, DASH-04, DASH-05, DASH-06)
+- [x] 05-01-PLAN.md — Engine GET /stats endpoint with D1 aggregates and tests (DASH-01, DASH-02)
+- [x] 05-02-PLAN.md — Frontend stat cards, hooks, and page integration (DASH-03, DASH-04, DASH-05, DASH-06)
+
+### Phase 6: Refine stats card UI
+**Goal:** Polish stat card visuals with idle shimmer and hover glow effects, and tailor the auctions page to show only 3 auction-relevant stats
+**Depends on:** Phase 5
+**Requirements**: None (polish phase)
+**Success Criteria** (what must be TRUE):
+  1. Stat cards display a subtle traveling shimmer along their border when idle (pure CSS animation)
+  2. Stat cards glow with their accent color on hover, transitioning smoothly
+  3. Auctions page shows exactly 3 stat cards (Total Auctions, Active Auctions, USDC Bonded)
+  4. Landing page unchanged with all 6 stat cards
+  5. Shimmer animation respects prefers-reduced-motion
+  6. No layout shift on hover or during shimmer
+**Plans**: 1 plan
+
+Plans:
+- [ ] 06-01-PLAN.md — Shimmer + glow effects on StatCard, AuctionStatsSection 3-card variant
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -105,3 +122,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 3. Agent-Client ZK Integration | 2/2 | Complete   | 2026-03-03 |
 | 4. Frontend + Demo | 2/2 | Complete   | 2026-03-03 |
 | 5. Key Figures Dashboard | 2/2 | Complete   | 2026-03-03 |
+| 6. Refine Stats Card UI | 0/1 | Planned    | — |
