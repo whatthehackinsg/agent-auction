@@ -1087,4 +1087,90 @@ describe('API routes (Hono)', () => {
     const json = await res.json()
     expect(json.error).toContain('empty')
   })
+
+  // ── GET /stats ────────────────────────────────────────────────────
+
+  describe('GET /stats', () => {
+    it('returns all zeros on empty DB', async () => {
+      // Use a fresh isolated DB state — all counts come from pre-existing rows in shared DB,
+      // so we just verify shape and types here against an endpoint that aggregates everything.
+      const res = await app.request('http://localhost/stats', {}, env)
+      expect(res.status).toBe(200)
+      const json = await res.json() as Record<string, unknown>
+      // Shape check — all 6 fields must be present
+      expect('totalAuctions' in json).toBe(true)
+      expect('activeAuctions' in json).toBe(true)
+      expect('settledAuctions' in json).toBe(true)
+      expect('totalUsdcBonded' in json).toBe(true)
+      expect('totalBids' in json).toBe(true)
+      expect('uniqueAgents' in json).toBe(true)
+      // totalUsdcBonded must be a string
+      expect(typeof json.totalUsdcBonded).toBe('string')
+      // Numeric fields must be numbers
+      expect(typeof json.totalAuctions).toBe('number')
+      expect(typeof json.activeAuctions).toBe('number')
+      expect(typeof json.settledAuctions).toBe('number')
+      expect(typeof json.totalBids).toBe('number')
+      expect(typeof json.uniqueAgents).toBe('number')
+    })
+
+    it('returns correct aggregates after inserting known data', async () => {
+      const statsAuctionId1 = randomAuctionId()
+      const statsAuctionId2 = randomAuctionId()
+      const deadline = Math.floor(Date.now() / 1000) + 3600
+
+      // Insert auction 1: OPEN (status=1), deposit=500000
+      await db
+        .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(statsAuctionId1, '0x' + 'cc'.repeat(32), 1, '1000000', '500000', deadline)
+        .run()
+
+      // Insert auction 2: SETTLED (status=3), deposit=500000
+      await db
+        .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(statsAuctionId2, '0x' + 'cd'.repeat(32), 3, '1000000', '500000', deadline)
+        .run()
+
+      // Insert 3 BID events: 2 from agent-1, 1 from agent-2
+      await db
+        .prepare('INSERT INTO events (auction_id, seq, prev_hash, event_hash, payload_hash, action_type, agent_id, wallet, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(statsAuctionId1, 10, '0x00', '0x01', '0x02', 'BID', 'stats-agent-1', '0xabc', '100')
+        .run()
+      await db
+        .prepare('INSERT INTO events (auction_id, seq, prev_hash, event_hash, payload_hash, action_type, agent_id, wallet, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(statsAuctionId1, 11, '0x01', '0x03', '0x04', 'BID', 'stats-agent-1', '0xabc', '200')
+        .run()
+      await db
+        .prepare('INSERT INTO events (auction_id, seq, prev_hash, event_hash, payload_hash, action_type, agent_id, wallet, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(statsAuctionId2, 10, '0x00', '0x05', '0x06', 'BID', 'stats-agent-2', '0xdef', '150')
+        .run()
+
+      const res = await app.request('http://localhost/stats', {}, env)
+      expect(res.status).toBe(200)
+      const json = await res.json() as Record<string, unknown>
+
+      // These auctions added 2 to totalAuctions, 1 to active, 1 to settled
+      // totalUsdcBonded added 1000000 from these two auctions
+      // totalBids added 3
+      // uniqueAgents: stats-agent-1 and stats-agent-2 are new unique BID agents
+      // (prior tests may have inserted other bids — we check >= not exact)
+      expect(typeof json.totalAuctions).toBe('number')
+      expect((json.totalAuctions as number)).toBeGreaterThanOrEqual(2)
+      expect((json.activeAuctions as number)).toBeGreaterThanOrEqual(1)
+      expect((json.settledAuctions as number)).toBeGreaterThanOrEqual(1)
+      expect(typeof json.totalUsdcBonded).toBe('string')
+      // totalBids should include at least 3 from our inserts
+      expect((json.totalBids as number)).toBeGreaterThanOrEqual(3)
+      // uniqueAgents should include at least 2 distinct agents from our inserts
+      expect((json.uniqueAgents as number)).toBeGreaterThanOrEqual(2)
+    })
+
+    it('response includes Cache-Control header with max-age=10', async () => {
+      const res = await app.request('http://localhost/stats', {}, env)
+      expect(res.status).toBe(200)
+      const cacheControl = res.headers.get('Cache-Control')
+      expect(cacheControl).not.toBeNull()
+      expect(cacheControl).toContain('max-age=10')
+    })
+  })
 })

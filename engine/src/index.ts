@@ -245,6 +245,37 @@ app.get('/auctions', async (c) => {
   return c.json({ auctions: result.results ?? [] })
 })
 
+app.get('/stats', async (c) => {
+  const [totalsResult, bidsResult, agentsResult] = await Promise.all([
+    c.env.AUCTION_DB
+      .prepare(
+        'SELECT COUNT(*) AS total_auctions, SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS active_auctions, SUM(CASE WHEN status = 3 THEN 1 ELSE 0 END) AS settled_auctions, COALESCE(SUM(CAST(deposit_amount AS INTEGER)), 0) AS total_usdc_bonded FROM auctions',
+      )
+      .first<{ total_auctions: number; active_auctions: number | null; settled_auctions: number | null; total_usdc_bonded: number }>(),
+    c.env.AUCTION_DB
+      .prepare("SELECT COUNT(*) AS total_bids FROM events WHERE action_type = 'BID'")
+      .first<{ total_bids: number }>(),
+    c.env.AUCTION_DB
+      .prepare("SELECT COUNT(DISTINCT agent_id) AS unique_agents FROM events WHERE action_type IN ('JOIN', 'BID')")
+      .first<{ unique_agents: number }>(),
+  ])
+
+  return c.json(
+    {
+      totalAuctions: totalsResult?.total_auctions ?? 0,
+      activeAuctions: totalsResult?.active_auctions ?? 0,
+      settledAuctions: totalsResult?.settled_auctions ?? 0,
+      totalUsdcBonded: String(totalsResult?.total_usdc_bonded ?? 0),
+      totalBids: bidsResult?.total_bids ?? 0,
+      uniqueAgents: agentsResult?.unique_agents ?? 0,
+    },
+    200,
+    {
+      'Cache-Control': 'public, max-age=10, stale-while-revalidate=30',
+    },
+  )
+})
+
 app.post('/auctions', async (c) => {
   const denied = requireAdmin(c)
   if (denied) return denied
