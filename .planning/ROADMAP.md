@@ -1,125 +1,32 @@
-# Roadmap: Agent Auction — ZK Privacy E2E
+# Roadmap: Agent Auction Platform
 
-## Overview
+## Milestones
 
-This milestone closes the "last mile" ZK integration on a fully operational brownfield auction platform. The circuits, verification code, and all supporting infrastructure already exist. Four phases wire the existing pieces in strict dependency order: fix the hash mismatch and prove circuits work in isolation, then extend MCP tools to accept proof payloads, then wire the agent-client to generate real proofs end-to-end, then surface cryptographic status in the frontend for hackathon judges.
+- ✅ **v1.0 ZK Privacy E2E** — Phases 1-6 (shipped 2026-03-04)
 
 ## Phases
 
-**Phase Numbering:**
-- Integer phases (1, 2, 3): Planned milestone work
-- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
+<details>
+<summary>✅ v1.0 ZK Privacy E2E (Phases 1-6) — SHIPPED 2026-03-04</summary>
 
-Decimal phases appear between their surrounding integers in numeric order.
+- [x] Phase 1: ZK Foundation (3/3 plans) — completed 2026-03-02
+- [x] Phase 2: MCP + Engine Wiring (4/4 plans) — completed 2026-03-02
+- [x] Phase 3: Agent-Client ZK Integration (2/2 plans) — completed 2026-03-03
+- [x] Phase 4: Frontend + Demo (2/2 plans) — completed 2026-03-03
+- [x] Phase 5: Key Figures Dashboard (2/2 plans) — completed 2026-03-03
+- [x] Phase 6: Refine Stats Card UI (1/1 plan) — completed 2026-03-04
 
-- [x] **Phase 1: ZK Foundation** - Fix hash mismatch, wire circuit test harness, populate on-chain Merkle root
-- [x] **Phase 2: MCP + Engine Wiring** - Extend MCP tool schemas to accept ZK proofs and validate engine E2E (completed 2026-03-02)
-- [x] **Phase 3: Agent-Client ZK Integration** - Wire real Groth16 proof generation into the agent-client flow (completed 2026-03-03)
-- [x] **Phase 4: Frontend + Demo** - Surface ZK verification status in UI and confirm live Base Sepolia demo (completed 2026-03-03)
-- [x] **Phase 5: Frontend Key Figures Dashboard** - Platform-wide stat cards on landing and auctions pages (completed 2026-03-03)
-- [x] **Phase 6: Refine Stats Card UI** - Add shimmer + glow effects to stat cards, tailor auctions page to 3 stats (completed 2026-03-04)
+Full details: `.planning/milestones/v1.0-ROADMAP.md`
 
-## Phase Details
-
-### Phase 1: ZK Foundation
-**Goal**: Circuits are confirmed working in isolation, the keccak/Poseidon root mismatch is eliminated, and the on-chain Merkle root contains real test agent leaves
-**Depends on**: Nothing (first phase)
-**Requirements**: ZKFN-01, ZKFN-02, ZKFN-03, ZKFN-04
-**Success Criteria** (what must be TRUE):
-  1. `npm test` in `packages/crypto/` passes for both RegistryMembership and BidRange circuits with real `.wasm` and `.zkey` artifacts
-  2. Engine no longer rejects real ZK proofs due to keccak/Poseidon root cross-check (cross-check removed or fixed)
-  3. `AgentPrivacyRegistry.getRoot()` on Base Sepolia returns a non-zero Poseidon Merkle root containing test agent commitments
-  4. Named signal index constants exist in `packages/crypto/src/signal-indices.ts` and are imported by engine verifier
-**Plans**: 3 plans
-
-Plans:
-- [x] 01-01-PLAN.md — Signal index constants (ZKFN-04) + remove engine cross-check (ZKFN-02)
-- [x] 01-02-PLAN.md — Circuit proof generation and verification tests (ZKFN-01)
-- [x] 01-03-PLAN.md — Test agent registration script and on-chain execution (ZKFN-03)
-
-### Phase 2: MCP + Engine Wiring
-**Goal**: MCP `join_auction` and `place_bid` tools accept ZK proof payloads, the EIP-712 signer uses the Poseidon nullifier when proofs are present, and the engine verifies real proofs end-to-end
-**Depends on**: Phase 1
-**Requirements**: MCPE-01, MCPE-02, MCPE-03, MCPE-04, MCPE-05
-**Success Criteria** (what must be TRUE):
-  1. A ZK proof payload submitted via MCP `join_auction` tool reaches the engine and produces an AuctionEvent with `zkNullifier` populated
-  2. A ZK proof payload submitted via MCP `place_bid` tool reaches the engine and produces an AuctionEvent with `bidCommitment` populated
-  3. Engine running with `ENGINE_REQUIRE_PROOFS=true` accepts the proof and rejects a matching request without a proof
-  4. MCP server can generate proofs server-side when an agent provides secrets but not a pre-built proof (hybrid mode)
-**Plans**: 4 plans
-
-Plans:
-- [x] 02-01-PLAN.md — Foundation: crypto dependency, config env vars, signer nullifier switch, proof-generator module (MCPE-03, MCPE-05)
-- [x] 02-02-PLAN.md — Tool wiring: extend join_auction and place_bid Zod schemas with proof params + structured errors (MCPE-01, MCPE-02)
-- [x] 02-03-PLAN.md — Integration tests: vitest setup, proof fixtures, signer + tool tests (MCPE-04)
-- [x] 02-04-PLAN.md — Engine bidCommitment threading: AuctionEvent + ValidationMutation + ingestAction (MCPE-02)
-
-### Phase 3: Agent-Client ZK Integration
-**Goal**: The agent-client autonomously generates real Groth16 membership and bid range proofs, persists private state across sessions, and submits the full proof flow through MCP tools
-**Depends on**: Phase 2
-**Requirements**: AGZK-01, AGZK-02, AGZK-03, AGZK-04
-**Success Criteria** (what must be TRUE):
-  1. Agent-client `joinAuction()` submits a real RegistryMembership Groth16 proof via MCP `join_auction` and the engine accepts it
-  2. Agent-client `placeBid()` submits a real BidRange Groth16 proof via MCP `place_bid` and the engine accepts it
-  3. A second call to `joinAuction()` with the same nullifier is rejected by the engine (double-join prevention)
-  4. Submitting a bid outside the declared range produces a structured error (not an unhandled exception)
-  5. Agent private state (secrets, nullifiers, Merkle witness) survives process restart and loads correctly next session
-**Plans**: TBD
-
-### Phase 4: Frontend + Demo
-**Goal**: Judges can visually confirm ZK proof verification in the spectator UI, and a live end-to-end auction on Base Sepolia demonstrates the full privacy stack including CRE settlement
-**Depends on**: Phase 3
-**Requirements**: FRNT-01, FRNT-02, FRNT-03, DEMO-01, DEMO-02
-**Success Criteria** (what must be TRUE):
-  1. JOIN events in the activity feed show a "ZK VERIFIED" badge when `zkNullifier` is present in the WebSocket event
-  2. BID events show a truncated `bidCommitment` field, visible to spectators
-  3. A privacy explainer panel in the auction room explains membership proof and bid range proof guarantees in plain language
-  4. A complete live run on Base Sepolia completes: agent registers, generates proofs, joins auction, bids with range proof, auction settles via CRE with escrow released
-**Plans**: TBD
-
-### Phase 5: Frontend auction room key figures dashboard
-**Goal:** Platform-wide key figures dashboard showing 6 aggregate stat cards (Total Auctions, Bond Required, Total Bids, Active Auctions, Settled Auctions, Unique Agents) on both the landing page and auctions list page, with count-up animation and real-time polling
-**Depends on:** Phase 4
-**Requirements**: DASH-01, DASH-02, DASH-03, DASH-04, DASH-05, DASH-06
-**Success Criteria** (what must be TRUE):
-  1. `GET /stats` engine endpoint returns all 6 aggregate fields from D1 with no auth required
-  2. Landing page shows 6 stat cards between hero section and problem section
-  3. Auctions list page shows 6 stat cards above the auction cards
-  4. Numbers animate from 0 to final value on page load (~1s ease-out)
-  5. Stats auto-refresh while page is open (15s SWR polling)
-  6. Desktop: 3-column grid; Mobile: 2-column grid
-**Plans**: 2 plans
-
-Plans:
-- [x] 05-01-PLAN.md — Engine GET /stats endpoint with D1 aggregates and tests (DASH-01, DASH-02)
-- [x] 05-02-PLAN.md — Frontend stat cards, hooks, and page integration (DASH-03, DASH-04, DASH-05, DASH-06)
-
-### Phase 6: Refine stats card UI
-**Goal:** Polish stat card visuals with idle shimmer and hover glow effects, and tailor the auctions page to show only 3 auction-relevant stats
-**Depends on:** Phase 5
-**Requirements**: None (polish phase)
-**Success Criteria** (what must be TRUE):
-  1. Stat cards display a subtle traveling shimmer along their border when idle (pure CSS animation)
-  2. Stat cards glow with their accent color on hover, transitioning smoothly
-  3. Auctions page shows exactly 3 stat cards (Total Auctions, Active Auctions, USDC Bonded)
-  4. Landing page unchanged with all 6 stat cards
-  5. Shimmer animation respects prefers-reduced-motion
-  6. No layout shift on hover or during shimmer
-**Plans**: 1 plan
-
-Plans:
-- [x] 06-01-PLAN.md — Shimmer + glow effects on StatCard, AuctionStatsSection 3-card variant
+</details>
 
 ## Progress
 
-**Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
-
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. ZK Foundation | 3/3 | Complete   | 2026-03-02 |
-| 2. MCP + Engine Wiring | 4/4 | Complete   | 2026-03-02 |
-| 3. Agent-Client ZK Integration | 2/2 | Complete   | 2026-03-03 |
-| 4. Frontend + Demo | 2/2 | Complete   | 2026-03-03 |
-| 5. Key Figures Dashboard | 2/2 | Complete   | 2026-03-03 |
-| 6. Refine Stats Card UI | 1/1 | Complete   | 2026-03-04 |
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 1. ZK Foundation | v1.0 | 3/3 | Complete | 2026-03-02 |
+| 2. MCP + Engine Wiring | v1.0 | 4/4 | Complete | 2026-03-02 |
+| 3. Agent-Client ZK Integration | v1.0 | 2/2 | Complete | 2026-03-03 |
+| 4. Frontend + Demo | v1.0 | 2/2 | Complete | 2026-03-03 |
+| 5. Key Figures Dashboard | v1.0 | 2/2 | Complete | 2026-03-03 |
+| 6. Refine Stats Card UI | v1.0 | 1/1 | Complete | 2026-03-04 |

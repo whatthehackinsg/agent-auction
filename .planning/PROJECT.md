@@ -2,84 +2,80 @@
 
 ## What This Is
 
-An agent-native auction platform where AI agents autonomously discover, join, bid in, and settle auctions — with on-chain USDC escrow, verifiable event ordering, ZK privacy proofs, and CRE-based trustless settlement. Built for the Chainlink 2026 Hackathon on Base Sepolia.
+An agent-native auction platform where AI agents autonomously discover, join, bid in, and settle auctions — with on-chain USDC escrow, verifiable event ordering, ZK privacy proofs (Groth16 RegistryMembership + BidRange), and CRE-based trustless settlement. Built for the Chainlink 2026 Hackathon on Base Sepolia.
 
 ## Core Value
 
-Working ZK proofs that actually verify on-chain — agents prove registry membership and bid range without revealing identity, and the full stack (MCP tools → engine → contracts → CRE settlement → frontend) demonstrates this cryptographic privacy end-to-end.
+Working ZK proofs that actually verify — agents prove registry membership and bid range without revealing identity, and the full stack (agent-client → MCP tools → engine verification → WebSocket → frontend badges → CRE settlement) demonstrates this cryptographic privacy end-to-end.
 
 ## Requirements
 
 ### Validated
 
-<!-- Shipped and confirmed valuable. -->
-
-- ✓ Smart contracts deployed on Base Sepolia (AuctionRegistry, AuctionEscrow, AgentPrivacyRegistry, NftEscrow) — existing
-- ✓ CRE E2E settlement confirmed on-chain (AuctionEnded → onReport → escrow release) — existing
-- ✓ Auction engine with Durable Object sequencer, Poseidon hash chain, D1 persistence — existing
-- ✓ Two-tier WebSocket (masked public, full participant) — existing
-- ✓ Platform commission system (global commissionBps, capped 10%, deducted at settlement) — existing
-- ✓ x402 discovery gating (optional micropayment gate on GET /auctions) — existing
-- ✓ Frontend spectator UI with scoreboard, masked agent display, replay viewer — existing
-- ✓ MCP server with 7 agent tools (discover, details, join, bid, bond, status, history) — existing
-- ✓ Agent-client demo with x402 auto-payment — existing
-- ✓ Shared crypto library (Poseidon, EIP-712, snarkjs helpers, nullifiers) — 56 tests passing
-- ✓ Two Circom Groth16 circuits compiled (RegistryMembership ~12K, BidRange ~5K) — existing
-- ✓ Engine ZK proof verification with inlined vkeys (snarkjs.groth16.verify) — existing
-- ✓ 144 contract tests, 182+ engine tests passing — existing
+- ✓ Smart contracts deployed on Base Sepolia (AuctionRegistry, AuctionEscrow, AgentPrivacyRegistry, NftEscrow) — pre-existing
+- ✓ CRE E2E settlement confirmed on-chain (AuctionEnded → onReport → escrow release) — pre-existing
+- ✓ Auction engine with Durable Object sequencer, Poseidon hash chain, D1 persistence — pre-existing
+- ✓ Two-tier WebSocket (masked public, full participant) — pre-existing
+- ✓ Platform commission system (global commissionBps, capped 10%) — pre-existing
+- ✓ x402 discovery gating (optional micropayment gate on GET /auctions) — pre-existing
+- ✓ Frontend spectator UI with scoreboard, masked agent display — pre-existing
+- ✓ MCP server with 7 agent tools — pre-existing
+- ✓ Shared crypto library (Poseidon, EIP-712, snarkjs helpers, nullifiers) — pre-existing
+- ✓ Two Circom Groth16 circuits compiled (RegistryMembership ~12K, BidRange ~5K) — pre-existing
+- ✓ Circuit test harness wired and passing for both circuits — v1.0 (ZKFN-01)
+- ✓ Engine ZK proof verification with inlined vkeys and named signal constants — v1.0 (ZKFN-02, ZKFN-04)
+- ✓ AgentPrivacyRegistry Merkle root populated with test agents — v1.0 (ZKFN-03)
+- ✓ MCP join_auction and place_bid accept ZK proof payloads — v1.0 (MCPE-01, MCPE-02)
+- ✓ EIP-712 signer supports Poseidon nullifier path — v1.0 (MCPE-03)
+- ✓ Engine verifies real ZK proofs end-to-end — v1.0 (MCPE-04)
+- ✓ MCP server can generate proofs server-side (hybrid mode) — v1.0 (MCPE-05)
+- ✓ Agent-client generates real Groth16 proofs and submits via MCP — v1.0 (AGZK-01, AGZK-02)
+- ✓ Agent private state persisted across sessions — v1.0 (AGZK-03)
+- ✓ BidRange failures caught with meaningful errors — v1.0 (AGZK-04)
+- ✓ Frontend ZK verification badges on bids and joins — v1.0 (FRNT-01)
+- ✓ Frontend nullifier consumed indicator — v1.0 (FRNT-02)
+- ✓ Frontend privacy explainer panel — v1.0 (FRNT-03)
+- ✓ Platform stats dashboard with animated cards and live polling — v1.0 (DASH-01–06)
+- ✓ Stat card shimmer/glow effects and 3-card auctions variant — v1.0
 
 ### Active
 
-<!-- Current scope. Building toward these. -->
-
-- [ ] Circuits test harness wired and passing (RegistryMembership + BidRange)
-- [ ] Agent-client generates real ZK membership proof via snarkjs and submits to engine via MCP join_auction tool
-- [ ] Agent-client generates real ZK bid range proof and submits to engine via MCP place_bid tool
-- [ ] MCP server tools accept and forward ZK proof payloads (join + bid)
-- [ ] Engine verifies real ZK proofs end-to-end (not just stub/bypass mode)
-- [ ] AgentPrivacyRegistry Merkle root updated with test agents for live demo
-- [ ] Live on-chain demo: agent registers → generates proofs → joins → bids → auction settles via CRE on Base Sepolia
-- [ ] Frontend shows ZK proof verification status and privacy indicators (not just string masking)
-- [ ] Frontend displays cryptographic guarantees (proof verified badge, nullifier consumed, membership confirmed)
+- [ ] Full live E2E demo on Base Sepolia (agent → proofs → bid → CRE settle) — deferred from v1.0
+- [ ] CCIP Private Transactions future vision narrative — deferred from v1.0
+- [ ] Add agent skills and finish MCP server (pending todo)
+- [ ] Validate NFT settings and run real NFT test (pending todo)
+- [ ] Audit onboarding pipeline and ERC-8004 details (pending todo)
 
 ### Out of Scope
 
-<!-- Explicit boundaries. Includes reasoning to prevent re-adding. -->
-
-- Auctions-preview batch endpoint — deferred to separate milestone, not needed for ZK demo
-- On-chain ZK proof verification (Solidity verifier) — P1 feature, off-chain snarkjs verification sufficient for hackathon
-- Sealed-bid commit-reveal flow — requires new circuit + protocol changes, too ambitious for this milestone
-- New circuit development — use existing RegistryMembership + BidRange circuits as-is
-- Mobile app or responsive frontend — web-first spectator UI is sufficient
+- On-chain ZK proof verification (Solidity verifier) — off-chain snarkjs sufficient for hackathon
+- Sealed-bid commit-reveal flow — requires new circuit, too ambitious
+- New circuit development — existing circuits sufficient
+- Mobile/responsive frontend — web-first spectator UI sufficient
+- CCIP Private Transactions implementation — mentioned as future vision only
 
 ## Context
 
-This is a brownfield project with substantial existing infrastructure. The ZK privacy layer is partially built — circuits compiled, engine verification logic exists, crypto library tested — but nothing is wired end-to-end. The gap is the "last mile" integration:
+Shipped v1.0 with full ZK privacy stack in 3 days (2026-03-02 → 2026-03-04). 66 commits, 127 files changed, +15,175 lines.
 
-1. **Circuits**: Compiled but test harness not connected (`npm test` expected to fail)
-2. **Agent-client**: Has EIP-712 signing but no ZK proof generation
-3. **MCP server**: Tools don't accept proof payloads yet
-4. **Engine**: Has `ENGINE_REQUIRE_PROOFS=true` flag but untested with real proofs from real circuits
-5. **Frontend**: Uses string masking (`Agent ●●●●XX`) but doesn't display proof verification status
+Tech stack: Solidity/Foundry (Base Sepolia), Cloudflare Workers + Durable Objects (engine), Next.js 16 + React 19 (frontend), Bun + CRE SDK (settlement), Circom 2.2.3 (circuits), snarkjs (proof gen/verify).
 
-The on-chain `AgentPrivacyRegistry` contract is deployed and has a `getRoot()` function the engine already reads — the Merkle root just needs to be populated with test agent leaves.
-
-## Constraints
-
-- **Chain**: Base Sepolia (chainId 84532) — all existing contracts deployed here
-- **Circuits**: Must use existing RegistryMembership + BidRange (no new circuit development)
-- **Runtime**: Engine runs on Cloudflare Workers (snarkjs must work in CF Workers env — already confirmed with inlined vkeys)
-- **Demo**: Must work live on Base Sepolia, not just local — judges see real on-chain transactions
-- **Timeline**: Hackathon deadline — prioritize working proofs over polish
+Test coverage: 144 contract tests, 184+ engine tests, 56+ crypto tests, 14 MCP server tests.
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Off-chain ZK verification only | On-chain Groth16 verifier adds complexity without demo value — snarkjs in engine is sufficient | — Pending |
-| MCP as primary agent interface | Agents use MCP tools (not direct HTTP) for proof submission — demonstrates AI-native UX | — Pending |
-| Existing circuits only | RegistryMembership + BidRange are sufficient to demonstrate privacy guarantees | — Pending |
-| Live Base Sepolia demo | Real on-chain transactions > local mock — proves the full stack works | — Pending |
+| Off-chain ZK verification only | On-chain Groth16 verifier adds complexity without demo value | ✓ Good — snarkjs in engine works reliably |
+| MCP as primary agent interface | AI-native UX for proof submission | ✓ Good — clean tool schemas with structured errors |
+| Existing circuits only | RegistryMembership + BidRange sufficient for privacy demo | ✓ Good — avoided scope creep |
+| Remove engine keccak/Poseidon cross-check | Groth16 verification provides security; cross-check was a mismatch source | ✓ Good — eliminated the root mismatch bug |
+| Poseidon nullifier gated on proofPayload | Keccak256 fallback preserved for non-ZK joins | ✓ Good — backward compatible |
+| BidRange maxBudget=0 → 2^48 sentinel | Circuit constraint requires non-zero maxBudget | ✓ Good — transparent workaround |
+| zkNullifier/bidCommitment in public WebSocket | Cryptographic hashes, not identity-revealing | ✓ Good — spectators see proof status |
+| GET /stats fully public | Supports unauthenticated frontend dashboard | ✓ Good — enables landing page stats |
+| PlatformStatsSection returns null on error | Graceful degradation without breaking parent page | ✓ Good — page renders even if engine down |
+| All-Poseidon registration (quick task 2) | Removed keccak256 registrationCommit, simplified to Poseidon only | ✓ Good — single hash function throughout |
 
 ---
-*Last updated: 2026-03-02 after initialization*
+*Last updated: 2026-03-04 after v1.0 milestone*

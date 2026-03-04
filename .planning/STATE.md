@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: milestone
-status: completed
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-03-04T06:25:00.000Z"
-last_activity: 2026-03-04 — 06-01 complete (shimmer + glow stat cards, AuctionStatsSection 3-card variant)
+milestone_name: ZK Privacy E2E
+status: archived
+stopped_at: Milestone v1.0 complete
+last_updated: "2026-03-04T14:00:00.000Z"
+last_activity: "2026-03-04 — v1.0 milestone archived"
 progress:
   total_phases: 6
   completed_phases: 6
@@ -18,121 +18,26 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-02)
+See: .planning/PROJECT.md (updated 2026-03-04)
 
-**Core value:** Working ZK proofs that actually verify on-chain — agents prove registry membership and bid range without revealing identity, demonstrated end-to-end on Base Sepolia.
-**Current focus:** Phase 4 complete — all plans done
+**Core value:** Working ZK proofs that actually verify — agents prove registry membership and bid range without revealing identity, demonstrated end-to-end.
+**Current focus:** v1.0 shipped — planning next milestone
 
 ## Current Position
 
-Phase: 6 of 6 (Refine Stats Card UI) — COMPLETE
-Plan: 1 of 1 in phase (06-01 complete — shimmer + glow stat cards, 3-card auctions layout)
-Status: All phases complete — v1.0 milestone achieved
-Last activity: 2026-03-04 - Completed quick task 2: Remove keccak256 registrationCommit, migrate to all-Poseidon
+Milestone: v1.0 ZK Privacy E2E — SHIPPED 2026-03-04
+Archive: .planning/milestones/v1.0-*
 
-Progress: [██████████] 100%
+Progress: [██████████] 100% — All 6 phases, 14 plans complete
 
-## Performance Metrics
+## Pending Todos
 
-**Velocity:**
-- Total plans completed: 3
-- Average duration: ~45 min
-- Total execution time: ~2.25 hours
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 01-zk-foundation | 3 | ~2.25h | ~45 min |
-| 02-mcp-engine-wiring | 1 (02-04) | ~7 min | ~7 min |
-
-**Recent Trend:**
-- Last 5 plans: 01-01 (2 min), 01-03 (~2h), 01-02 (2 min)
-- Trend: Fast execution when implementation is clear
-
-*Updated after each plan completion*
-| Phase 02-mcp-engine-wiring P02 | 10 | 2 tasks | 2 files |
-| Phase 02-mcp-engine-wiring P03 | 8 | 3 tasks | 10 files |
-| Phase 03-agent-client-zk-integration P01 | 3 | 3 tasks | 5 files |
-| Phase 03-agent-client-zk-integration P02 | 8 | 2 tasks | 1 file |
-| Phase 04-frontend-demo P01 | 5 | 2 tasks | 2 files |
-| Phase 04-frontend-demo P02 | 8 | 2 tasks | 2 files |
-| Phase 05-frontend-auction-room-key-figures-dashboard P01 | 7 | 1 tasks | 2 files |
-| Phase 05-frontend-auction-room-key-figures-dashboard P02 | 2 | 2 tasks | 7 files |
-| Phase 06-refine-stats-card-ui P01 | 8 | 3 tasks | 6 files |
-
-## Accumulated Context
-
-### Decisions
-
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- Off-chain ZK verification only (snarkjs in engine, no Solidity verifier contract)
-- MCP as primary agent interface for proof submission
-- Option A for keccak/Poseidon mismatch: remove engine cross-check (Groth16 verification provides security)
-- Existing RegistryMembership + BidRange circuits only, no new circuit development
-- Import signal constants from @agent-auction/crypto in engine — dependency is one-directional (engine -> crypto), no circular import
-- Remove unused expectedRoot local variable entirely rather than leaving assigned-but-unused to avoid TypeScript strict-mode warning
-- Pre-existing build errors in packages/crypto (snarkjs types, ethers Uint8Array) are out of scope for plan 01-01
-- test-agents/*.json files contain agentSecret + nullifiers — added to .gitignore; README.md explains local regeneration
-- AgentPrivacyRegistry root 0xca223b34b59d6362ccffa90e04ebaa12ea40bb6d5ef3d9b611e2231126cc50f2 is the stable anchor for Phase 2 ZK membership proof generation — Phase 2 should call getRoot() dynamically, not hardcode
-- Circuit tests use fs.readFileSync to load vkeys from circuits/keys/*.json (no engine import) — validates full disk→verify pipeline
-- BidRange out-of-range: Circom constraint violation causes fullProve to throw (not return RANGE_OK=0) — test uses rejects.toThrow()
-- vitest discovers packages/crypto/tests/ via **/*.test.ts glob without config changes
-- Only populate bidCommitment when bidRangeResult.bidCommitment !== '0' — keeps events clean for no-proof bids (backward compat)
-- Added ethers as direct mcp-server dependency (readRegistryRoot requires ethers.Provider, not rpcUrl string directly)
-- signJoin() Poseidon nullifier gated on proofPayload presence — keccak256 fallback preserved for non-ZK joins (backward compatible)
-- BidRange maxBudget=0 substituted with BigInt(2**48) sentinel — circuit constraint requires non-zero maxBudget
-- [Phase 02-mcp-engine-wiring]: BID EIP-712 type has no nullifier field — bid proof attached after signBid() via object spread, not passed into signer
-- [Phase 02-mcp-engine-wiring]: zkError() helper duplicated in join.ts and bid.ts for tool self-containment rather than extracted to shared module
-- Fixtures generated once via one-off .mjs script using same test values as packages/crypto/tests/circuits.test.ts, committed as JSON for fast test execution without snarkjs fullProve at test time
-- Capturing mock MCP server intercepts registerTool() to expose handler callback directly — no MCP transport overhead in tests
-- engine/test/fixtures/ created as independent copy — engine tests self-contained, no cross-module path dependency
-- computeRegistrationCommit from @agent-auction/crypto is synchronous keccak256 (not Poseidon) — matches onboarding.ts; preparePrivacyState uses it without await
-- privacy.ts re-exports AgentPrivateState from @agent-auction/crypto instead of redefining locally — type compatibility with proof generation functions
-- npm install --legacy-peer-deps required in agent-client — permissionless@0.3.4 peerOptional ox@^0.11.3 conflict
-- agentIds in demo switched from [1001, 1002, 1003] to [1, 2, 3] — must match Merkle tree commitments in test-agent state files
-- In-memory usedNullifiers updated after persistNullifier() so double-join demo detects reuse without disk reload
-- [Phase 04-frontend-demo]: zkNullifier/bidCommitment included in public WebSocket messages — cryptographic hashes, not identity-revealing
-- [Phase 05-frontend-auction-room-key-figures-dashboard]: GET /stats is fully public (no auth, no x402) to support unauthenticated frontend dashboard consumption
-- [Phase 05-frontend-auction-room-key-figures-dashboard]: totalUsdcBonded returned as string (consistent with USDC amount convention across the API)
-- [Phase 05-frontend-auction-room-key-figures-dashboard]: uniqueAgents filtered to action_type IN ('JOIN','BID') to count meaningful participation events only
-- [Phase 05-frontend-auction-room-key-figures-dashboard]: valueRef pattern in useCountUp avoids react-hooks lint error while preserving animation-from-current-value behavior
-- [Phase 05-frontend-auction-room-key-figures-dashboard]: UsdcStatCard is a separate sub-component because it needs both BigInt base-unit conversion and custom displayValue for animated USDC display
-- [Phase 05-frontend-auction-room-key-figures-dashboard]: PlatformStatsSection returns null on error for graceful degradation without breaking parent page
-
-- [Phase 06-refine-stats-card-ui]: glowRgb values derived from existing border hex colors for visual consistency
-- [Phase 06-refine-stats-card-ui]: mask-composite: exclude with 2px padding for border-only shimmer (not full-card overlay)
-- [Phase 06-refine-stats-card-ui]: AuctionStatsSection shows 3 stats: Total Auctions (mint), Active Auctions (rose), USDC Bonded (gold)
-- [Phase 06-refine-stats-card-ui]: UsdcStatCard exported from PlatformStatsSection for reuse rather than duplicated
-
-### Roadmap Evolution
-
-- Phase 5 added: Frontend auction room key figures dashboard
-- Phase 6 added: Refine stats card UI
-
-### Pending Todos
-
-- `.planning/todos/pending/2026-03-03-add-agent-skills-and-finish-mcp-server.md` — Add agent skills and finish MCP server
-- `.planning/todos/pending/2026-03-03-validate-nft-settings-and-run-real-nft-test.md` — Validate NFT settings and run real NFT test
-- `.planning/todos/pending/2026-03-03-audit-onboarding-pipeline-and-erc-8004-details.md` — Audit onboarding pipeline and ERC-8004 details
-
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 1 | Cherry-pick ZK crypto security fixes + sealed-bid commit-reveal | 2026-03-04 | 0b767ec | [1-review-feat-zk-crypto-security-fixes-bra](./quick/1-review-feat-zk-crypto-security-fixes-bra/) |
-| 2 | Remove keccak256 registrationCommit, migrate to all-Poseidon | 2026-03-04 | ab47d35 | [2-remove-keccak256-registrationcommit-and-](./quick/2-remove-keccak256-registrationcommit-and-/) |
-
-### Blockers/Concerns
-
-- EIP-712 nullifier type mismatch (keccak vs Poseidon in signer.ts) — addressed in Phase 2
-- Pre-existing TypeScript errors in packages/crypto build (snarkjs types, ethers Uint8Array incompatibility) — pre-date this phase, out of scope
-- RESOLVED: `AgentPrivacyRegistry.getRoot()` removed entirely in quick task 2 (all-Poseidon migration, per-agent roots only)
+- Add agent skills and finish MCP server
+- Validate NFT settings and run real NFT test
+- Audit onboarding pipeline and ERC-8004 details
 
 ## Session Continuity
 
-Last session: 2026-03-04T13:17:35Z
-Stopped at: Completed quick task 2 (remove keccak256 registrationCommit)
+Last session: 2026-03-04
+Stopped at: Milestone v1.0 archived
 Resume file: None
