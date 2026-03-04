@@ -39,6 +39,6 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 **Plans:** 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Engine: D1 migration, tokenURI resolution, NftEscrow reads, API enrichment
+- [x] 01-01-PLAN.md — Engine: D1 migration, tokenURI resolution, NftEscrow reads, API enrichment
 - [ ] 01-02-PLAN.md — MCP: Enrich discover/details tools with NFT fields and hasNft filter
 - [ ] 01-03-PLAN.md — Frontend: NFT name display, filter toggle, escrow badge, OpenSea links
