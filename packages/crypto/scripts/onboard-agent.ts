@@ -21,7 +21,6 @@ import { writeFile } from "fs/promises";
 import {
   prepareOnboarding,
   registerOnChain,
-  readRegistryRoot,
 } from "../src/onboarding.js";
 
 // ---------- Config ----------
@@ -61,7 +60,6 @@ async function main() {
   const privateState = await prepareOnboarding(agentId, capabilityIds);
   console.log(`  agentSecret:           ${privateState.agentSecret.toString().slice(0, 20)}...`);
   console.log(`  capabilityMerkleRoot:  ${privateState.capabilityMerkleRoot.toString().slice(0, 20)}...`);
-  console.log(`  registrationCommit:    ${privateState.registrationCommit.slice(0, 20)}...`);
   console.log(`  leafHashes:            ${privateState.leafHashes.length} leaves`);
   console.log();
 
@@ -77,21 +75,13 @@ async function main() {
   console.log(`  Gas:     ${receipt.gasUsed.toString()}`);
   console.log();
 
-  // Step 3: Verify root updated
-  console.log("Step 3: Verifying registry root...");
-  const root = await readRegistryRoot(registryAddress, provider);
-  console.log(`  Registry root: ${root}`);
-  console.log();
-
-  // Step 4: Save private state
+  // Step 3: Save private state
   const stateJson = {
     agentId: agentId.toString(),
     agentSecret: privateState.agentSecret.toString(),
-    salt: privateState.salt.toString(),
     capabilities: capabilityIds.map((id) => id.toString()),
     leafHashes: privateState.leafHashes.map((h) => h.toString()),
     capabilityMerkleRoot: privateState.capabilityMerkleRoot.toString(),
-    registrationCommit: privateState.registrationCommit,
     registryAddress,
     registeredAt: new Date().toISOString(),
   };

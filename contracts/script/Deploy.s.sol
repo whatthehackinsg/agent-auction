@@ -87,7 +87,7 @@ contract Deploy is Script {
         console2.log("AuctionEscrow deployed:", address(escrow));
 
         // ── Step 4: Deploy AgentPrivacyRegistry ─────────────────
-        privacyRegistry = new AgentPrivacyRegistry();
+        privacyRegistry = new AgentPrivacyRegistry(identityRegistry);
         console2.log("AgentPrivacyRegistry deployed:", address(privacyRegistry));
 
         // ── Step 5: Cross-bind contracts ────────────────────────

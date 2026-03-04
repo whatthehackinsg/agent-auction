@@ -18,14 +18,11 @@ export interface AgentCapability {
 export interface AgentPrivateState {
   agentId: bigint;
   agentSecret: bigint;
-  salt: bigint;
   capabilities: AgentCapability[];
   /** Poseidon leaf hashes (one per capability, indexed by leafIndex) */
   leafHashes: bigint[];
   /** Poseidon Merkle root of the capability tree */
   capabilityMerkleRoot: bigint;
-  /** keccak256(agentSecret, capabilityMerkleRoot, salt) — stored on-chain */
-  registrationCommit: string;
 }
 
 export interface MerkleProof {
@@ -37,12 +34,11 @@ export interface MerkleProof {
 // ---------- Constants ----------
 
 const PRIVACY_REGISTRY_ABI = [
-  "function register(uint256 agentId, bytes32 commit, bytes32 poseidonRoot, bytes32 capCommitment) external",
-  "function getRoot() external view returns (bytes32)",
+  "function register(uint256 agentId, bytes32 poseidonRoot, bytes32 capCommitment) external",
   "function getAgentPoseidonRoot(uint256 agentId) external view returns (bytes32)",
   "function getAgentCapabilityCommitment(uint256 agentId) external view returns (bytes32)",
   "function getAgentCount() external view returns (uint256)",
-  "function agents(uint256) external view returns (bytes32 registrationCommit, bytes32 capabilityPoseidonRoot, bytes32 capabilityCommitment, uint256 registeredAt, address controller)",
+  "function agents(uint256) external view returns (bytes32 capabilityPoseidonRoot, bytes32 capabilityCommitment, uint256 registeredAt, address controller)",
 ] as const;
 
 /** How many levels for the off-chain Poseidon Merkle tree (matches circuit) */
@@ -165,21 +161,6 @@ export function getMerkleProof(
 }
 
 /**
- * Compute the on-chain registration commitment.
- * registrationCommit = keccak256(abi.encodePacked(agentSecret, capabilityMerkleRoot, salt))
- */
-export function computeRegistrationCommit(
-  agentSecret: bigint,
-  capabilityMerkleRoot: bigint,
-  salt: bigint
-): string {
-  return ethers.solidityPackedKeccak256(
-    ["uint256", "uint256", "uint256"],
-    [agentSecret, capabilityMerkleRoot, salt]
-  );
-}
-
-/**
  * Full onboarding flow: generate keys, build tree, compute commitment.
  * Does NOT send any transaction — returns the private state for the caller to register.
  */
@@ -188,7 +169,6 @@ export async function prepareOnboarding(
   capabilityIds: bigint[]
 ): Promise<AgentPrivateState> {
   const agentSecret = generateSecret();
-  const salt = generateSecret();
 
   // Compute leaf hashes
   const leafHashes: bigint[] = [];
@@ -200,21 +180,12 @@ export async function prepareOnboarding(
   // Build Poseidon Merkle tree
   const { root: capabilityMerkleRoot } = await buildPoseidonMerkleTree(leafHashes);
 
-  // Compute on-chain commitment
-  const registrationCommit = computeRegistrationCommit(
-    agentSecret,
-    capabilityMerkleRoot,
-    salt
-  );
-
   return {
     agentId,
     agentSecret,
-    salt,
     capabilities: capabilityIds.map((id) => ({ capabilityId: id })),
     leafHashes,
     capabilityMerkleRoot,
-    registrationCommit,
   };
 }
 
@@ -254,27 +225,11 @@ export async function registerOnChain(
 
   const tx = await registry.register(
     privateState.agentId,
-    privateState.registrationCommit,
     poseidonRootHex,
     capCommitmentHex,
   );
   const receipt = await tx.wait();
   return receipt;
-}
-
-/**
- * Read the current registry root from the contract.
- */
-export async function readRegistryRoot(
-  registryAddress: string,
-  provider: ethers.Provider
-): Promise<string> {
-  const registry = new ethers.Contract(
-    registryAddress,
-    PRIVACY_REGISTRY_ABI,
-    provider
-  );
-  return registry.getRoot();
 }
 
 export { MERKLE_LEVELS, PRIVACY_REGISTRY_ABI };

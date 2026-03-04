@@ -14,7 +14,7 @@
  * WARNING: Do NOT run in CI — this costs gas and agents stay registered permanently.
  * Re-running is safe: AlreadyRegistered errors are caught and skipped.
  */
-import { prepareOnboarding, registerOnChain, readRegistryRoot } from "../src/onboarding.js";
+import { prepareOnboarding, registerOnChain } from "../src/onboarding.js";
 import { ethers } from "ethers";
 import { writeFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
@@ -87,7 +87,7 @@ async function main(): Promise<void> {
 
     const state = await prepareOnboarding(agentId, capabilityIds);
     console.log(
-      `  registrationCommit: ${state.registrationCommit.slice(0, 20)}...`
+      `  capabilityMerkleRoot: ${state.capabilityMerkleRoot.toString().slice(0, 20)}...`
     );
 
     console.log(`  Registering on AgentPrivacyRegistry at ${REGISTRY}...`);
@@ -113,18 +113,6 @@ async function main(): Promise<void> {
     const outPath = join(outDir, `agent-${agentId}.json`);
     writeFileSync(outPath, serializeState(state), "utf8");
     console.log(`  Private state saved to ${outPath}`);
-  }
-
-  // Verify root is non-zero
-  console.log("\n--- Registry verification ---");
-  const root = await readRegistryRoot(REGISTRY, provider);
-  console.log(`AgentPrivacyRegistry.getRoot() = ${root}`);
-  if (root === "0x0000000000000000000000000000000000000000000000000000000000000000") {
-    console.warn(
-      "WARNING: Registry root is still zero. Registration may not have taken effect yet."
-    );
-  } else {
-    console.log("Root is non-zero — registration confirmed.");
   }
 
   console.log("\nDone. All 3 test agents registered (or already registered).");

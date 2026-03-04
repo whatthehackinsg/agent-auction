@@ -4,7 +4,6 @@ import {
   computeLeaf,
   buildPoseidonMerkleTree,
   getMerkleProof,
-  computeRegistrationCommit,
   prepareOnboarding,
 } from "../src/onboarding.js";
 import { poseidonHash } from "../src/poseidon-chain.js";
@@ -92,37 +91,15 @@ describe("getMerkleProof", () => {
   });
 });
 
-describe("computeRegistrationCommit", () => {
-  it("returns a 0x-prefixed 66-char hex string", () => {
-    const commit = computeRegistrationCommit(123n, 456n, 789n);
-    expect(commit.startsWith("0x")).toBe(true);
-    expect(commit.length).toBe(66);
-  });
-
-  it("is deterministic", () => {
-    const a = computeRegistrationCommit(123n, 456n, 789n);
-    const b = computeRegistrationCommit(123n, 456n, 789n);
-    expect(a).toBe(b);
-  });
-
-  it("changes with different inputs", () => {
-    const a = computeRegistrationCommit(123n, 456n, 789n);
-    const b = computeRegistrationCommit(123n, 456n, 790n);
-    expect(a).not.toBe(b);
-  });
-});
-
 describe("prepareOnboarding", () => {
   it("returns complete private state", async () => {
     const state = await prepareOnboarding(1n, [42n]);
 
     expect(state.agentId).toBe(1n);
     expect(state.agentSecret).toBeGreaterThan(0n);
-    expect(state.salt).toBeGreaterThan(0n);
     expect(state.capabilities.length).toBe(1);
     expect(state.leafHashes.length).toBe(1);
     expect(state.capabilityMerkleRoot).toBeTruthy();
-    expect(state.registrationCommit.startsWith("0x")).toBe(true);
   });
 });
 
@@ -147,7 +124,6 @@ describe("E2E: onboarding → proof generation → verification", () => {
       pathElements: proof.pathElements,
       pathIndices: proof.pathIndices,
       auctionId,
-      salt: state.salt,
       registryRoot: result.root,
     });
 
