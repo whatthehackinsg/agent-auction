@@ -14,6 +14,7 @@ import { resolveImageUrl } from '@/lib/ipfs'
 
 export default function AuctionsPage() {
   const { auctions, isLoading, error } = useAuctions()
+  const [nftFilter, setNftFilter] = useState<'all' | 'nft' | 'no-nft'>('all')
   const [, setTick] = useState(0)
 
   useEffect(() => {
@@ -22,6 +23,13 @@ export default function AuctionsPage() {
     }, 1000)
     return () => clearInterval(id)
   }, [])
+
+  const filteredAuctions = nftFilter === 'all'
+    ? auctions
+    : auctions.filter((a) => {
+        const hasNft = !!(a.nft_contract && a.nft_token_id)
+        return nftFilter === 'nft' ? hasNft : !hasNft
+      })
 
   return (
     <AuctionShell>
@@ -35,6 +43,22 @@ export default function AuctionsPage() {
           {'// real-time rooms from the edge sequencer. open a room to inspect bids, settlement, and replay proofs.'}
         </p>
       </section>
+
+      <div className="mb-4 flex gap-2 font-mono text-xs">
+        {(['all', 'nft', 'no-nft'] as const).map((filter) => (
+          <button
+            key={filter}
+            onClick={() => setNftFilter(filter)}
+            className={`rounded border px-3 py-1 transition-colors ${
+              nftFilter === filter
+                ? 'border-[#6EE7B7] bg-[#6EE7B7]/10 text-[#6EE7B7]'
+                : 'border-[#2b3a56] text-[#5E5E7A] hover:border-[#6EE7B7]/50'
+            }`}
+          >
+            {filter === 'all' ? 'All' : filter === 'nft' ? 'NFT Only' : 'No NFT'}
+          </button>
+        ))}
+      </div>
 
       {isLoading ? (
         <>
@@ -63,18 +87,22 @@ export default function AuctionsPage() {
         </PixelPanel>
       ) : null}
 
-      {!isLoading && !error && auctions.length === 0 ? (
+      {!isLoading && !error && filteredAuctions.length === 0 ? (
         <PixelPanel accent="violet" headerLabel="auctions.empty" className="min-h-[140px]">
-          <p className="font-mono text-sm text-[#EEEEF5]">No auctions yet.</p>
+          <p className="font-mono text-sm text-[#EEEEF5]">
+            {nftFilter !== 'all' ? `No ${nftFilter === 'nft' ? 'NFT' : 'non-NFT'} auctions found.` : 'No auctions yet.'}
+          </p>
           <p className="mt-2 font-mono text-xs text-[#9B9BB8]">
-            {'// create one via agent-client or POST /auctions on the engine'}
+            {nftFilter !== 'all'
+              ? '// try changing the filter above'
+              : '// create one via agent-client or POST /auctions on the engine'}
           </p>
         </PixelPanel>
       ) : null}
 
-      {!isLoading && !error && auctions.length > 0 ? (
+      {!isLoading && !error && filteredAuctions.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {auctions.map((auction) => {
+          {filteredAuctions.map((auction) => {
             const state = statusLabel(auction.status)
             return (
               <Link key={auction.auction_id} href={`/auctions/${auction.auction_id}`} className="group">
@@ -83,7 +111,7 @@ export default function AuctionsPage() {
                   className="min-h-[220px] border-[#2b3a56] transition-transform duration-200 group-hover:-translate-y-[2px] group-hover:border-[#6EE7B7]"
                 >
                   {(() => {
-                    const imgUrl = resolveImageUrl(auction.item_image_cid)
+                    const imgUrl = resolveImageUrl(auction.item_image_cid) ?? auction.nft_image_url ?? null
                     return imgUrl ? (
                       <div className="relative -mx-4 -mt-4 mb-3">
                         <img
@@ -99,6 +127,11 @@ export default function AuctionsPage() {
                       </div>
                     ) : null
                   })()}
+                  {auction.nft_name ? (
+                    <p className="mb-1 truncate font-mono text-[10px] font-bold uppercase tracking-wider text-[#F5C46E]">
+                      {auction.nft_name}
+                    </p>
+                  ) : null}
                   <div className="flex flex-col gap-3 font-mono text-xs text-[#9B9BB8]">
                     <div className="flex items-center justify-between">
                       <StatusPill status={state} />
