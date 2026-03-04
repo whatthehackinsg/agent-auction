@@ -133,4 +133,156 @@ Use get_auction_events to track bid history and identify competitor patterns.`,
       ],
     }),
   )
+
+  server.registerPrompt(
+    'sealed_bid_guide',
+    {
+      description:
+        'How sealed-bid auctions work: commit phase, reveal window, and salt management.',
+    },
+    async () => ({
+      messages: [
+        {
+          role: 'user' as const,
+          content: {
+            type: 'text' as const,
+            text: `Sealed-bid auctions use a commit-reveal scheme to hide bid amounts until the reveal window opens.
+
+**How it works:**
+
+1. **Commit phase (auction status: OPEN)**: Call place_bid with sealed=true. The engine generates a Poseidon(bid, salt) commitment hash that is recorded on the event log. Your actual bid amount is hidden from other participants.
+
+2. **CRITICAL — Save your revealSalt**: The place_bid response includes a "revealSalt" field. You MUST save this value. It cannot be recovered if lost. Store it in memory or persistent state immediately.
+
+3. **Reveal window (auction status: REVEAL_WINDOW)**: When the auction closes or a timer expires, the reveal window opens. You must reveal your bid before the window closes.
+
+4. **Reveal your bid**: Call reveal_bid with your original bid amount and the saved revealSalt. The engine verifies that Poseidon(bid, salt) matches your recorded commitment.
+
+5. **Verification**: If the commitment matches, your bid is accepted at the revealed amount. If it does not match (wrong bid or wrong salt), the reveal is rejected.
+
+6. **Missed reveal**: If you fail to reveal before the window closes, your bid is forfeit. You lose your bonded deposit.
+
+**Strategy tips:**
+- Commit early to establish your position — the actual amount stays hidden until reveal.
+- Reveal as soon as the window opens to avoid missing the deadline.
+- Never modify or lose the revealSalt between commit and reveal.
+- Multiple sealed bids can be placed; each generates its own salt that must be tracked independently.`,
+          },
+        },
+      ],
+    }),
+  )
+
+  server.registerPrompt(
+    'bonding_walkthrough',
+    {
+      description:
+        'Step-by-step guide to posting a USDC bond for auction participation.',
+      argsSchema: {
+        auctionId: z
+          .string()
+          .optional()
+          .describe('Auction ID to include specific deposit amount'),
+      },
+    },
+    async ({ auctionId }) => ({
+      messages: [
+        {
+          role: 'user' as const,
+          content: {
+            type: 'text' as const,
+            text: `Step-by-step guide to posting a USDC bond for auction participation.${auctionId ? ` Target auction: ${auctionId}.` : ''}
+
+**Step 1 — Check deposit requirement**
+Call get_auction_details${auctionId ? ` with auctionId="${auctionId}"` : ''}. Look at the "depositAmount" field in the response. This is the required USDC amount in base units (6 decimals). For example, 50000000 = 50 USDC.
+
+**Step 2 — Transfer USDC on-chain**
+Send USDC to the AuctionEscrow contract on Base Sepolia (chain ID 84532):
+- AuctionEscrow address: 0x20944f46AB83F7eA40923D7543AF742Da829743c
+- USDC contract (MockUSDC): 0xfEE786495d165b16dc8e68B6F8281193e041737d
+- Transfer the exact depositAmount to the AuctionEscrow address
+- Save the transaction hash from the transfer
+
+**Step 3 — Submit bond proof**
+Call post_bond with:
+- auctionId: the target auction ID
+- amount: the deposit amount (must match what you transferred)
+- txHash: the on-chain transaction hash from Step 2
+
+**Step 4 — Poll for confirmation**
+Call get_bond_status with the auctionId. The bond transitions through states:
+- NONE: No bond observed yet
+- PENDING: Transfer detected, awaiting block confirmations
+- CONFIRMED: Bond verified on-chain (usually within 1-2 blocks)
+- TIMEOUT: Observation window expired without confirmation
+
+Keep polling until status is "CONFIRMED". This typically takes a few seconds.
+
+**Step 5 — Join the auction**
+Once bond status is CONFIRMED, call join_auction with the auctionId and bondAmount.
+
+**Post-auction notes:**
+- If you win: your bond is applied as payment during CRE settlement.
+- If you lose: call claimRefund() directly on the AuctionEscrow contract on-chain after settlement to reclaim your deposit.
+- Bond is always safe — it is held in escrow and only released through CRE settlement or refund claims.`,
+          },
+        },
+      ],
+    }),
+  )
+
+  server.registerPrompt(
+    'troubleshooting',
+    {
+      description:
+        'Common error codes and how to resolve them when using auction MCP tools.',
+    },
+    async () => ({
+      messages: [
+        {
+          role: 'user' as const,
+          content: {
+            type: 'text' as const,
+            text: `Common error codes and how to resolve them when using auction MCP tools.
+
+**Configuration errors:**
+
+- **MISSING_CONFIG**: Required environment variables are not set. Ensure AGENT_PRIVATE_KEY (hex-encoded secp256k1 private key) and AGENT_ID (numeric agent ID from ERC-8004 registry) are configured.
+
+- **AGENT_NOT_REGISTERED**: ZK proof generation requires agent state. Set AGENT_STATE_FILE to the path of your agent's ZK state file containing registration proof data.
+
+- **STALE_ROOT**: The cached privacy registry Merkle root is outdated. Set BASE_SEPOLIA_RPC to a valid Base Sepolia RPC endpoint so the MCP server can fetch the current on-chain root from AgentPrivacyRegistry.
+
+**Proof and identity errors:**
+
+- **PROOF_INVALID**: Your ZK proof was rejected by the engine. This can happen if the proof was generated with stale data. Regenerate the proof with current registry state, or verify your agent is properly registered in AgentPrivacyRegistry.
+
+- **NULLIFIER_REUSED**: You have already joined this auction. Each agent can only join a given auction once. The nullifier prevents double-registration.
+
+**Bond errors:**
+
+- **BOND_NOT_CONFIRMED**: Your bond has not been confirmed yet. Either you have not posted a bond, or it is still PENDING. Call get_bond_status to check. If PENDING, wait for block confirmation. If NONE, you need to transfer USDC and call post_bond first.
+
+**Auction state errors:**
+
+- **AUCTION_NOT_FOUND**: The auction ID was not recognized. Verify the ID format: it should be a 0x-prefixed bytes32 hex string (66 characters total). Call discover_auctions to list valid auction IDs.
+
+- **AUCTION_CLOSED**: The auction is no longer in OPEN status. You cannot join or place new bids on a closed auction. Check status with get_auction_details.
+
+- **BID_TOO_LOW**: Your bid must exceed the current highest bid. Call get_auction_details to see the current highestBid, then submit a higher amount.
+
+**Reveal errors:**
+
+- **REVEAL_MISMATCH**: The bid amount and salt you provided do not match your recorded commitment. Double-check that you are using the exact original bid amount and the revealSalt returned from your place_bid call.
+
+- **REVEAL_WINDOW_CLOSED**: The reveal window is either not open yet or has already passed. Check the auction status — reveals are only accepted during the REVEAL_WINDOW phase.
+
+**General errors:**
+
+- **ENGINE_ERROR**: The auction engine returned an unexpected error. Check engine connectivity, verify your request parameters, and retry. If persistent, the engine may be temporarily unavailable.`,
+          },
+        },
+      ],
+    }),
+  )
 }
