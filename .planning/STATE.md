@@ -1,46 +1,44 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-current_plan: 3 of 3
-status: unknown
-stopped_at: Completed quick task 3
-last_updated: "2026-03-04T16:39:02.026Z"
+milestone: v1.1
+milestone_name: Autonomous Agent Onboarding
+current_plan: null
+status: defining_requirements
+stopped_at: null
+last_updated: "2026-03-05T00:00:00.000Z"
 progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-04)
+See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Working ZK proofs that actually verify — agents prove registry membership and bid range without revealing identity, demonstrated end-to-end.
-**Current focus:** Phase 2 — Finish MCP server (COMPLETE)
+**Current focus:** Milestone v1.1 — Autonomous Agent Onboarding (defining requirements)
 
 ## Current Position
 
-Phase: 02-finish-mcp-server
-Current Plan: 3 of 3
-Progress: [██████████] 100% — 6/6 plans complete
-
-Milestone: v1.0 ZK Privacy E2E — SHIPPED 2026-03-04
-Archive: .planning/milestones/v1.0-*
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-05 — Milestone v1.1 started
 
 ## Pending Todos
 
-- Add agent skills and finish MCP server
-- Validate NFT settings and run real NFT test
-- Audit onboarding pipeline and ERC-8004 details
+- Full live E2E demo on Base Sepolia (deferred from v1.0)
+- CCIP Private Transactions future vision narrative (deferred from v1.0)
 
 ## Accumulated Context
 
 ### Roadmap Evolution
+- v1.0: 6 phases, 14 plans — ZK Privacy E2E shipped 2026-03-04
 - Phase 1 added: Fix NFT support gaps
 - Phase 2 added: Finish MCP server — audit tool coverage, implement missing tools, add tests, write agent skills documentation
 
@@ -62,6 +60,7 @@ Archive: .planning/milestones/v1.0-*
 - [Phase 02]: parseToolResponse helper centralizes JSON extraction from MCP content array
 - [Phase Q3]: check_identity derives wallet from AGENT_PRIVATE_KEY via viem privateKeyToAccount when wallet param not provided
 - [Phase Q3]: Readiness object includes actionable missingSteps with exact contract addresses
+- All-Poseidon registration (quick task 2) — single hash function throughout
 
 ### Performance Metrics
 
@@ -74,12 +73,6 @@ Archive: .planning/milestones/v1.0-*
 | Phase 02 P03 | 3min | 2 tasks | 4 files |
 | Phase 02 P02 | 3min | 2 tasks | 7 files |
 
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 3 | Complete agent onboarding process docs and MCP tools - ERC-8004 registration, agent wallet signing, bond/bid flow, ZK proof setup | 2026-03-04 | 5138f0b | [3-complete-agent-onboarding-process-docs-a](./quick/3-complete-agent-onboarding-process-docs-a/) |
-
 ## Session Continuity
 
-Last activity: 2026-03-04 - Completed quick task 3: Complete agent onboarding process docs and MCP tools
+Last activity: 2026-03-05 — Milestone v1.1 Autonomous Agent Onboarding started

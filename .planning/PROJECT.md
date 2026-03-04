@@ -40,11 +40,16 @@ Working ZK proofs that actually verify — agents prove registry membership and 
 
 ### Active
 
-- [ ] Full live E2E demo on Base Sepolia (agent → proofs → bid → CRE settle) — deferred from v1.0
-- [ ] CCIP Private Transactions future vision narrative — deferred from v1.0
-- [ ] Add agent skills and finish MCP server (pending todo)
-- [ ] Validate NFT settings and run real NFT test (pending todo)
-- [ ] Audit onboarding pipeline and ERC-8004 details (pending todo)
+<!-- v1.1 Autonomous Agent Onboarding -->
+- [ ] 4 new MCP tools: register_identity, deposit_bond, withdraw_funds, claim_refund
+- [ ] Make ZK proofs mandatory (not optional) in join_auction and place_bid
+- [ ] Merge readyForZkProofs into readyToParticipate in check_identity
+- [ ] Rewrite auction skills with correct ERC-8004 ABI and mandatory ZK flow
+- [ ] Full autonomous agent per-auction loop (discover → bond → join → bid → monitor → withdraw)
+
+<!-- Deferred from v1.0 -->
+- [ ] Full live E2E demo on Base Sepolia (agent → proofs → bid → CRE settle)
+- [ ] CCIP Private Transactions future vision narrative
 
 ### Out of Scope
 
@@ -53,6 +58,17 @@ Working ZK proofs that actually verify — agents prove registry membership and 
 - New circuit development — existing circuits sufficient
 - Mobile/responsive frontend — web-first spectator UI sufficient
 - CCIP Private Transactions implementation — mentioned as future vision only
+
+## Current Milestone: v1.1 Autonomous Agent Onboarding
+
+**Goal:** Make agents fully autonomous for the per-auction loop — human does one-time setup, agent handles everything via MCP tools with mandatory ZK proofs.
+
+**Target features:**
+- 4 new MCP tools (register_identity, deposit_bond, withdraw_funds, claim_refund)
+- Mandatory ZK proofs on join/bid (ENGINE_REQUIRE_PROOFS=true default)
+- Unified readiness check (merge ZK + identity into single readyToParticipate)
+- Rewritten auction skills with correct onboarding flow
+- Full autonomous per-auction loop
 
 ## Context
 
@@ -78,4 +94,4 @@ Test coverage: 144 contract tests, 184+ engine tests, 56+ crypto tests, 14 MCP s
 | All-Poseidon registration (quick task 2) | Removed keccak256 registrationCommit, simplified to Poseidon only | ✓ Good — single hash function throughout |
 
 ---
-*Last updated: 2026-03-04 after v1.0 milestone*
+*Last updated: 2026-03-05 after v1.1 milestone start*
