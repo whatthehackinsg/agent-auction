@@ -30,3 +30,15 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 | 4. Frontend + Demo | v1.0 | 2/2 | Complete | 2026-03-03 |
 | 5. Key Figures Dashboard | v1.0 | 2/2 | Complete | 2026-03-03 |
 | 6. Refine Stats Card UI | v1.0 | 1/1 | Complete | 2026-03-04 |
+
+### Phase 1: Fix NFT support gaps
+
+**Goal:** Close gaps in NFT metadata visibility across engine, MCP tools, and frontend by resolving ERC-721 tokenURI at auction creation time, reading NftEscrow deposit status on-chain, and surfacing rich NFT context (image, name, description, escrow badge, marketplace links) through all layers.
+**Requirements**: NFT-RESOLVE, NFT-ESCROW, NFT-ENGINE-API, NFT-MCP-DISCOVER, NFT-MCP-DETAILS, NFT-MCP-FILTER, NFT-FRONTEND-LIST, NFT-FRONTEND-DETAIL, NFT-FRONTEND-FILTER, NFT-FRONTEND-MARKETPLACE
+**Depends on:** None (post-v1.0 standalone phase)
+**Plans:** 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Engine: D1 migration, tokenURI resolution, NftEscrow reads, API enrichment
+- [ ] 01-02-PLAN.md — MCP: Enrich discover/details tools with NFT fields and hasNft filter
+- [ ] 01-03-PLAN.md — Frontend: NFT name display, filter toggle, escrow badge, OpenSea links
