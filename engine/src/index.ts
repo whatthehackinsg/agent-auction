@@ -9,6 +9,8 @@ import { createX402Middleware } from './middleware/x402'
 import { pinToIpfs } from './lib/ipfs'
 import { createSequencerClient, auctionRegistryAbi } from './lib/chain-client'
 import { ADDRESSES } from './lib/addresses'
+import { resolveNftMetadata } from './lib/nft-metadata'
+import { getNftEscrowStatus } from './lib/nft-escrow'
 import {
   getPaymentSignatureHeader,
   hasX402Receipt,
@@ -408,6 +410,29 @@ app.post('/auctions', async (c) => {
     return c.json({ error: 'failed to create auction' }, 500)
   }
 
+  // Best-effort NFT metadata resolution (non-blocking for auction creation)
+  let nftName: string | null = null
+  let nftDescription: string | null = null
+  let nftImageUrl: string | null = null
+  let nftTokenUri: string | null = null
+  if (nftContract && nftTokenId) {
+    try {
+      const resolved = await resolveNftMetadata(nftContract, nftTokenId, nftChainId ?? undefined)
+      nftName = resolved.name
+      nftDescription = resolved.description
+      nftImageUrl = resolved.imageUrl
+      nftTokenUri = resolved.rawTokenUri
+      if (nftName || nftImageUrl) {
+        await c.env.AUCTION_DB
+          .prepare('UPDATE auctions SET nft_name = ?, nft_description = ?, nft_image_url = ?, nft_token_uri = ? WHERE auction_id = ?')
+          .bind(nftName, nftDescription, nftImageUrl, nftTokenUri, auctionId)
+          .run()
+      }
+    } catch {
+      // Best-effort -- auction already created, metadata is bonus
+    }
+  }
+
   // Initialize the room metadata (best effort).
   const room = roomStub(c.env, auctionId)
   await room.fetch(
@@ -458,6 +483,10 @@ app.post('/auctions', async (c) => {
     nftContract,
     nftTokenId,
     nftChainId,
+    nftName,
+    nftDescription,
+    nftImageUrl,
+    nftTokenUri,
   }
 
   return c.json({
@@ -484,7 +513,15 @@ app.get('/auctions/:id', async (c) => {
   const snapshotRes = await room.fetch(makeRoomRequest('/snapshot', auctionId))
   const snapshot = await snapshotRes.json()
 
-  return c.json({ auction, snapshot })
+  // Best-effort NftEscrow deposit status (only when auction has NFT fields)
+  let nftEscrowState: string | null = null
+  const auctionRecord = auction as Record<string, unknown>
+  if (auctionRecord.nft_contract && auctionRecord.nft_token_id) {
+    const escrowStatus = await getNftEscrowStatus(auctionId)
+    nftEscrowState = escrowStatus.state
+  }
+
+  return c.json({ auction, snapshot, nftEscrowState })
 })
 
 app.post('/auctions/:id/close', async (c) => {
@@ -615,9 +652,9 @@ app.post('/auctions/:id/action', async (c) => {
 app.get('/auctions/:id/manifest', async (c) => {
   const auctionId = c.req.param('id')
   const row = await c.env.AUCTION_DB
-    .prepare('SELECT auction_id, manifest_hash, title, description, item_image_cid, nft_contract, nft_token_id, nft_chain_id FROM auctions WHERE auction_id = ?')
+    .prepare('SELECT auction_id, manifest_hash, title, description, item_image_cid, nft_contract, nft_token_id, nft_chain_id, nft_name, nft_description, nft_image_url, nft_token_uri FROM auctions WHERE auction_id = ?')
     .bind(auctionId)
-    .first<{ auction_id: string; manifest_hash: string; title: string | null; description: string | null; item_image_cid: string | null; nft_contract: string | null; nft_token_id: string | null; nft_chain_id: number | null }>()
+    .first<{ auction_id: string; manifest_hash: string; title: string | null; description: string | null; item_image_cid: string | null; nft_contract: string | null; nft_token_id: string | null; nft_chain_id: number | null; nft_name: string | null; nft_description: string | null; nft_image_url: string | null; nft_token_uri: string | null }>()
 
   if (!row) {
     return c.json({ error: 'auction not found' }, 404)
@@ -628,6 +665,10 @@ app.get('/auctions/:id/manifest', async (c) => {
     nftContract: row.nft_contract,
     nftTokenId: row.nft_token_id,
     nftChainId: row.nft_chain_id,
+    nftName: row.nft_name,
+    nftDescription: row.nft_description,
+    nftImageUrl: row.nft_image_url,
+    nftTokenUri: row.nft_token_uri,
   }
 
   return c.json({
