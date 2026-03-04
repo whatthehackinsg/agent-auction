@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/Badge'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { useAuctionDetail, useAuctionRoom, useAuctionState } from '@/hooks'
-import { formatCountdown, formatUsdc, nftExplorerUrl, statusLabel, truncateHex } from '@/lib/format'
+import { formatCountdown, formatUsdc, nftExplorerUrl, nftMarketplaceUrl, statusLabel, truncateHex } from '@/lib/format'
 import { resolveImageUrl } from '@/lib/ipfs'
 
 function maskAgentId(agentId: string): string {
@@ -88,10 +88,10 @@ export default function AuctionRoomPage() {
         </PixelPanel>
       ) : null}
 
-      {!isLoading && !error && detail?.auction.item_image_cid ? (
+      {!isLoading && !error && (detail?.auction.item_image_cid || detail?.auction.nft_image_url || detail?.auction.nft_contract) ? (
         <PixelPanel accent="gold" headerLabel="item.details" className="mb-4">
           {(() => {
-            const imgUrl = resolveImageUrl(detail.auction.item_image_cid)
+            const imgUrl = resolveImageUrl(detail.auction.item_image_cid) ?? detail.auction.nft_image_url ?? null
             const explorerUrl = nftExplorerUrl(
               detail.auction.nft_chain_id,
               detail.auction.nft_contract,
@@ -109,8 +109,17 @@ export default function AuctionRoomPage() {
                 {detail.auction.title ? (
                   <p className="mt-3 font-mono text-lg font-bold text-[#EEEEF5]">{detail.auction.title}</p>
                 ) : null}
+                {!detail.auction.title && detail.auction.nft_name ? (
+                  <p className="mt-3 font-mono text-lg font-bold text-[#EEEEF5]">{detail.auction.nft_name}</p>
+                ) : null}
+                {detail.auction.title && detail.auction.nft_name && detail.auction.title !== detail.auction.nft_name ? (
+                  <p className="mt-1 font-mono text-xs text-[#F5C46E]">{detail.auction.nft_name}</p>
+                ) : null}
                 {detail.auction.description ? (
                   <p className="mt-1 font-mono text-xs text-[#9B9BB8]">{detail.auction.description}</p>
+                ) : null}
+                {!detail.auction.description && detail.auction.nft_description ? (
+                  <p className="mt-1 font-mono text-xs text-[#9B9BB8]">{detail.auction.nft_description}</p>
                 ) : null}
                 {explorerUrl ? (
                   <a
@@ -121,6 +130,28 @@ export default function AuctionRoomPage() {
                   >
                     {truncateHex(detail.auction.nft_contract!, 10, 6)} / #{detail.auction.nft_token_id}
                   </a>
+                ) : null}
+                {(() => {
+                  const marketplaceUrl = nftMarketplaceUrl(
+                    detail.auction.nft_chain_id,
+                    detail.auction.nft_contract,
+                    detail.auction.nft_token_id,
+                  )
+                  return marketplaceUrl ? (
+                    <a
+                      href={marketplaceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-4 inline-block font-mono text-xs text-[#F5C46E] hover:underline"
+                    >
+                      View on OpenSea
+                    </a>
+                  ) : null
+                })()}
+                {detail.nftEscrowState === 'DEPOSITED' ? (
+                  <span className="mt-3 inline-block rounded bg-[#6EE7B7]/90 px-2 py-1 font-mono text-[10px] font-bold text-[#0a0f1a]">
+                    NFT DEPOSITED
+                  </span>
                 ) : null}
               </>
             )
