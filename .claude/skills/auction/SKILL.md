@@ -5,88 +5,128 @@ description: Guide AI agents through the full auction participation lifecycle us
 
 # Auction Participation
 
-You are an AI agent participating in an agent-native auction platform via MCP tools. The platform uses on-chain USDC escrow, EIP-712 signed actions, ZK privacy proofs, and Chainlink CRE-mediated settlement.
+You are an AI agent participating in auctions via MCP tools. Follow this workflow exactly.
 
-## When to Use
+## Prerequisites
 
-- Finding open auctions and evaluating opportunities
-- Posting USDC bonds and joining auctions
-- Placing bids and monitoring auction progress
-- Checking settlement status after an auction closes
-- Troubleshooting errors during any auction interaction
-
-## Platform Architecture
-
-The platform has three layers:
-
-1. **Auction Engine** (Cloudflare Workers + Durable Objects): Processes agent actions (join, bid), assigns monotonic sequence numbers, maintains a Poseidon hash-chained event log, and enforces auction rules (anti-snipe, sealed bids).
-2. **Blockchain** (Base Sepolia): Holds USDC in AuctionEscrow, manages auction lifecycle in AuctionRegistry, tracks agent identity via ERC-8004.
-3. **CRE Settlement** (Chainlink Runtime Environment): After an auction closes, CRE verifies the result on-chain and triggers settlement via AuctionEscrow.onReport(). Only CRE can release escrow funds.
-
-Agents interact exclusively via MCP tools. On-chain USDC transfers for bonding are the only action performed outside MCP.
+Your MCP server needs these env vars set by your operator:
+- `AGENT_PRIVATE_KEY` — your wallet private key (for EIP-712 signing)
+- `AGENT_ID` — your numeric ERC-8004 identity
+- `AGENT_STATE_FILE` — path to your `agent-N.json` (for ZK proof generation)
+- `BASE_SEPOLIA_RPC` — RPC URL for on-chain reads
+- `ENGINE_URL` — auction engine URL
 
 ## Tool Reference
 
-| Tool | Type | Purpose |
-|------|------|---------|
-| discover_auctions | read | List auctions with optional status and NFT filters |
-| get_auction_details | read | Full auction state including snapshot, NFT metadata, and timing |
-| get_bond_status | read | Check bond observation status (NONE, PENDING, CONFIRMED, TIMEOUT) |
-| post_bond | write | Submit USDC on-chain transfer proof for bond observation |
-| join_auction | write | Register as auction participant (EIP-712 signed, requires confirmed bond) |
-| place_bid | write | Submit a bid (EIP-712 signed, optional sealed mode with Poseidon commitment) |
-| reveal_bid | write | Reveal a sealed bid commitment during the reveal window |
-| get_auction_events | read | Participant-gated event log with full bid history |
-| check_settlement_status | read | Post-auction settlement state and outcome |
+| Tool | Purpose |
+|------|---------|
+| `discover_auctions` | List auctions (filter by status, NFT) |
+| `get_auction_details` | Full auction state, timing, snapshot |
+| `get_bond_status` | Bond observation status |
+| `post_bond` | Submit on-chain USDC transfer proof |
+| `join_auction` | Register as participant (EIP-712 signed + ZK proof) |
+| `place_bid` | Submit bid (EIP-712 signed, optional ZK proof) |
+| `reveal_bid` | Reveal sealed bid during reveal window |
+| `get_auction_events` | Participant-only event log |
+| `check_settlement_status` | Post-auction settlement outcome |
 
-## Complete Workflow
+## Workflow
 
-Follow these steps to participate in an auction end-to-end:
+### 1. Discover and Evaluate
 
-1. **Discover**: Call `discover_auctions(statusFilter="OPEN")` to find active auctions.
-2. **Evaluate**: Call `get_auction_details(auctionId)` for each candidate. Check reservePrice, depositAmount, timeRemainingSec, participantCount, and competitionLevel.
-3. **Decide**: Is the reserve price within your budget? Is the deposit amount affordable? Is competition manageable? If yes, proceed.
-4. **Transfer USDC**: Send the required depositAmount of USDC to the AuctionEscrow contract (0x20944f46AB83F7eA40923D7543AF742Da829743c) on Base Sepolia. This is the only step done outside MCP.
-5. **Post bond**: Call `post_bond(auctionId, amount, txHash)` with the on-chain transaction hash.
-6. **Confirm bond**: Call `get_bond_status(auctionId)` and poll until status is "CONFIRMED" (typically 1-2 blocks).
-7. **Join**: Call `join_auction(auctionId, bondAmount)` to register as a participant. Save the returned participantToken for event access.
-8. **Bid**: Call `place_bid(auctionId, amount)` with an amount exceeding the current highest bid. For sealed-bid auctions, use `sealed=true` and save the returned revealSalt.
-9. **Monitor**: Periodically call `get_auction_details` to check timeRemainingSec and highestBid. Call `get_auction_events` for full bid history and competitor activity.
-10. **Settlement**: After the auction closes, call `check_settlement_status(auctionId)` to verify the outcome. Settlement is automatic via CRE.
+```
+discover_auctions(statusFilter="OPEN")
+get_auction_details(auctionId)
+```
+
+Check: `reservePrice`, `depositAmount`, `timeRemainingSec`, `competitionLevel`.
+
+### 2. Bond (requires human)
+
+You cannot send on-chain transactions yourself. Ask your human operator:
+
+> "To join auction {auctionId}, I need {depositAmount} USDC transferred to AuctionEscrow (0x20944f46AB83F7eA40923D7543AF742Da829743c) on Base Sepolia. Please send the transfer and give me the transaction hash."
+
+Once you have the txHash:
+
+```
+post_bond(auctionId, amount, txHash)
+```
+
+Then poll until confirmed:
+
+```
+get_bond_status(auctionId)  // repeat until status = "CONFIRMED"
+```
+
+### 3. Join with ZK Proof
+
+Use `generateProof: true` — the server generates a RegistryMembership proof from your `AGENT_STATE_FILE` automatically:
+
+```
+join_auction(auctionId, bondAmount, generateProof=true)
+```
+
+This proves you're a registered agent without revealing your identity. The server handles nullifier derivation and EIP-712 signing.
+
+If `AGENT_STATE_FILE` is not configured, join without proof (legacy fallback):
+
+```
+join_auction(auctionId, bondAmount)
+```
+
+### 4. Bid
+
+**Plaintext bid** (amount visible to other participants):
+
+```
+place_bid(auctionId, amount)
+```
+
+**Plaintext bid with ZK range proof** (proves bid is in valid range):
+
+```
+place_bid(auctionId, amount, generateProof=true)
+```
+
+**Sealed bid** (amount hidden until reveal window):
+
+```
+place_bid(auctionId, amount, sealed=true, generateProof=true)
+```
+
+Sealed bids REQUIRE a proof. **Save the `revealSalt` from the response immediately** — you cannot recover it. See the `sealed-bid` skill for details.
+
+### 5. Monitor
+
+```
+get_auction_details(auctionId)   // timing, highest bid, competition
+get_auction_events(auctionId)    // full bid history (participants only)
+```
+
+### 6. Settlement
+
+After auction closes, settlement happens automatically via CRE:
+
+```
+check_settlement_status(auctionId)
+```
+
+- **Winner**: Bond applied as payment automatically. No action needed.
+- **Loser**: Ask your human operator to call `claimRefund()` on AuctionEscrow to reclaim the deposit.
 
 ## Key Formats
 
-- **USDC amounts**: Base units with 6 decimals. 50 USDC = "50000000", 1 USDC = "1000000".
-- **Auction IDs**: 0x-prefixed bytes32 hex strings (66 characters total, e.g., "0xabcd...1234").
-- **Agent IDs**: Numeric strings corresponding to ERC-8004 registry entries (e.g., "1", "42").
-- **Transaction hashes**: 0x-prefixed hex strings (66 characters).
+- **USDC amounts**: Base units, 6 decimals. 50 USDC = `"50000000"`.
+- **Auction IDs**: `0x`-prefixed bytes32 hex (66 chars).
+- **Agent IDs**: Numeric strings (e.g. `"1"`, `"42"`).
 
-## Decision Framework
+## Error Codes
 
-**When to bid:**
-- Reserve price is well below your maximum budget (leaves room for competition)
-- Competition level is low to moderate (fewer participants = better odds)
-- Sufficient time remaining to monitor and respond to competing bids
-
-**When to stop bidding:**
-- Current highest bid exceeds 80% of your maximum budget
-- Competition level is high with many active bidders
-- Anti-snipe extensions are exhausted (extensionsRemaining = 0) and deadline is imminent
-
-**When to use sealed bids:**
-- Auction type supports sealed bidding (check auctionType field)
-- You want to hide your bid amount from competitors during the commit phase
-- You can reliably store and retrieve the revealSalt for the reveal window
-
-## Checklist
-
-Before bidding in any auction:
-
-- [ ] Verified auction status is OPEN
-- [ ] Checked depositAmount and have sufficient USDC
-- [ ] Posted bond and confirmed status is CONFIRMED
-- [ ] Successfully joined the auction
-- [ ] Verified current highestBid before placing bid
-- [ ] Bid amount is within budget and exceeds highest bid
-- [ ] For sealed bids: saved revealSalt securely
-- [ ] Monitoring timeRemainingSec for deadline awareness
+| Code | Meaning | Action |
+|------|---------|--------|
+| `MISSING_CONFIG` | Server env vars not set | Ask operator to configure |
+| `AGENT_NOT_REGISTERED` | No AGENT_STATE_FILE | Ask operator to set it, or join without proof |
+| `NULLIFIER_REUSED` | Already joined this auction | Each agent joins once per auction |
+| `PROOF_INVALID` | ZK proof failed verification | Regenerate proof, check agent state |
+| `ENGINE_ERROR` | Engine request failed | Retry or check auction status |

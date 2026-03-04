@@ -1,70 +1,56 @@
 ---
 name: sealed-bid-strategy
-description: Strategy guide for sealed-bid auctions — commit phase, reveal window, salt management. Use when participating in a sealed-bid auction or when the auctionType is "sealed".
+description: Strategy guide for sealed-bid auctions — commit-reveal with Poseidon hashing, salt management, ZK range proofs. Use when auctionType is "sealed" or agent wants to hide bid amounts.
 ---
 
 # Sealed-Bid Strategy
 
-Specialized skill for sealed-bid auctions that use a Poseidon-based commit-reveal scheme to hide bid amounts until the reveal window.
+Sealed-bid auctions use Poseidon-based commit-reveal. Your bid amount stays hidden until the reveal window.
 
-## When to Use
+## How It Works
 
-- Auction type is "sealed" (check auctionType in get_auction_details response)
-- You need to place a hidden bid during the commit phase
-- You need to reveal a previously committed bid
-- Managing multiple sealed bid salts across auctions
+1. **Commit phase** (OPEN): You submit `Poseidon(bid, salt)` as a commitment. Others see you bid but not the amount.
+2. **Reveal phase** (REVEAL_WINDOW): You prove your commitment by providing the original bid and salt. Engine verifies `Poseidon(bid, salt) == stored commitment`.
 
-## How Sealed Bids Work
+Winner = highest revealed bid.
 
-Sealed-bid auctions have two distinct phases:
+## Placing a Sealed Bid
 
-1. **Commit phase** (auction status: OPEN): You submit a hidden bid. The engine computes `Poseidon(bid, salt)` as your commitment hash and records it on the event log. Other participants see that you bid but not the amount.
+Sealed bids require a ZK range proof. Use `generateProof: true` and the server handles it:
 
-2. **Reveal phase** (auction status: REVEAL_WINDOW): After the commit phase ends, a reveal window opens. You must prove your commitment by providing the original bid amount and salt. The engine recomputes the Poseidon hash and verifies it matches.
+```
+place_bid(auctionId, amount, sealed=true, generateProof=true)
+```
 
-The winner is determined by the highest revealed bid, not by commit order.
+The response includes:
+- `bidCommitment` — the Poseidon hash stored on the event log
+- `revealSalt` — **SAVE THIS IMMEDIATELY**
 
-## Critical: Salt Management
+**If you lose the salt, you cannot reveal your bid. Your bond is forfeit.**
 
-When you call `place_bid(auctionId, amount, sealed=true)`, the response includes a `revealSalt` field.
+Store the salt keyed by auctionId. If you make multiple sealed bids, each has a unique salt.
 
-**You MUST save this value immediately.** The salt is generated randomly and cannot be recovered from the engine or the commitment hash. If you lose the salt:
+## Revealing
 
-- You cannot reveal your bid
-- Your bid is treated as forfeit
-- You lose your bonded deposit
+When auction status changes to `REVEAL_WINDOW`:
 
-Storage recommendations:
-- Keep the salt in agent memory for the duration of the auction
-- If your agent has persistent state, write the salt keyed by `(auctionId, commitmentHash)`
-- For multiple sealed bids, track each salt independently — each `place_bid` generates a unique salt
+```
+reveal_bid(auctionId, bid=<exact original amount>, salt=<saved revealSalt>)
+```
 
-## Workflow
+The bid and salt must exactly match the original `place_bid` call. The server signs a REVEAL EIP-712 message and submits to the engine.
 
-1. **Place sealed bid**: Call `place_bid(auctionId, amount, sealed=true)`
-2. **Save salt**: Immediately store the `revealSalt` from the response
-3. **Wait for reveal window**: Monitor `get_auction_details` — when status changes to REVEAL_WINDOW, proceed
-4. **Reveal bid**: Call `reveal_bid(auctionId, amount, salt)` with the exact original bid amount and saved salt
-5. **Verify reveal**: Check the response confirms successful reveal
+## Timing
 
-## Timing Strategy
+- **Commit early**: Since amounts are hidden, early commitment doesn't reveal strategy.
+- **Reveal promptly**: The reveal window has a fixed duration. Missing it forfeits your bid.
+- **Monitor transitions**: Poll `get_auction_details` to detect OPEN -> REVEAL_WINDOW.
 
-- **Commit early**: Place your sealed bid early in the commit phase. Since amounts are hidden, early commitment does not reveal strategy but establishes your participation.
-- **Reveal promptly**: Reveal as soon as the window opens. The reveal window has a fixed duration — missing it forfeits your bid.
-- **Monitor status transitions**: Poll `get_auction_details` to detect when the auction moves from OPEN to REVEAL_WINDOW. Do not rely on timing alone.
+## Error Codes
 
-## Error Handling
-
-- **REVEAL_MISMATCH**: The bid amount or salt does not match your commitment. Verify you are using the exact values from the original `place_bid` call.
-- **REVEAL_WINDOW_CLOSED**: The reveal window has passed. Your bid is forfeit.
-- **BID_TOO_LOW**: Even in sealed mode, some auctions enforce a minimum bid. Ensure your amount meets the reserve price.
-
-## Checklist
-
-- [ ] Confirmed auction supports sealed bidding (auctionType)
-- [ ] Called place_bid with sealed=true
-- [ ] Saved revealSalt immediately after place_bid response
-- [ ] Verified commitment hash was recorded (check response)
-- [ ] Monitoring auction status for REVEAL_WINDOW transition
-- [ ] Revealed bid within the reveal window using exact original amount and salt
-- [ ] Confirmed reveal was accepted by the engine
+| Code | Meaning | Action |
+|------|---------|--------|
+| `PROOF_REQUIRED` | Sealed bids need a ZK proof | Add `generateProof=true` |
+| `REVEAL_MISMATCH` | Amount or salt doesn't match commitment | Use exact original values |
+| `REVEAL_WINDOW_CLOSED` | Too late to reveal | Bid is forfeit |
+| `BID_COMMIT_FAILED` | Engine rejected the commitment | Check proof and auction status |
