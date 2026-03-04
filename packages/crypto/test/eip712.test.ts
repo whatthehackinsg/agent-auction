@@ -46,7 +46,7 @@ describe("hashTypedData", () => {
       auctionId: 1, bidCommitment: 0, encryptedBidHash: ethers.ZeroHash,
       zkRangeProofHash: ethers.ZeroHash, nonce: 0, deadline: 0,
     });
-    hashTypedData(TEST_DOMAIN, "Reveal", { auctionId: 1, bid: 0, salt: 0, nonce: 0 });
+    hashTypedData(TEST_DOMAIN, "Reveal", { auctionId: 1, bid: 0, salt: 0, nonce: 0, deadline: 0 });
     hashTypedData(TEST_DOMAIN, "Deliver", {
       auctionId: 1, milestoneId: 0, deliveryHash: ethers.ZeroHash,
       executionLogHash: ethers.ZeroHash, nonce: 0, deadline: 0,

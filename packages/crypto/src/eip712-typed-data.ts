@@ -52,6 +52,7 @@ export const TYPED_DATA_TYPES = {
     { name: "bid", type: "uint256" },
     { name: "salt", type: "uint256" },
     { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
   ],
   Deliver: [
     { name: "auctionId", type: "uint256" },
@@ -76,6 +77,9 @@ export const TYPED_DATA_TYPES = {
 } as const;
 
 export type SpeechActType = keyof typeof TYPED_DATA_TYPES;
+
+type TypedDataField = { name: string; type: string };
+type TypedDataMap = Record<string, readonly TypedDataField[]>;
 
 // ----- Core Functions -----
 
@@ -108,10 +112,7 @@ export function encodeTypedData(
 ) {
   return {
     domain,
-    types: { [primaryType]: TYPED_DATA_TYPES[primaryType] } as Record<
-      string,
-      { name: string; type: string }[]
-    >,
+    types: { [primaryType]: TYPED_DATA_TYPES[primaryType] } as TypedDataMap,
     primaryType,
     value: message,
   };
@@ -127,11 +128,13 @@ export function verifyEIP712Signature(
   signature: string | Uint8Array
 ): string {
   const types = { [primaryType]: TYPED_DATA_TYPES[primaryType] };
+  const signatureHex =
+    typeof signature === "string" ? signature : ethers.hexlify(signature);
   const recovered = ethers.verifyTypedData(
     domain,
     types as any,
     message,
-    signature
+    signatureHex
   );
   return recovered;
 }

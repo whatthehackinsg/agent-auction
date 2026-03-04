@@ -39,6 +39,8 @@ export async function generateMembershipProof(input: {
   pathIndices: number[];
   auctionId: bigint;
   registryRoot: bigint;
+  /** Optional compatibility input for older compiled artifacts that still expect `salt`. */
+  salt?: bigint;
 }): Promise<{ proof: Groth16Proof; publicSignals: string[] }> {
   // Pre-compute expected public signals for validation
   const capabilityCommitment = await poseidonHash([
@@ -51,7 +53,7 @@ export async function generateMembershipProof(input: {
     1n, // JOIN action type
   ]);
 
-  const circuitInput = {
+  const circuitInputBase = {
     // Private
     agentSecret: input.agentSecret.toString(),
     capabilityId: input.capabilityId.toString(),
@@ -65,13 +67,30 @@ export async function generateMembershipProof(input: {
     nullifier: nullifier.toString(),
   };
 
-  const { proof, publicSignals } = await snarkjs.groth16.fullProve(
-    circuitInput,
-    wasmPath("RegistryMembership"),
-    zkeyPath("registry_member")
-  );
-
-  return { proof: proof as Groth16Proof, publicSignals };
+  try {
+    const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+      circuitInputBase,
+      wasmPath("RegistryMembership"),
+      zkeyPath("registry_member")
+    );
+    return { proof: proof as Groth16Proof, publicSignals };
+  } catch (err) {
+    // Compatibility fallback for stale wasm/zkey artifacts that still require a private `salt`.
+    const message = err instanceof Error ? err.message : String(err);
+    if (!message.includes("Not all inputs have been set")) {
+      throw err;
+    }
+    const circuitInputWithSalt = {
+      ...circuitInputBase,
+      salt: (input.salt ?? 0n).toString(),
+    };
+    const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+      circuitInputWithSalt,
+      wasmPath("RegistryMembership"),
+      zkeyPath("registry_member")
+    );
+    return { proof: proof as Groth16Proof, publicSignals };
+  }
 }
 
 /**

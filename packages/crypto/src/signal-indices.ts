@@ -5,7 +5,8 @@
  *
  * NOTE: publicSignals[REGISTRY_ROOT] is the POSEIDON Merkle root from the circuit witness.
  * It does NOT match AgentPrivacyRegistry.getRoot() which uses keccak256 internally.
- * The Groth16 proof itself binds the Poseidon root — no external cross-check is needed.
+ * The engine cross-checks publicSignals[REGISTRY_ROOT] against getAgentPoseidonRoot()
+ * and publicSignals[CAPABILITY_COMMITMENT] against getAgentCapabilityCommitment() on-chain.
  */
 export const MEMBERSHIP_SIGNALS = {
   REGISTRY_ROOT: 0,

@@ -41,6 +41,8 @@ skills-lock.json
 circuits/build/
 circuits/ptau/
 circuits/keys/*.zkey
+!circuits/keys/registry_member_final.zkey
+!circuits/keys/bid_range_final.zkey
 circuits/*.r1cs
 circuits/*.sym
 circuits/*.ptau
