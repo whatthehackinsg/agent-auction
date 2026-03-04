@@ -15,6 +15,7 @@ import type { EngineClient } from '../lib/engine.js'
 import { ActionSigner } from '../lib/signer.js'
 import type { ServerConfig } from '../lib/config.js'
 import { requireSignerConfig } from '../lib/config.js'
+import { toolError } from '../lib/tool-response.js'
 
 interface EngineActionResponse {
   seq: number
@@ -49,7 +50,14 @@ export function registerRevealTool(
       }),
     },
     async ({ auctionId, bid, salt }) => {
-      const { agentPrivateKey, agentId } = requireSignerConfig(config)
+      let agentPrivateKey: Hex
+      let agentId: string
+      try {
+        ;({ agentPrivateKey, agentId } = requireSignerConfig(config))
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return toolError('MISSING_CONFIG', msg, 'Set AGENT_PRIVATE_KEY and AGENT_ID env vars')
+      }
       const signer = new ActionSigner(agentPrivateKey)
 
       const nonceKey = `REVEAL:${agentId}`
@@ -71,22 +79,21 @@ export function registerRevealTool(
         )
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: JSON.stringify({
-                success: false,
-                error: msg,
-                hint: msg.includes('commitment mismatch')
-                  ? 'The bid and salt do not match your stored commitment'
-                  : msg.includes('reveal window')
-                    ? 'The reveal window is not currently open'
-                    : 'Check auction status and your bid/salt values',
-              }, null, 2),
-            },
-          ],
+        if (msg.includes('commitment mismatch')) {
+          return toolError(
+            'REVEAL_MISMATCH',
+            msg,
+            'The bid and salt do not match your stored commitment — verify you saved the correct revealSalt from place_bid',
+          )
         }
+        if (msg.includes('reveal window')) {
+          return toolError(
+            'REVEAL_WINDOW_CLOSED',
+            msg,
+            'The reveal window is not currently open — check auction status with get_auction_details',
+          )
+        }
+        return toolError('ENGINE_ERROR', msg, 'Check auction status and your bid/salt values')
       }
 
       nonceTracker.set(nonceKey, nonce + 1)

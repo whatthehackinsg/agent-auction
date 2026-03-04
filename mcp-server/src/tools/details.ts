@@ -11,6 +11,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { EngineClient } from '../lib/engine.js'
+import { toolError } from '../lib/tool-response.js'
 
 interface RoomSnapshot {
   auctionId: string
@@ -90,7 +91,20 @@ export function registerDetailsTool(server: McpServer, engine: EngineClient): vo
       }),
     },
     async ({ auctionId }) => {
-      const data = await engine.get<AuctionDetailResponse>(`/auctions/${auctionId}`)
+      let data: AuctionDetailResponse
+      try {
+        data = await engine.get<AuctionDetailResponse>(`/auctions/${auctionId}`)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (msg.includes('404') || msg.toLowerCase().includes('not found')) {
+          return toolError(
+            'AUCTION_NOT_FOUND',
+            msg,
+            'Verify the auction ID is correct (0x-prefixed bytes32)',
+          )
+        }
+        return toolError('ENGINE_ERROR', msg, 'Check engine connectivity and try again')
+      }
 
       const { auction, snapshot, nftEscrowState } = data
       const result = {

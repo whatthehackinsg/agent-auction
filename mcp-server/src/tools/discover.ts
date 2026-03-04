@@ -8,6 +8,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { EngineClient } from '../lib/engine.js'
+import { toolError } from '../lib/tool-response.js'
 
 interface AuctionRow {
   auction_id: string
@@ -63,7 +64,13 @@ export function registerDiscoverTool(server: McpServer, engine: EngineClient): v
       }),
     },
     async ({ statusFilter, hasNft: hasNftFilter }) => {
-      const data = await engine.get<AuctionsResponse>('/auctions')
+      let data: AuctionsResponse
+      try {
+        data = await engine.get<AuctionsResponse>('/auctions')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return toolError('ENGINE_ERROR', msg, 'Check engine connectivity and try again')
+      }
       let auctions = data.auctions
 
       if (statusFilter && statusFilter !== 'ALL') {

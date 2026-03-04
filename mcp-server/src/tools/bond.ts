@@ -15,6 +15,7 @@ import type { EngineClient } from '../lib/engine.js'
 import type { ServerConfig } from '../lib/config.js'
 import { requireSignerConfig } from '../lib/config.js'
 import { ActionSigner } from '../lib/signer.js'
+import { toolError } from '../lib/tool-response.js'
 
 interface BondStatusResponse {
   status: 'NONE' | 'PENDING' | 'CONFIRMED' | 'TIMEOUT'
@@ -47,14 +48,22 @@ export function registerBondTools(
     async ({ auctionId, agentId: inputAgentId }) => {
       const agentId = inputAgentId ?? config.agentId
       if (!agentId) {
-        throw new Error(
-          'agentId is required: either provide it as a parameter or set AGENT_ID env var',
+        return toolError(
+          'MISSING_CONFIG',
+          'agentId is required',
+          'Provide agentId parameter or set AGENT_ID env var',
         )
       }
 
-      const status = await engine.get<BondStatusResponse>(
-        `/auctions/${auctionId}/bonds/${agentId}`,
-      )
+      let status: BondStatusResponse
+      try {
+        status = await engine.get<BondStatusResponse>(
+          `/auctions/${auctionId}/bonds/${agentId}`,
+        )
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return toolError('ENGINE_ERROR', msg, 'Check engine connectivity and try again')
+      }
 
       return {
         content: [
@@ -93,19 +102,38 @@ export function registerBondTools(
       }),
     },
     async ({ auctionId, amount, txHash }) => {
-      const { agentId } = requireSignerConfig(config)
+      let agentId: string
+      try {
+        ;({ agentId } = requireSignerConfig(config))
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return toolError('MISSING_CONFIG', msg, 'Set AGENT_PRIVATE_KEY and AGENT_ID env vars')
+      }
       const signer = new ActionSigner(config.agentPrivateKey!)
       const depositor = signer.address
 
-      const result = await engine.post<{ status: string; txHash: string }>(
-        `/auctions/${auctionId}/bonds`,
-        {
-          agentId,
-          depositor,
-          amount,
-          txHash,
-        },
-      )
+      let result: { status: string; txHash: string }
+      try {
+        result = await engine.post<{ status: string; txHash: string }>(
+          `/auctions/${auctionId}/bonds`,
+          {
+            agentId,
+            depositor,
+            amount,
+            txHash,
+          },
+        )
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (msg.toLowerCase().includes('bond')) {
+          return toolError(
+            'BOND_NOT_CONFIRMED',
+            msg,
+            'Verify the USDC transfer tx hash and amount are correct',
+          )
+        }
+        return toolError('ENGINE_ERROR', msg, 'Check engine connectivity and try again')
+      }
 
       return {
         content: [

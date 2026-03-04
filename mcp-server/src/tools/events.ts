@@ -12,6 +12,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { EngineClient } from '../lib/engine.js'
+import { toolError } from '../lib/tool-response.js'
 
 interface EventRow {
   seq: number
@@ -55,7 +56,20 @@ export function registerEventsTool(server: McpServer, engine: EngineClient): voi
     async ({ auctionId, agentId, limit }) => {
       // Build the events URL with participant token if agent ID provided
       const params = agentId ? `?participantToken=${encodeURIComponent(agentId)}` : ''
-      const data = await engine.get<EventsResponse>(`/auctions/${auctionId}/events${params}`)
+      let data: EventsResponse
+      try {
+        data = await engine.get<EventsResponse>(`/auctions/${auctionId}/events${params}`)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (msg.includes('403') || msg.toLowerCase().includes('participant')) {
+          return toolError(
+            'PARTICIPANT_REQUIRED',
+            msg,
+            'You must join the auction before accessing events — call join_auction first',
+          )
+        }
+        return toolError('ENGINE_ERROR', msg, 'Check engine connectivity and try again')
+      }
       let events = data.events
 
       if (limit !== undefined && limit > 0) {
