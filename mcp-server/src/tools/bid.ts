@@ -17,6 +17,8 @@ import { ActionSigner } from '../lib/signer.js'
 import type { ServerConfig } from '../lib/config.js'
 import { requireSignerConfig } from '../lib/config.js'
 import { loadAgentState, generateBidRangeProofForAgent } from '../lib/proof-generator.js'
+import { generateSecret } from '@agent-auction/crypto'
+import { poseidonHash } from '@agent-auction/crypto/poseidon-chain'
 
 interface EngineActionResponse {
   seq: number
@@ -55,6 +57,14 @@ export function registerBidTool(
         amount: z
           .string()
           .describe('Bid amount in USDC base units (6 decimals). E.g. "100000000" for 100 USDC'),
+        sealed: z
+          .boolean()
+          .optional()
+          .describe('If true, submit a sealed BID_COMMIT instead of a plaintext BID. Requires generateProof: true or proofPayload.'),
+        salt: z
+          .string()
+          .optional()
+          .describe('Reveal salt for sealed bids (bigint as decimal string). Auto-generated if omitted.'),
         proofPayload: z
           .object({
             proof: z.object({
@@ -76,7 +86,7 @@ export function registerBidTool(
           ),
       }),
     },
-    async ({ auctionId, amount, proofPayload, generateProof }) => {
+    async ({ auctionId, amount, sealed, salt: saltParam, proofPayload, generateProof }) => {
       const { agentPrivateKey, agentId } = requireSignerConfig(config)
       const signer = new ActionSigner(agentPrivateKey)
 
@@ -114,6 +124,67 @@ export function registerBidTool(
         }
       }
 
+      // ── Sealed-bid (BID_COMMIT) path ──────────────────────────────────────
+      if (sealed) {
+        if (!resolvedProof) {
+          return zkError(
+            'PROOF_REQUIRED',
+            'Sealed-bid BID_COMMIT requires a BidRange proof',
+            'Set generateProof: true or provide a pre-built proofPayload',
+          )
+        }
+
+        const bidAmount = BigInt(amount)
+        const revealSalt = saltParam ? BigInt(saltParam) : generateSecret()
+        const bidCommitment = await poseidonHash([bidAmount, revealSalt])
+
+        const nonceKey = `BID_COMMIT:${agentId}`
+        const nonce = nonceTracker.get(nonceKey) ?? 0
+
+        const payload = await signer.signBidCommit({
+          auctionId: auctionId as Hex,
+          agentId,
+          bidCommitment,
+          nonce,
+        })
+
+        let result: EngineActionResponse
+        try {
+          result = await engine.post<EngineActionResponse>(
+            `/auctions/${auctionId}/action`,
+            { ...payload, proof: resolvedProof },
+          )
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          return zkError('BID_COMMIT_FAILED', msg, 'Check the proof and auction status')
+        }
+
+        nonceTracker.set(nonceKey, nonce + 1)
+
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({
+                success: true,
+                action: 'BID_COMMIT',
+                auctionId,
+                agentId,
+                wallet: signer.address,
+                bidCommitment: bidCommitment.toString(),
+                revealSalt: revealSalt.toString(),
+                nonce,
+                seq: result.seq,
+                eventHash: result.eventHash,
+                prevHash: result.prevHash,
+                note: 'Save revealSalt — required to reveal your bid in the reveal window',
+              }, null, 2),
+            },
+          ],
+        }
+      }
+
+      // ── Standard BID path ─────────────────────────────────────────────────
       const nonceKey = `BID:${agentId}`
       const nonce = nonceTracker.get(nonceKey) ?? 0
 

@@ -51,15 +51,57 @@ export async function verifyAgentWallet(
 }
 
 /**
- * Read the current Merkle root from AgentPrivacyRegistry.
+ * Read the current keccak256 Merkle root from AgentPrivacyRegistry.
  *
- * Used to cross-check membership proofs against the on-chain state.
  * Returns the root as a hex string, or null on error.
  */
 export async function getPrivacyRegistryRoot(): Promise<string | null> {
   try {
     const root = await agentPrivacyRegistry.read.getRoot()
     return root as string
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Read the per-agent Poseidon Merkle root from AgentPrivacyRegistry.
+ *
+ * This is the Poseidon root stored on-chain during registration, matching the
+ * circuit's registryRoot public signal. Used to cross-check ZK membership proofs.
+ *
+ * Returns the root as a 0x-prefixed hex string, or null if not registered / zero root.
+ */
+export async function getAgentPoseidonRoot(
+  agentId: string,
+): Promise<string | null> {
+  try {
+    const root = await agentPrivacyRegistry.read.getAgentPoseidonRoot([BigInt(agentId)])
+    // Zero bytes32 means not registered or root not stored
+    if (!root || root === ('0x' + '0'.repeat(64))) {
+      return null
+    }
+    return root as string
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Read the per-agent capability commitment from AgentPrivacyRegistry.
+ *
+ * Returns Poseidon(capabilityId, agentSecret) stored during registration,
+ * or null if not registered / zero.
+ */
+export async function getAgentCapabilityCommitment(
+  agentId: string,
+): Promise<string | null> {
+  try {
+    const commitment = await agentPrivacyRegistry.read.getAgentCapabilityCommitment([BigInt(agentId)])
+    if (!commitment || commitment === ('0x' + '0'.repeat(64))) {
+      return null
+    }
+    return commitment as string
   } catch {
     return null
   }

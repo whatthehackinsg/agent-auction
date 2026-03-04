@@ -64,6 +64,8 @@ function actionTypeToNumber(type: ActionType): number {
     case ActionType.BID: return 1
     case ActionType.DELIVER: return 2
     case ActionType.WITHDRAW: return 3
+    case ActionType.BID_COMMIT: return 4
+    case ActionType.REVEAL: return 5
     default: throw new Error(`Unknown action type: ${type}`)
   }
 }
@@ -126,6 +128,12 @@ export class AuctionRoom implements DurableObject {
   private uniqueBidderCount: number = 0
   private reservePrice: string = '0'
 
+  /** Sealed-bid mode: commit phase → reveal window → close */
+  private sealedBid: boolean = false
+  private revealWindowSec: number = 120
+  /** Unix timestamp when reveal window closes (0 = not in reveal window yet) */
+  private revealWindowDeadline: number = 0
+
   constructor(state: DurableObjectState, env: Env) {
     this.state = state
     this.env = env
@@ -157,6 +165,9 @@ export class AuctionRoom implements DurableObject {
         lastEventTimestampVal,
         uniqueBiddersVal,
         reservePriceVal,
+        sealedBidVal,
+        revealWindowSecVal,
+        revealWindowDeadlineVal,
       ] = await Promise.all([
         this.state.storage.get<number>('seqCounter'),
         this.state.storage.get<string>('chainHead'),
@@ -182,6 +193,9 @@ export class AuctionRoom implements DurableObject {
         this.state.storage.get<number>('lastEventTimestamp'),
         this.state.storage.get<string[]>('uniqueBidders'),
         this.state.storage.get<string>('reservePrice'),
+        this.state.storage.get<boolean>('sealedBid'),
+        this.state.storage.get<number>('revealWindowSec'),
+        this.state.storage.get<number>('revealWindowDeadline'),
       ])
       this.seqCounter = seq ?? 0
       this.chainHead = head ?? ZERO_HASH_HEX
@@ -230,6 +244,9 @@ export class AuctionRoom implements DurableObject {
       this.uniqueBidderSet = new Set(savedBidders)
       this.uniqueBidderCount = this.uniqueBidderSet.size
       this.reservePrice = reservePriceVal ?? '0'
+      this.sealedBid = sealedBidVal ?? false
+      this.revealWindowSec = revealWindowSecVal ?? 120
+      this.revealWindowDeadline = revealWindowDeadlineVal ?? 0
     })
   }
 
@@ -361,6 +378,16 @@ export class AuctionRoom implements DurableObject {
       }
       await this.state.storage.put('roomConfig', this.roomConfig)
 
+      // Extract sealed-bid config from roomConfig.engine
+      if (typeof this.roomConfig.engine.sealedBid === 'boolean') {
+        this.sealedBid = this.roomConfig.engine.sealedBid
+        await this.state.storage.put('sealedBid', this.sealedBid)
+      }
+      if (typeof this.roomConfig.engine.revealWindowSec === 'number') {
+        this.revealWindowSec = this.roomConfig.engine.revealWindowSec
+        await this.state.storage.put('revealWindowSec', this.revealWindowSec)
+      }
+
       // Load reserve price from D1 for aggregate calculations
       if (this.auctionId) {
         const row = await this.env.AUCTION_DB
@@ -442,18 +469,26 @@ export class AuctionRoom implements DurableObject {
         maxBid = row?.max_bid ?? '0'
       }
 
-      // Read on-chain privacy registry root for ZK proof cross-check
-      let registryRoot: string | undefined
-      if (this.env.ENGINE_REQUIRE_PROOFS === 'true') {
-        const { getPrivacyRegistryRoot } = await import('./lib/identity')
-        const root = await getPrivacyRegistryRoot()
-        if (root) registryRoot = root
+      // Sealed-bid phase checks
+      if (this.sealedBid) {
+        const now = Math.floor(Date.now() / 1000)
+        if (action.type === ActionType.BID) {
+          throw new Error('plaintext BID not allowed in sealed-bid auction; use BID_COMMIT')
+        }
+        if (action.type === ActionType.REVEAL) {
+          if (this.revealWindowDeadline === 0 || now > this.revealWindowDeadline) {
+            throw new Error('reveal window is not open')
+          }
+        }
+        if (action.type === ActionType.BID_COMMIT && (this.auctionStatus !== 1 || this.revealWindowDeadline > 0)) {
+          throw new Error('BID_COMMIT only allowed during commit phase')
+        }
       }
 
+      // Per-agent Poseidon root is fetched inside handleJoin() directly from DO storage cache
       const validationCtx: ValidationContext = {
         requireProofs: this.env.ENGINE_REQUIRE_PROOFS === 'true',
         verifyWallet: this.env.ENGINE_VERIFY_WALLET === 'true',
-        expectedRegistryRoot: registryRoot,
       }
       const validation = await validateAction(
         action,
@@ -576,6 +611,20 @@ export class AuctionRoom implements DurableObject {
       this.uniqueBidderCount = this.uniqueBidderSet.size
       await this.state.storage.put('highestBid', this.highestBid)
       await this.state.storage.put('highestBidder', this.highestBidder)
+      await this.state.storage.put('bidCount', this.bidCount)
+      await this.state.storage.put('uniqueBidders', [...this.uniqueBidderSet])
+    }
+    if (action.type === ActionType.REVEAL) {
+      // Revealed bid updates highestBid only if it exceeds current leader
+      if (BigInt(action.amount) > BigInt(this.highestBid)) {
+        this.highestBid = action.amount
+        this.highestBidder = action.agentId
+        await this.state.storage.put('highestBid', this.highestBid)
+        await this.state.storage.put('highestBidder', this.highestBidder)
+      }
+      this.bidCount += 1
+      this.uniqueBidderSet.add(action.agentId)
+      this.uniqueBidderCount = this.uniqueBidderSet.size
       await this.state.storage.put('bidCount', this.bidCount)
       await this.state.storage.put('uniqueBidders', [...this.uniqueBidderSet])
     }
@@ -936,7 +985,7 @@ export class AuctionRoom implements DurableObject {
         amount: e.amount,
         createdAt: Number(e.created_at ?? 0),
       })
-      if (e.action_type !== ActionType.BID) continue
+      if (e.action_type !== ActionType.BID && e.action_type !== ActionType.REVEAL) continue
       hasBids = true
       const amount = BigInt(e.amount)
       if (amount > winningBidAmount) {
@@ -1085,9 +1134,27 @@ export class AuctionRoom implements DurableObject {
   async alarm(): Promise<void> {
     console.log(`[AuctionRoom] alarm fired for auction ${this.auctionId}`)
     if (!this.auctionId) return
-    // closeAuction is idempotent via onChainSettled — safe to call on retries
     if (this.auctionStatus === 4) return
     if (this.onChainSettled) return
+
+    // Sealed-bid: first alarm (at original deadline) opens reveal window;
+    // second alarm (at revealWindowDeadline) closes the auction.
+    if (this.sealedBid && this.auctionStatus === 1 && this.revealWindowDeadline === 0) {
+      const now = Math.floor(Date.now() / 1000)
+      this.revealWindowDeadline = now + this.revealWindowSec
+      await this.state.storage.put('revealWindowDeadline', this.revealWindowDeadline)
+      await this.state.storage.setAlarm(this.revealWindowDeadline * 1000)
+      this.broadcastEvent({
+        actionType: 'REVEAL_WINDOW_OPEN',
+        agentId: '0',
+        amount: '0',
+        wallet: ZERO_WALLET,
+        timestamp: now,
+      })
+      return
+    }
+
+    // closeAuction is idempotent via onChainSettled — safe to call on retries
     await this.closeAuction(this.auctionId)
   }
 

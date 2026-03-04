@@ -14,6 +14,7 @@ import {
   verifyMembershipProof,
   verifyBidRangeProof,
   deriveNullifier,
+  computeRevealCommitment,
   type AuctionSpeechActType,
   type VerifyMembershipOptions,
   type VerifyBidRangeOptions,
@@ -25,7 +26,7 @@ import { toBytes, toHex } from 'viem'
 export interface ValidationContext {
   /** When true, null/missing ZK proof is rejected. */
   requireProofs?: boolean
-  /** On-chain registry root for cross-checking proof's registryRoot. */
+  /** On-chain registry root for cross-checking proof's registryRoot (legacy global field). */
   expectedRegistryRoot?: string
   /** When true, verify wallet matches ERC-8004 ownerOf(agentId) on JOIN. */
   verifyWallet?: boolean
@@ -128,6 +129,8 @@ export async function commitValidationMutation(
 const ACTION_TO_PRIMARY_TYPE: Record<string, AuctionSpeechActType> = {
   [ActionType.JOIN]: 'Join',
   [ActionType.BID]: 'Bid',
+  [ActionType.BID_COMMIT]: 'BidCommit',
+  [ActionType.REVEAL]: 'Reveal',
   [ActionType.DELIVER]: 'Deliver',
 }
 
@@ -139,7 +142,7 @@ const ACTION_TO_PRIMARY_TYPE: Record<string, AuctionSpeechActType> = {
 async function verifySignature(
   action: ActionRequest,
   auctionId: string,
-  extra?: { nullifier?: bigint },
+  extra?: { nullifier?: bigint; bidCommitment?: bigint },
 ): Promise<void> {
   const primaryType = ACTION_TO_PRIMARY_TYPE[action.type]
   if (!primaryType) {
@@ -149,8 +152,8 @@ async function verifySignature(
   const auctionIdUint = BigInt(auctionId)
   const deadline = BigInt(action.deadline ?? 0)
 
-  // Check deadline hasn't expired (skip if 0 = no expiry)
-  if (deadline > 0n) {
+  // Check deadline hasn't expired (skip if 0 = no expiry, or for REVEAL which has no deadline)
+  if (deadline > 0n && action.type !== ActionType.REVEAL) {
     const now = BigInt(Math.floor(Date.now() / 1000))
     if (deadline < now) {
       throw new Error(`Action signature expired (deadline: ${action.deadline})`)
@@ -175,6 +178,24 @@ async function verifySignature(
         amount: BigInt(action.amount),
         nonce: BigInt(action.nonce),
         deadline,
+      }
+      break
+    case ActionType.BID_COMMIT:
+      message = {
+        auctionId: auctionIdUint,
+        bidCommitment: extra?.bidCommitment ?? 0n,
+        encryptedBidHash: ('0x' + '00'.repeat(32)) as `0x${string}`,
+        zkRangeProofHash: ('0x' + '00'.repeat(32)) as `0x${string}`,
+        nonce: BigInt(action.nonce),
+        deadline,
+      }
+      break
+    case ActionType.REVEAL:
+      message = {
+        auctionId: auctionIdUint,
+        bid: BigInt(action.amount),
+        salt: BigInt(action.revealSalt ?? '0'),
+        nonce: BigInt(action.nonce),
       }
       break
     case ActionType.DELIVER:
@@ -224,6 +245,9 @@ async function verifyMembership(
  * Handle JOIN action: verify membership proof (get ZK nullifier if available),
  * derive fallback nullifier if needed, verify signature, check nullifier not spent,
  * check nonce.
+ *
+ * Phase 3: fetches per-agent Poseidon root from chain (cached in DO storage)
+ * and cross-checks against the proof's registryRoot public signal.
  */
 export async function handleJoin(
   action: ActionRequest,
@@ -246,8 +270,31 @@ export async function handleJoin(
     }
   }
 
+  // 0b. Fetch per-agent Poseidon root for proof cross-check (cached in DO storage, 24h TTL)
+  //     Only needed when proofs are required — saves an RPC call in non-ZK mode.
+  let agentPoseidonRoot: string | undefined
+  if (ctx?.requireProofs) {
+    const cached = await storage.get<string>(`poseidonRoot:${action.agentId}`)
+    if (cached) {
+      agentPoseidonRoot = cached
+    } else {
+      const { getAgentPoseidonRoot } = await import('../lib/identity')
+      const root = await getAgentPoseidonRoot(action.agentId)
+      if (root) {
+        agentPoseidonRoot = root
+        await storage.put(`poseidonRoot:${action.agentId}`, root)
+      }
+    }
+  }
+
+  // Build membership verification context with per-agent root
+  const membershipCtx: ValidationContext = {
+    ...ctx,
+    expectedRegistryRoot: agentPoseidonRoot,
+  }
+
   // 1. Verify membership proof — get ZK nullifier from publicSignals[2] if proof exists
-  const membership = await verifyMembership(action, ctx)
+  const membership = await verifyMembership(action, membershipCtx)
 
   // 2. Determine which nullifier to use:
   //    - If proof provided a valid ZK nullifier (Poseidon), use it
@@ -264,10 +311,11 @@ export async function handleJoin(
     nullifierBigInt = BigInt(membership.nullifier)
   } else {
     // Legacy keccak fallback (no proof or proof was optional and missing)
+    // Phase 5 fix: use agentId (not wallet), action type 1 (matches circuit JOIN=1)
     const fallback = await deriveNullifier(
-      toBytes(action.wallet as `0x${string}`, { size: 32 }),
+      toBytes(BigInt(action.agentId), { size: 32 }),
       toBytes(auctionId as `0x${string}`, { size: 32 }),
-      0, // ActionType.JOIN = 0
+      1, // ActionType.JOIN = 1 (matches circuit nullHash.inputs[2] <== 1)
     )
     nullifierHash = toHex(fallback)
     nullifierBigInt = BigInt(nullifierHash)
@@ -326,11 +374,6 @@ export async function handleBid(
   // 2. If proof was provided, cross-check that the proven reservePrice and maxBudget
   //    are consistent with the auction's constraints
   if (action.proof != null && bidRangeResult.bidCommitment !== '0') {
-    // The proof's reservePrice must not exceed the bid amount
-    // and the bid amount must not exceed the proof's maxBudget.
-    // (The circuit already enforces reservePrice <= bid <= maxBudget,
-    //  so we trust the proof — but we verify the proven range bounds
-    //  are compatible with the auction's maxBid cap if set.)
     if (BigInt(maxBid) > 0n && BigInt(bidRangeResult.maxBudget) > BigInt(maxBid)) {
       throw new Error(
         `Bid range proof maxBudget ${bidRangeResult.maxBudget} exceeds auction max bid cap ${maxBid}`,
@@ -375,6 +418,105 @@ export async function handleBid(
       actionType: ActionType.BID,
       nonce: action.nonce,
       ...(bidRangeResult.bidCommitment !== '0' ? { bidCommitment: bidRangeResult.bidCommitment } : {}),
+    },
+  }
+}
+
+/**
+ * Handle BID_COMMIT action (sealed-bid mode).
+ * Verifies BidRange proof (required), verifies BidCommit EIP-712 signature,
+ * stores the bid commitment for later REVEAL verification.
+ */
+export async function handleBidCommit(
+  action: ActionRequest,
+  storage: DurableObjectStorage,
+  auctionId: string,
+): Promise<ValidationResult> {
+  // 1. BidRange proof is required for BID_COMMIT (no plaintext amount)
+  const bidRangeResult = await verifyBidRangeProof(action.proof ?? null, { requireProof: true })
+  if (!bidRangeResult.valid) {
+    throw new Error(`Invalid bid range proof for agent ${action.agentId}`)
+  }
+
+  // 2. Extract bidCommitment from proven public signals
+  const bidCommitment = BigInt(bidRangeResult.bidCommitment)
+
+  // 3. Verify BidCommit EIP-712 signature (includes bidCommitment from proof)
+  await verifySignature(action, auctionId, { bidCommitment })
+
+  // 4. Check nonce
+  await checkNonce(action.agentId, ActionType.BID_COMMIT, action.nonce, storage)
+
+  // 5. Store bidCommitment for REVEAL phase verification
+  await storage.put(`bidCommit:${action.agentId}`, bidRangeResult.bidCommitment)
+
+  return {
+    action: {
+      type: action.type,
+      agentId: action.agentId,
+      wallet: action.wallet,
+      amount: '0', // No plaintext amount in sealed-bid commit phase
+      nonce: action.nonce,
+      signature: action.signature,
+      proof: action.proof,
+    },
+    mutation: {
+      agentId: action.agentId,
+      actionType: ActionType.BID_COMMIT,
+      nonce: action.nonce,
+      bidCommitment: bidRangeResult.bidCommitment,
+    },
+  }
+}
+
+/**
+ * Handle REVEAL action (sealed-bid mode).
+ * Verifies Reveal EIP-712 signature, loads stored bid commitment,
+ * computes Poseidon(bid, salt) and verifies it matches the stored commitment.
+ */
+export async function handleReveal(
+  action: ActionRequest,
+  storage: DurableObjectStorage,
+  auctionId: string,
+): Promise<ValidationResult> {
+  // 1. Verify Reveal EIP-712 signature
+  await verifySignature(action, auctionId)
+
+  // 2. Check nonce
+  await checkNonce(action.agentId, ActionType.REVEAL, action.nonce, storage)
+
+  // 3. Load stored bid commitment from BID_COMMIT phase
+  const stored = await storage.get<string>(`bidCommit:${action.agentId}`)
+  if (!stored) {
+    throw new Error(
+      `No bid commitment found for agent ${action.agentId} — submit BID_COMMIT first`,
+    )
+  }
+
+  // 4. Compute Poseidon(bid, salt) and verify against stored commitment
+  const bid = BigInt(action.amount)
+  const salt = BigInt(action.revealSalt ?? '0')
+  const computed = await computeRevealCommitment(bid, salt)
+  if (computed !== stored) {
+    throw new Error(`Reveal commitment mismatch for agent ${action.agentId}`)
+  }
+
+  // 5. Delete commitment to prevent double-reveal
+  await storage.delete(`bidCommit:${action.agentId}`)
+
+  return {
+    action: {
+      type: action.type,
+      agentId: action.agentId,
+      wallet: action.wallet,
+      amount: action.amount, // The actual revealed bid amount
+      nonce: action.nonce,
+      signature: action.signature,
+    },
+    mutation: {
+      agentId: action.agentId,
+      actionType: ActionType.REVEAL,
+      nonce: action.nonce,
     },
   }
 }
@@ -429,6 +571,10 @@ export async function validateAction(
       return handleJoin(action, storage, auctionId, ctx)
     case ActionType.BID:
       return handleBid(action, storage, auctionId, highestBid, maxBid, ctx)
+    case ActionType.BID_COMMIT:
+      return handleBidCommit(action, storage, auctionId)
+    case ActionType.REVEAL:
+      return handleReveal(action, storage, auctionId)
     case ActionType.DELIVER:
       return handleDeliver(action, storage, auctionId)
     default:

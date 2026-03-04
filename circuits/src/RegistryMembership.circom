@@ -6,7 +6,7 @@ include "../node_modules/circomlib/circuits/mux1.circom";
 // Prove membership in the registry Merkle tree
 // without revealing which agent you are.
 //
-// Private inputs: agentSecret, capabilityId, leafIndex, pathElements, pathIndices, auctionId, salt
+// Private inputs: agentSecret, capabilityId, leafIndex, pathElements, pathIndices, auctionId
 // Public inputs:  registryRoot, capabilityCommitment, nullifier
 //
 // Constraints: ~12K (20-level Poseidon Merkle tree)
@@ -18,7 +18,6 @@ template RegistryMembership(LEVELS) {
     signal input pathElements[LEVELS];
     signal input pathIndices[LEVELS];
     signal input auctionId;
-    signal input salt;
 
     // --- Public inputs (sent to DO sequencer) ---
     signal input registryRoot;
@@ -42,6 +41,8 @@ template RegistryMembership(LEVELS) {
     for (var i = 0; i < LEVELS; i++) {
         // pathIndices[i] == 0 means current node is left child
         // pathIndices[i] == 1 means current node is right child
+        // Boolean-constrain pathIndices: must be 0 or 1 (prevents malleability)
+        pathIndices[i] * (1 - pathIndices[i]) === 0;
         mux[i] = Mux1();
         mux[i].c[0] <== levelHash[i];
         mux[i].c[1] <== pathElements[i];

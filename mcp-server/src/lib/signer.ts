@@ -2,7 +2,7 @@
  * EIP-712 signing using viem's privateKeyToAccount.
  *
  * Implements the same domain/types as the engine and agent-client
- * to produce valid signatures for JOIN and BID actions.
+ * to produce valid signatures for JOIN, BID, BID_COMMIT, and REVEAL actions.
  */
 
 import {
@@ -45,21 +45,39 @@ const BID_TYPES = {
   ],
 } as const
 
+const BID_COMMIT_TYPES = {
+  BidCommit: [
+    { name: 'auctionId', type: 'uint256' },
+    { name: 'bidCommitment', type: 'uint256' },
+    { name: 'encryptedBidHash', type: 'bytes32' },
+    { name: 'zkRangeProofHash', type: 'bytes32' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'deadline', type: 'uint256' },
+  ],
+} as const
+
+const REVEAL_TYPES = {
+  Reveal: [
+    { name: 'auctionId', type: 'uint256' },
+    { name: 'bid', type: 'uint256' },
+    { name: 'salt', type: 'uint256' },
+    { name: 'nonce', type: 'uint256' },
+  ],
+} as const
+
 // ── Nullifier derivation ─────────────────────────────────────────────────
 
 /**
- * Derive the JOIN nullifier exactly as the engine and agent-client do.
+ * Derive the JOIN nullifier exactly as the engine's legacy fallback does.
  *
- * nullifier = keccak256(abi.encode(walletAsUint256, auctionIdAsUint256, 0))
+ * nullifier = keccak256(abi.encode(agentId, auctionIdAsUint256, ActionType.JOIN=1))
+ *
+ * Used only when no ZK proof is available. When a ZK membership proof is provided,
+ * the Poseidon nullifier from publicSignals[MEMBERSHIP_SIGNALS.NULLIFIER] is used instead.
  */
-export function deriveJoinNullifier(wallet: Address, auctionId: Hex): bigint {
-  const walletBytes = toBytes(wallet, { size: 32 })
+export function deriveJoinNullifier(agentId: bigint, auctionId: Hex): bigint {
   const auctionBytes = toBytes(auctionId, { size: 32 })
 
-  let secret = 0n
-  for (const b of walletBytes) {
-    secret = (secret << 8n) | BigInt(b)
-  }
   let auction = 0n
   for (const b of auctionBytes) {
     auction = (auction << 8n) | BigInt(b)
@@ -71,7 +89,7 @@ export function deriveJoinNullifier(wallet: Address, auctionId: Hex): bigint {
       { name: 'auction', type: 'uint256' },
       { name: 'actionType', type: 'uint256' },
     ],
-    [secret, auction, 0n],
+    [agentId, auction, 1n],
   )
   return BigInt(keccak256(encoded))
 }
@@ -124,7 +142,7 @@ export class ActionSigner {
       nullifier = BigInt(params.proofPayload.publicSignals[MEMBERSHIP_SIGNALS.NULLIFIER])
     } else {
       // Legacy keccak256 fallback for non-ZK joins
-      nullifier = deriveJoinNullifier(this.account.address, params.auctionId)
+      nullifier = deriveJoinNullifier(BigInt(params.agentId), params.auctionId)
     }
 
     const signature = await this.account.signTypedData({
@@ -191,6 +209,100 @@ export class ActionSigner {
       amount: params.amount.toString(),
       nonce: params.nonce,
       deadline: deadline.toString(),
+      signature,
+    }
+  }
+
+  /**
+   * Sign a BID_COMMIT action for sealed-bid auctions.
+   *
+   * The bidCommitment is Poseidon(bid, salt) — computed by the caller and passed in.
+   * encryptedBidHash and zkRangeProofHash are zero bytes32 (not yet implemented).
+   */
+  async signBidCommit(params: {
+    auctionId: Hex
+    agentId: string
+    bidCommitment: bigint
+    nonce: number
+    deadlineSec?: number
+  }): Promise<{
+    type: 'BID_COMMIT'
+    agentId: string
+    wallet: Address
+    amount: string
+    nonce: number
+    deadline: string
+    signature: Hex
+    bidCommitment: string
+  }> {
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + (params.deadlineSec ?? 300))
+    const zeroBytes32 = ('0x' + '00'.repeat(32)) as Hex
+
+    const signature = await this.account.signTypedData({
+      domain: EIP712_DOMAIN,
+      types: BID_COMMIT_TYPES,
+      primaryType: 'BidCommit',
+      message: {
+        auctionId: BigInt(params.auctionId),
+        bidCommitment: params.bidCommitment,
+        encryptedBidHash: zeroBytes32,
+        zkRangeProofHash: zeroBytes32,
+        nonce: BigInt(params.nonce),
+        deadline,
+      },
+    })
+
+    return {
+      type: 'BID_COMMIT',
+      agentId: params.agentId,
+      wallet: this.account.address,
+      amount: '0',
+      nonce: params.nonce,
+      deadline: deadline.toString(),
+      signature,
+      bidCommitment: params.bidCommitment.toString(),
+    }
+  }
+
+  /**
+   * Sign a REVEAL action for sealed-bid auctions.
+   *
+   * The bid and salt must produce Poseidon(bid, salt) === the stored bidCommitment.
+   */
+  async signReveal(params: {
+    auctionId: Hex
+    agentId: string
+    bid: bigint
+    salt: bigint
+    nonce: number
+  }): Promise<{
+    type: 'REVEAL'
+    agentId: string
+    wallet: Address
+    amount: string
+    revealSalt: string
+    nonce: number
+    signature: Hex
+  }> {
+    const signature = await this.account.signTypedData({
+      domain: EIP712_DOMAIN,
+      types: REVEAL_TYPES,
+      primaryType: 'Reveal',
+      message: {
+        auctionId: BigInt(params.auctionId),
+        bid: params.bid,
+        salt: params.salt,
+        nonce: BigInt(params.nonce),
+      },
+    })
+
+    return {
+      type: 'REVEAL',
+      agentId: params.agentId,
+      wallet: this.account.address,
+      amount: params.bid.toString(),
+      revealSalt: params.salt.toString(),
+      nonce: params.nonce,
       signature,
     }
   }

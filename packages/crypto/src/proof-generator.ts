@@ -38,7 +38,6 @@ export async function generateMembershipProof(input: {
   pathElements: bigint[];
   pathIndices: number[];
   auctionId: bigint;
-  salt: bigint;
   registryRoot: bigint;
 }): Promise<{ proof: Groth16Proof; publicSignals: string[] }> {
   // Pre-compute expected public signals for validation
@@ -60,7 +59,6 @@ export async function generateMembershipProof(input: {
     pathElements: input.pathElements.map((x) => x.toString()),
     pathIndices: input.pathIndices,
     auctionId: input.auctionId.toString(),
-    salt: input.salt.toString(),
     // Public
     registryRoot: input.registryRoot.toString(),
     capabilityCommitment: capabilityCommitment.toString(),

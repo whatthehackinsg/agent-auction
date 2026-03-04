@@ -207,7 +207,6 @@ export async function generateMembershipProofForAgent(
     pathElements: merkleProof.pathElements,
     pathIndices: merkleProof.pathIndices,
     auctionId,
-    salt: agentState.salt,
     registryRoot,
   })
 }

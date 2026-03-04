@@ -19,6 +19,7 @@ import {
 import { EIP712_DOMAIN } from './addresses'
 import {
   computeEventHash as poseidonComputeEventHash,
+  poseidonHash,
 } from '@agent-auction/crypto/poseidon-chain'
 // signal-indices is a pure constants file (no snarkjs dependency) — use sub-path
 // import to avoid pulling in the barrel which transitively loads snarkjs-verify.ts
@@ -35,7 +36,7 @@ async function getSnarkjs() {
   if (!_snarkjs) {
     _snarkjs = await import(_snarkjsId)
   }
-  return _snarkjs
+  return _snarkjs!
 }
 
 // ---- Hash Chain (Poseidon-based via poseidon-lite, CF Workers compatible) ----
@@ -125,6 +126,20 @@ export const AUCTION_EIP712_TYPES = {
     { name: 'amount', type: 'uint256' },
     { name: 'nonce', type: 'uint256' },
     { name: 'deadline', type: 'uint256' },
+  ],
+  BidCommit: [
+    { name: 'auctionId', type: 'uint256' },
+    { name: 'bidCommitment', type: 'uint256' },
+    { name: 'encryptedBidHash', type: 'bytes32' },
+    { name: 'zkRangeProofHash', type: 'bytes32' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'deadline', type: 'uint256' },
+  ],
+  Reveal: [
+    { name: 'auctionId', type: 'uint256' },
+    { name: 'bid', type: 'uint256' },
+    { name: 'salt', type: 'uint256' },
+    { name: 'nonce', type: 'uint256' },
   ],
   Deliver: [
     { name: 'auctionId', type: 'uint256' },
@@ -291,11 +306,20 @@ export async function verifyMembershipProof(
       return { valid: false, registryRoot: proofPayload.publicSignals[MEMBERSHIP_SIGNALS.REGISTRY_ROOT], nullifier: proofPayload.publicSignals[MEMBERSHIP_SIGNALS.NULLIFIER] }
     }
 
-    // NOTE: expectedRegistryRoot cross-check intentionally removed (Phase 1 / ZKFN-02).
-    // The circuit uses Poseidon hashing; AgentPrivacyRegistry._updateRoot() uses keccak256.
-    // These roots will NEVER match. The Groth16 proof itself binds the Poseidon root
-    // cryptographically — no external cross-check is needed or meaningful.
-    // Do NOT reinstate this check.
+    // Cross-check the proof's Poseidon registryRoot against the per-agent root stored on-chain.
+    // The on-chain root is stored as bytes32 (hex); the proof signal is a decimal string.
+    // Convert hex → bigint → decimal string for comparison.
+    if (options?.expectedRegistryRoot) {
+      const proofRoot = proofPayload.publicSignals[MEMBERSHIP_SIGNALS.REGISTRY_ROOT]
+      const expectedDecimal = BigInt(options.expectedRegistryRoot).toString()
+      if (proofRoot !== expectedDecimal) {
+        return {
+          valid: false,
+          registryRoot: proofRoot,
+          nullifier: proofPayload.publicSignals[MEMBERSHIP_SIGNALS.NULLIFIER],
+        }
+      }
+    }
 
     return {
       valid: true,
@@ -452,3 +476,15 @@ export async function verifyBidRangeProof(
 
 /** Zero hash constant for chain initialization */
 export const ZERO_HASH = new Uint8Array(32)
+
+/**
+ * Compute bid commitment for sealed-bid reveal verification.
+ * commitment = Poseidon(bid, salt) as decimal string (matches BidRange circuit output format).
+ *
+ * Used by handleReveal() to verify that the revealed (bid, salt) matches the stored commitment
+ * from the handleBidCommit() phase.
+ */
+export async function computeRevealCommitment(bid: bigint, salt: bigint): Promise<string> {
+  const hash = await poseidonHash([bid, salt])
+  return hash.toString()
+}

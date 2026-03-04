@@ -10,6 +10,8 @@
 export enum ActionType {
   JOIN = 'JOIN',
   BID = 'BID',
+  BID_COMMIT = 'BID_COMMIT',  // Sealed-bid: commit phase (no plaintext amount)
+  REVEAL = 'REVEAL',           // Sealed-bid: reveal phase (plaintext bid + salt)
   DELIVER = 'DELIVER',
   WITHDRAW = 'WITHDRAW',
 }
@@ -64,6 +66,7 @@ export interface ActionRequest {
   signature: string;
   deadline?: number;            // Unix timestamp — signature expiry
   proof?: unknown;
+  revealSalt?: string;          // For REVEAL action: the salt used to compute the bid commitment
 }
 
 // ─── Inclusion Receipts ──────────────────────────────────────────────

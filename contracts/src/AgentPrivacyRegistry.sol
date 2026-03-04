@@ -1,39 +1,66 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
+/// @notice Minimal interface for the ERC-8004 identity registry.
+interface IIdentityRegistry {
+    function ownerOf(uint256 agentId) external view returns (address);
+}
+
 /// @title AgentPrivacyRegistry
 /// @notice Sidecar to ERC-8004 IdentityRegistry — stores ZK privacy commitments.
 ///         NOT the identity authority. Never used for settlement authorization.
-///         The DO sequencer reads getRoot() to verify membership proof public inputs.
+///         The DO sequencer reads getAgentPoseidonRoot() per-agent to verify
+///         membership proof public inputs (Phase 3 fix: per-agent Poseidon root).
 contract AgentPrivacyRegistry {
     struct Agent {
-        bytes32 registrationCommit; // keccak256(agentSecret, capabilityMerkleRoot, salt)
+        bytes32 registrationCommit;     // keccak256(agentSecret, capabilityMerkleRoot, salt)
+        bytes32 capabilityPoseidonRoot; // Poseidon Merkle root of capability tree (circuit-native)
+        bytes32 capabilityCommitment;   // Poseidon(capabilityId, agentSecret) for Issue 6
         uint256 registeredAt;
-        address controller;         // can update the commitment
+        address controller;             // can update the commitment
     }
 
+    IIdentityRegistry public immutable identityRegistry;
+
     mapping(uint256 => Agent) public agents; // agentId => Agent
-    bytes32 public registryRoot;             // Merkle root of all commitments
+    bytes32 public registryRoot;             // keccak256 Merkle root of all registration commits
 
     uint256 public agentCount;
-    bytes32[] private commitments;           // ordered list for Merkle tree computation
+    bytes32[] private commitments;           // ordered list for keccak256 Merkle tree computation
 
-    event AgentRegistered(uint256 indexed agentId, bytes32 commit, address controller);
+    event AgentRegistered(uint256 indexed agentId, bytes32 commit, bytes32 poseidonRoot, address controller);
     event CommitmentUpdated(uint256 indexed agentId, bytes32 newCommit);
     event RootUpdated(bytes32 newRoot);
 
     error AlreadyRegistered(uint256 agentId);
     error NotController(uint256 agentId);
     error NotRegistered(uint256 agentId);
+    error NotOwner(uint256 agentId);
 
-    /// @notice Register an agent's privacy commitment
-    /// @param agentId The ERC-8004 agent token ID
-    /// @param commit keccak256(agentSecret, capabilityMerkleRoot, salt)
-    function register(uint256 agentId, bytes32 commit) external {
+    constructor(address _identityRegistry) {
+        identityRegistry = IIdentityRegistry(_identityRegistry);
+    }
+
+    /// @notice Register an agent's privacy commitment.
+    ///         Caller must be the ERC-8004 owner of agentId.
+    /// @param agentId        The ERC-8004 agent token ID
+    /// @param commit         keccak256(agentSecret, capabilityMerkleRoot, salt)
+    /// @param poseidonRoot   Poseidon Merkle root of the agent's capability tree
+    /// @param capCommitment  Poseidon(capabilityId, agentSecret) — optional, pass bytes32(0) to skip
+    function register(
+        uint256 agentId,
+        bytes32 commit,
+        bytes32 poseidonRoot,
+        bytes32 capCommitment
+    ) external {
+        // Issue 4: ownership check — only the ERC-8004 owner may register
+        if (identityRegistry.ownerOf(agentId) != msg.sender) revert NotOwner(agentId);
         if (agents[agentId].registeredAt != 0) revert AlreadyRegistered(agentId);
 
         agents[agentId] = Agent({
             registrationCommit: commit,
+            capabilityPoseidonRoot: poseidonRoot,
+            capabilityCommitment: capCommitment,
             registeredAt: block.timestamp,
             controller: msg.sender
         });
@@ -41,7 +68,7 @@ contract AgentPrivacyRegistry {
         commitments.push(commit);
         agentCount++;
 
-        emit AgentRegistered(agentId, commit, msg.sender);
+        emit AgentRegistered(agentId, commit, poseidonRoot, msg.sender);
         _updateRoot();
     }
 
@@ -56,13 +83,23 @@ contract AgentPrivacyRegistry {
         emit CommitmentUpdated(agentId, newCommit);
         // Note: updateCommitment does not update the commitments array or root
         // because the Merkle tree is append-only for simplicity in MVP.
-        // The commitment stored in `agents` mapping is the source of truth
-        // for individual agent queries. The Merkle root covers registration commits only.
     }
 
-    /// @notice Get the current Merkle root of all registration commitments
+    /// @notice Get the current keccak256 Merkle root of all registration commitments
     function getRoot() external view returns (bytes32) {
         return registryRoot;
+    }
+
+    /// @notice Get the per-agent Poseidon Merkle root of the capability tree.
+    ///         The engine uses this to cross-check ZK membership proof registryRoot.
+    function getAgentPoseidonRoot(uint256 agentId) external view returns (bytes32) {
+        return agents[agentId].capabilityPoseidonRoot;
+    }
+
+    /// @notice Get the per-agent capability commitment Poseidon(capabilityId, agentSecret).
+    ///         The engine uses this to cross-check ZK membership proof capabilityCommitment.
+    function getAgentCapabilityCommitment(uint256 agentId) external view returns (bytes32) {
+        return agents[agentId].capabilityCommitment;
     }
 
     /// @notice Get total number of registered agents
@@ -70,7 +107,7 @@ contract AgentPrivacyRegistry {
         return agentCount;
     }
 
-    /// @dev Recompute Merkle root from commitments array (keccak256 binary tree)
+    /// @dev Recompute keccak256 Merkle root from commitments array
     function _updateRoot() internal {
         uint256 n = commitments.length;
         if (n == 0) {

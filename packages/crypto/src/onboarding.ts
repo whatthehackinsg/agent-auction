@@ -37,10 +37,12 @@ export interface MerkleProof {
 // ---------- Constants ----------
 
 const PRIVACY_REGISTRY_ABI = [
-  "function register(uint256 agentId, bytes32 commit) external",
+  "function register(uint256 agentId, bytes32 commit, bytes32 poseidonRoot, bytes32 capCommitment) external",
   "function getRoot() external view returns (bytes32)",
+  "function getAgentPoseidonRoot(uint256 agentId) external view returns (bytes32)",
+  "function getAgentCapabilityCommitment(uint256 agentId) external view returns (bytes32)",
   "function getAgentCount() external view returns (uint256)",
-  "function agents(uint256) external view returns (bytes32 registrationCommit, uint256 registeredAt, address controller)",
+  "function agents(uint256) external view returns (bytes32 registrationCommit, bytes32 capabilityPoseidonRoot, bytes32 capabilityCommitment, uint256 registeredAt, address controller)",
 ] as const;
 
 /** How many levels for the off-chain Poseidon Merkle tree (matches circuit) */
@@ -218,6 +220,9 @@ export async function prepareOnboarding(
 
 /**
  * Register an agent on the AgentPrivacyRegistry contract.
+ *
+ * Passes the Poseidon capability tree root and capability commitment on-chain
+ * so the engine can cross-check ZK membership proof public signals.
  */
 export async function registerOnChain(
   privateState: AgentPrivateState,
@@ -230,9 +235,28 @@ export async function registerOnChain(
     signer
   );
 
+  // Convert Poseidon root (bigint) to bytes32 hex
+  const poseidonRootHex = ethers.zeroPadValue(
+    ethers.toBeHex(privateState.capabilityMerkleRoot),
+    32
+  );
+
+  // Compute capabilityCommitment = Poseidon(capabilityId, agentSecret) for first capability
+  const { poseidonHash } = await import("./poseidon-chain.js");
+  const capCommitmentBig = await poseidonHash([
+    privateState.capabilities[0].capabilityId,
+    privateState.agentSecret,
+  ]);
+  const capCommitmentHex = ethers.zeroPadValue(
+    ethers.toBeHex(capCommitmentBig),
+    32
+  );
+
   const tx = await registry.register(
     privateState.agentId,
-    privateState.registrationCommit
+    privateState.registrationCommit,
+    poseidonRootHex,
+    capCommitmentHex,
   );
   const receipt = await tx.wait();
   return receipt;
