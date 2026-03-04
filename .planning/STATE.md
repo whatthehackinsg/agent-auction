@@ -42,6 +42,7 @@ Archive: .planning/milestones/v1.0-*
 
 ### Roadmap Evolution
 - Phase 1 added: Fix NFT support gaps
+- Phase 2 added: Finish MCP server — audit tool coverage, implement missing tools, add tests, write agent skills documentation
 
 ### Decisions
 - tokenURI resolution is best-effort after D1 insert -- failures do not block auction creation

@@ -42,3 +42,13 @@ Plans:
 - [x] 01-01-PLAN.md — Engine: D1 migration, tokenURI resolution, NftEscrow reads, API enrichment
 - [ ] 01-02-PLAN.md — MCP: Enrich discover/details tools with NFT fields and hasNft filter
 - [ ] 01-03-PLAN.md — Frontend: NFT name display, filter toggle, escrow badge, OpenSea links
+
+### Phase 2: Finish MCP server: audit tool coverage vs agent flow, implement missing tools, add tests, write agent skills documentation
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 1
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 2 to break down)
