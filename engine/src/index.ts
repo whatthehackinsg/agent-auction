@@ -839,16 +839,16 @@ app.post('/verify-identity', async (c) => {
     return c.json({ error: 'missing required fields: agentId, wallet' }, 400)
   }
 
-  const { verifyAgentWallet, getPrivacyRegistryRoot } = await import('./lib/identity')
+  const { verifyAgentWallet, getAgentPoseidonRoot } = await import('./lib/identity')
 
   const { verified, resolvedWallet } = await verifyAgentWallet(body.agentId, body.wallet)
-  const privacyRoot = await getPrivacyRegistryRoot()
+  const poseidonRoot = await getAgentPoseidonRoot(body.agentId)
 
   return c.json({
     verified,
     resolvedWallet,
-    privacyRegistered: privacyRoot !== null,
-    privacyRoot,
+    privacyRegistered: poseidonRoot !== null,
+    poseidonRoot,
   })
 })
 

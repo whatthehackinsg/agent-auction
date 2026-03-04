@@ -28,9 +28,8 @@ const erc8004RegistryAbi = [
   { name: 'getAgentWallet', type: 'function', stateMutability: 'view', inputs: [{ name: 'agentId', type: 'uint256' }], outputs: [{ name: '', type: 'address' }] },
 ] as const
 
-/** AgentPrivacyRegistry — ZK membership Merkle root + per-agent Poseidon roots */
+/** AgentPrivacyRegistry — per-agent Poseidon roots (all-Poseidon, no keccak256 global root) */
 const agentPrivacyRegistryAbi = [
-  { name: 'getRoot', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bytes32' }] },
   { name: 'getAgentPoseidonRoot', type: 'function', stateMutability: 'view', inputs: [{ name: 'agentId', type: 'uint256' }], outputs: [{ name: '', type: 'bytes32' }] },
   { name: 'getAgentCapabilityCommitment', type: 'function', stateMutability: 'view', inputs: [{ name: 'agentId', type: 'uint256' }], outputs: [{ name: '', type: 'bytes32' }] },
 ] as const

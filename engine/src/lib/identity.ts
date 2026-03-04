@@ -4,7 +4,8 @@
  * The engine reads on-chain state only — agents self-register via
  * register(agentURI) and own their agentId as an ERC-721 NFT.
  *
- * Also provides getPrivacyRegistryRoot() for ZK membership verification.
+ * Also provides per-agent Poseidon root and capability commitment reads
+ * from AgentPrivacyRegistry for ZK membership verification.
  */
 
 import { identityRegistry, agentPrivacyRegistry } from './chain-client'
@@ -48,20 +49,6 @@ export async function verifyAgentWallet(
   }
   const verified = resolvedWallet.toLowerCase() === wallet.toLowerCase()
   return { verified, resolvedWallet }
-}
-
-/**
- * Read the current keccak256 Merkle root from AgentPrivacyRegistry.
- *
- * Returns the root as a hex string, or null on error.
- */
-export async function getPrivacyRegistryRoot(): Promise<string | null> {
-  try {
-    const root = await agentPrivacyRegistry.read.getRoot()
-    return root as string
-  } catch {
-    return null
-  }
 }
 
 /**

@@ -310,8 +310,9 @@ export async function handleJoin(
     nullifierHash = membership.nullifier
     nullifierBigInt = BigInt(membership.nullifier)
   } else {
-    // Legacy keccak fallback (no proof or proof was optional and missing)
-    // Phase 5 fix: use agentId (not wallet), action type 1 (matches circuit JOIN=1)
+    // Poseidon-based fallback (no proof or proof was optional and missing)
+    // deriveNullifier uses Poseidon(agentId, auctionId, actionType) — NOT keccak256.
+    // Deprecated: when ENGINE_REQUIRE_PROOFS=true, this path is unreachable.
     const fallback = await deriveNullifier(
       toBytes(BigInt(action.agentId), { size: 32 }),
       toBytes(auctionId as `0x${string}`, { size: 32 }),

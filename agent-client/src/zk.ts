@@ -18,7 +18,6 @@ import {
   generateBidRangeProof,
   buildPoseidonMerkleTree,
   getMerkleProof,
-  readRegistryRoot,
   generateSecret,
   type AgentPrivateState,
   type Groth16Proof,
@@ -35,7 +34,7 @@ const ROOT_CACHE_TTL_MS = 5 * 60 * 1000
 
 // ── Module-level cache ────────────────────────────────────────────────────────
 
-let registryRootCache: { root: bigint; fetchedAt: number } | null = null
+let registryRootCache: { root: bigint; fetchedAt: number; key: string } | null = null
 
 // ── Error classes ─────────────────────────────────────────────────────────────
 
@@ -115,14 +114,11 @@ export function loadAgentState(filePath: string): AgentStateWithNullifiers {
   return {
     agentId: deserializeBigInt(parsed.agentId),
     agentSecret: deserializeBigInt(parsed.agentSecret),
-    salt: deserializeBigInt(parsed.salt),
     capabilities: (parsed.capabilities as Array<{ capabilityId: string }>).map((c) => ({
       capabilityId: deserializeBigInt(c.capabilityId),
     })),
     leafHashes: (parsed.leafHashes as string[]).map(deserializeBigInt),
     capabilityMerkleRoot: deserializeBigInt(parsed.capabilityMerkleRoot),
-    // registrationCommit is a hex string, not a bigint
-    registrationCommit: parsed.registrationCommit as string,
     // Default to empty array if not yet present in state file
     usedNullifiers: (parsed.usedNullifiers as string[] | undefined) ?? [],
   }
@@ -161,24 +157,27 @@ export function getAgentStateFiles(count: number): string[] {
 }
 
 /**
- * Read the current AgentPrivacyRegistry root from Base Sepolia.
+ * Read the per-agent Poseidon root from AgentPrivacyRegistry on Base Sepolia.
  *
- * Returns the root as a bigint. Caches the value for up to 5 minutes
+ * Returns the root as a bigint. Caches per agentId for up to 5 minutes
  * to avoid repeated RPC calls during a session.
  */
-export async function fetchRegistryRoot(rpcUrl: string): Promise<bigint> {
+export async function fetchRegistryRoot(rpcUrl: string, agentId?: bigint): Promise<bigint> {
+  // Cache key includes agentId for per-agent caching
+  const cacheKey = agentId ? `agent:${agentId}` : 'global'
   const now = Date.now()
-  if (registryRootCache && now - registryRootCache.fetchedAt < ROOT_CACHE_TTL_MS) {
+  if (registryRootCache && registryRootCache.key === cacheKey && now - registryRootCache.fetchedAt < ROOT_CACHE_TTL_MS) {
     return registryRootCache.root
   }
 
   const provider = new ethers.JsonRpcProvider(rpcUrl)
-  const rootHex = await readRegistryRoot(AGENT_PRIVACY_REGISTRY, provider)
+  const abi = ['function getAgentPoseidonRoot(uint256 agentId) external view returns (bytes32)']
+  const registry = new ethers.Contract(AGENT_PRIVACY_REGISTRY, abi, provider)
 
-  // readRegistryRoot returns a bytes32 hex string — convert to bigint
+  const rootHex = await registry.getAgentPoseidonRoot(agentId ?? 0n)
   const root = BigInt(rootHex)
 
-  registryRootCache = { root, fetchedAt: now }
+  registryRootCache = { root, fetchedAt: now, key: cacheKey }
   return root
 }
 
