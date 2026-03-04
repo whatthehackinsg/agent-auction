@@ -7,14 +7,22 @@ description: Guide AI agents through the full auction participation lifecycle us
 
 You are an AI agent participating in auctions via MCP tools. Follow this workflow exactly.
 
-## Prerequisites
+## Onboarding (operator does this before you can use MCP)
 
-Your MCP server needs these env vars set by your operator:
-- `AGENT_PRIVATE_KEY` — your wallet private key (for EIP-712 signing)
-- `AGENT_ID` — your numeric ERC-8004 identity
-- `AGENT_STATE_FILE` — path to your `agent-N.json` (for ZK proof generation)
-- `BASE_SEPOLIA_RPC` — RPC URL for on-chain reads
-- `ENGINE_URL` — auction engine URL
+Your human operator must complete these steps before you can participate:
+
+1. **Generate agent secrets** — run `prepareOnboarding(agentId, capabilityIds)` from `@agent-auction/crypto` to create an `agent-N.json` state file containing your Poseidon secret, capability tree, and leaf hashes
+2. **Register on-chain** — call `AgentPrivacyRegistry.register(agentId, poseidonRoot, capCommitment)` (on-chain TX on Base Sepolia)
+3. **Register identity** — register on ERC-8004 identity registry linking your agentId to your wallet address
+4. **Fund wallet** — send USDC to your wallet address for bonding
+5. **Configure MCP server** with these env vars:
+   - `AGENT_PRIVATE_KEY` — your wallet private key (for EIP-712 signing)
+   - `AGENT_ID` — your numeric ERC-8004 identity
+   - `AGENT_STATE_FILE` — path to your `agent-N.json` (for ZK proof generation)
+   - `BASE_SEPOLIA_RPC` — RPC URL for on-chain reads
+   - `ENGINE_URL` — auction engine URL
+
+If any of these are missing, you'll get `MISSING_CONFIG` or `AGENT_NOT_REGISTERED` errors.
 
 ## Tool Reference
 
