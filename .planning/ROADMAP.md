@@ -45,10 +45,12 @@ Plans:
 
 ### Phase 2: Finish MCP server: audit tool coverage vs agent flow, implement missing tools, add tests, write agent skills documentation
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Complete the MCP server for production-ready agent use by adding a check_settlement_status tool, standardizing error responses across all tools with structured codes, achieving full test coverage (8/8 tools tested), adding 3 new MCP prompts (sealed-bid guide, bonding walkthrough, troubleshooting), and creating 3 Claude Agent Skills that teach AI agents the auction participation lifecycle.
+**Requirements**: MCP-TOOL-01, MCP-ERR-01, MCP-ZOD-01, MCP-TEST-01, MCP-TEST-02, MCP-PROMPT-01, MCP-SKILL-01, MCP-SKILL-02, MCP-SKILL-03
 **Depends on:** Phase 1
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 2 to break down)
+- [ ] 02-01-PLAN.md — New settlement tool, shared error helpers, structured error standardization across all tools
+- [ ] 02-02-PLAN.md — Test coverage for all untested tools (discover, details, bond, events, reveal, settlement)
+- [ ] 02-03-PLAN.md — 3 new MCP prompts and 3 Claude Agent Skills in .claude/skills/auction/
