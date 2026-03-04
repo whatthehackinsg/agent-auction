@@ -28,6 +28,7 @@ import { registerBondTools } from './tools/bond.js'
 import { registerEventsTool } from './tools/events.js'
 import { registerRevealTool } from './tools/reveal.js'
 import { registerSettlementTool } from './tools/settlement.js'
+import { registerIdentityTool } from './tools/identity.js'
 import { registerPrompts } from './prompts.js'
 
 // ── Configuration ────────────────────────────────────────────────────
@@ -58,6 +59,7 @@ function createServer(): McpServer {
   registerRevealTool(server, engine, config, nonceTracker)
   registerEventsTool(server, engine)
   registerSettlementTool(server, engine)
+  registerIdentityTool(server, engine, config)
 
   // Register prompts
   registerPrompts(server)
