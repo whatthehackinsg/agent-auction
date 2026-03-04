@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 Phase: 6 of 6 (Refine Stats Card UI) — COMPLETE
 Plan: 1 of 1 in phase (06-01 complete — shimmer + glow stat cards, 3-card auctions layout)
 Status: All phases complete — v1.0 milestone achieved
-Last activity: 2026-03-04 — 06-01 complete (shimmer + glow stat cards, AuctionStatsSection 3-card variant)
+Last activity: 2026-03-04 - Completed quick task 1: Cherry-pick ZK crypto security fixes + sealed-bid commit-reveal
 
 Progress: [██████████] 100%
 
@@ -117,6 +117,12 @@ Recent decisions affecting current work:
 - `.planning/todos/pending/2026-03-03-add-agent-skills-and-finish-mcp-server.md` — Add agent skills and finish MCP server
 - `.planning/todos/pending/2026-03-03-validate-nft-settings-and-run-real-nft-test.md` — Validate NFT settings and run real NFT test
 - `.planning/todos/pending/2026-03-03-audit-onboarding-pipeline-and-erc-8004-details.md` — Audit onboarding pipeline and ERC-8004 details
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Cherry-pick ZK crypto security fixes + sealed-bid commit-reveal | 2026-03-04 | 0b767ec | [1-review-feat-zk-crypto-security-fixes-bra](./quick/1-review-feat-zk-crypto-security-fixes-bra/) |
 
 ### Blockers/Concerns
 
