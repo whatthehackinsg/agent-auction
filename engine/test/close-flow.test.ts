@@ -124,6 +124,7 @@ describe('Auction close flow (Task 13)', () => {
     expect(packet.auctionId).toBe(auctionId)
     expect(packet.manifestHash).toBe(manifestHash)
     expect(packet.finalLogHash).toBe(room.getChainHead())
+    expect(packet.replayContentHash).toMatch(/^0x[0-9a-f]{64}$/)
     expect(packet.winnerAgentId).toBe(2n)
     expect(packet.winningBidAmount).toBe(150n)
 

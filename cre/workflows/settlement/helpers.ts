@@ -18,6 +18,7 @@ import {
   toHex,
   type Hex,
 } from "viem";
+import { createHash } from "node:crypto";
 
 export const AUCTION_ENDED_SIGNATURE = keccak256(
   toHex("AuctionEnded(bytes32,uint256,address,uint256,bytes32,bytes32)")
@@ -65,6 +66,22 @@ function toHexLogField(value: LogField | undefined, field: string): Hex {
     return bytesToHex(value) as Hex;
   }
   throw new Error(`Missing ${field}`);
+}
+
+function decodeReplayBody(body: string | Uint8Array): Uint8Array {
+  if (body instanceof Uint8Array) {
+    return body;
+  }
+  if (typeof body === "string") {
+    if (body.length === 0) return new Uint8Array();
+    return Uint8Array.from(Buffer.from(body, "base64"));
+  }
+  throw new Error("Replay bundle response body is missing or invalid");
+}
+
+function sha256Hex(bytes: Uint8Array): Hex {
+  const digest = createHash("sha256").update(Buffer.from(bytes)).digest("hex");
+  return (`0x${digest}`) as Hex;
 }
 
 export function decodeAuctionEndedLog(log: AuctionEndedLogInput): {
@@ -241,8 +258,18 @@ export const onAuctionEnded = (
     if (!bundleResponse.body || bundleResponse.body.length === 0) {
       throw new Error("Replay bundle is empty");
     }
+    const replayBytes = decodeReplayBody(bundleResponse.body as string | Uint8Array);
+    if (replayBytes.length === 0) {
+      throw new Error("Replay bundle is empty");
+    }
+    const computedReplayHash = sha256Hex(replayBytes);
+    if (computedReplayHash.toLowerCase() !== event.replayContentHash.toLowerCase()) {
+      throw new Error(
+        `Replay content hash mismatch: expected=${event.replayContentHash} computed=${computedReplayHash}`
+      );
+    }
     runtime.log(
-      `[SETTLEMENT] Phase C: Replay bundle fetched (${bundleResponse.body.length} bytes)`
+      `[SETTLEMENT] Phase C: Replay bundle hash verified (${replayBytes.length} bytes)`
     );
   }
 
