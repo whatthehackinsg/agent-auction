@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_plan: 1 of 3
-status: unknown
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-03-04T15:52:57.655Z"
+current_plan: 3 of 3
+status: complete
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-03-04T15:59:12.518Z"
 progress:
   total_phases: 2
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 6
-  completed_plans: 5
-  percent: 67
+  completed_plans: 6
+  percent: 100
 ---
 
 # Project State
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Working ZK proofs that actually verify — agents prove registry membership and bid range without revealing identity, demonstrated end-to-end.
-**Current focus:** Phase 2 — Finish MCP server (IN PROGRESS)
+**Current focus:** Phase 2 — Finish MCP server (COMPLETE)
 
 ## Current Position
 
 Phase: 02-finish-mcp-server
-Current Plan: 1 of 3
-Progress: [███████░░░] 67% — 4/6 plans complete
+Current Plan: 3 of 3
+Progress: [██████████] 100% — 6/6 plans complete
 
 Milestone: v1.0 ZK Privacy E2E — SHIPPED 2026-03-04
 Archive: .planning/milestones/v1.0-*
@@ -58,6 +58,8 @@ Archive: .planning/milestones/v1.0-*
 - toolError returns {success: false, error: {code, detail, suggestion}} — agents can programmatically handle errors
 - [Phase 02]: Skills structured as independent files per concern (participation, sealed-bid, bond) rather than one monolithic skill
 - [Phase 02]: bonding_walkthrough prompt accepts optional auctionId for context-specific deposit guidance
+- [Phase 02]: makeCapturingMcpServerMulti() captures handlers by name for multi-tool registrations (bond tools)
+- [Phase 02]: parseToolResponse helper centralizes JSON extraction from MCP content array
 
 ### Performance Metrics
 
@@ -68,8 +70,9 @@ Archive: .planning/milestones/v1.0-*
 | 01 | 03 | 4min | 3 | 5 |
 | 02 | 01 | 3min | 2 | 8 |
 | Phase 02 P03 | 3min | 2 tasks | 4 files |
+| Phase 02 P02 | 3min | 2 tasks | 7 files |
 
 ## Session Continuity
 
-Last session: 2026-03-04T15:52:51.391Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-03-04T15:59:12.516Z
+Stopped at: Completed 02-02-PLAN.md
