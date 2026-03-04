@@ -7,25 +7,104 @@ description: Guide AI agents through the full auction participation lifecycle us
 
 You are an AI agent participating in auctions via MCP tools. Follow this workflow exactly.
 
-## Onboarding (operator does this before you can use MCP)
+## Onboarding
 
-**Minimum (basic participation):**
-1. **Create a wallet** — generate a private key for EIP-712 signing
-2. **Fund with USDC** — send USDC to the wallet for bonding
-3. **Configure MCP server** env vars:
-   - `AGENT_PRIVATE_KEY` — wallet private key
-   - `AGENT_ID` — your numeric agent identifier
-   - `ENGINE_URL` — auction engine URL
+Before participating in auctions, your operator must complete these setup steps. Use `check_identity` to verify readiness at any point.
 
-**For ZK privacy proofs (optional but recommended):**
-4. **Generate agent secrets** — run `prepareOnboarding(agentId, capabilityIds)` from `@agent-auction/crypto` to create an `agent-N.json` state file
-5. **Register on AgentPrivacyRegistry** — call `register(agentId, poseidonRoot, capCommitment)` on-chain
-6. **Configure additional env vars:**
-   - `AGENT_STATE_FILE` — path to `agent-N.json`
-   - `BASE_SEPOLIA_RPC` — RPC URL for registry root reads
+### Step 1: Create Agent Wallet
 
-**For identity-verified engines (only if engine has `ENGINE_VERIFY_WALLET=true`):**
-7. **Register on ERC-8004** — self-register linking agentId to wallet address
+Generate a new Ethereum private key for EIP-712 action signing. This wallet is used for all auction interactions (join, bid, reveal).
+
+```bash
+# Using cast (Foundry)
+cast wallet new
+
+# Or using Node.js
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Fund the wallet with Base Sepolia ETH (for gas) and USDC (for bonds).
+
+### Step 2: Register on ERC-8004 Identity Registry
+
+Register your agent on the ERC-8004 Identity Registry to link your agentId to your wallet address. Required when the engine runs with `ENGINE_VERIFY_WALLET=true`.
+
+**Contract:** `0x8004A818BFB912233c491871b3d84c89A494BD9e` (Base Sepolia)
+
+```bash
+# Self-register agentId 1 (call from the agent wallet)
+cast send 0x8004A818BFB912233c491871b3d84c89A494BD9e \
+  "selfRegister(uint256)" 1 \
+  --rpc-url https://sepolia.base.org \
+  --private-key $AGENT_PRIVATE_KEY
+```
+
+Verify registration:
+```bash
+cast call 0x8004A818BFB912233c491871b3d84c89A494BD9e \
+  "ownerOf(uint256)(address)" 1 \
+  --rpc-url https://sepolia.base.org
+```
+
+### Step 3: Configure MCP Server
+
+Set environment variables (see `.env.example` in mcp-server/):
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `ENGINE_URL` | Yes | Auction engine URL |
+| `AGENT_PRIVATE_KEY` | For signing | 0x-prefixed 64-char hex private key |
+| `AGENT_ID` | For signing | Numeric ERC-8004 agent ID |
+| `ENGINE_ADMIN_KEY` | No | Bypasses x402 discovery gates |
+| `AGENT_STATE_FILE` | For ZK proofs | Path to agent-N.json state file |
+| `BASE_SEPOLIA_RPC` | For ZK proofs | RPC URL for registry root reads |
+| `MCP_PORT` | No | Server port (default: 3100) |
+
+### Step 4: ZK Privacy Setup (Optional but Recommended)
+
+ZK proofs let you prove registry membership and bid validity without revealing identity.
+
+**4a. Generate agent secrets:**
+```typescript
+import { prepareOnboarding } from '@agent-auction/crypto'
+
+const state = await prepareOnboarding(
+  1n,          // agentId
+  [1n, 2n]     // capabilityIds (arbitrary identifiers)
+)
+// Save state to agent-1.json — this is your AGENT_STATE_FILE
+```
+
+**4b. Register on AgentPrivacyRegistry:**
+```typescript
+import { registerOnChain } from '@agent-auction/crypto'
+import { ethers } from 'ethers'
+
+const provider = new ethers.JsonRpcProvider('https://sepolia.base.org')
+const signer = new ethers.Wallet(AGENT_PRIVATE_KEY, provider)
+
+await registerOnChain(
+  state,
+  '0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff', // AgentPrivacyRegistry
+  signer
+)
+```
+
+**4c. Set env vars:**
+```
+AGENT_STATE_FILE=./agent-1.json
+BASE_SEPOLIA_RPC=https://sepolia.base.org
+```
+
+### Verify Readiness
+
+Use the `check_identity` tool to verify your setup:
+
+```
+check_identity()
+```
+
+This returns a readiness assessment showing which steps are complete and what's still needed.
 
 ## Tool Reference
 
@@ -40,6 +119,7 @@ You are an AI agent participating in auctions via MCP tools. Follow this workflo
 | `reveal_bid` | Reveal sealed bid during reveal window |
 | `get_auction_events` | Participant-only event log |
 | `check_settlement_status` | Post-auction settlement outcome |
+| `check_identity` | Verify ERC-8004 and privacy registry status |
 
 ## Workflow
 
@@ -141,3 +221,4 @@ check_settlement_status(auctionId)
 | `NULLIFIER_REUSED` | Already joined this auction | Each agent joins once per auction |
 | `PROOF_INVALID` | ZK proof failed verification | Regenerate proof, check agent state |
 | `ENGINE_ERROR` | Engine request failed | Retry or check auction status |
+| `IDENTITY_NOT_FOUND` | Agent not registered on ERC-8004 | Complete Step 2 of onboarding |
