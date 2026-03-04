@@ -94,6 +94,10 @@ export interface ItemMetadata {
   nftContract?: string | null
   nftTokenId?: string | null
   nftChainId?: number | null
+  nftName?: string | null
+  nftDescription?: string | null
+  nftImageUrl?: string | null
+  nftTokenUri?: string | null
 }
 
 // ─── Room State ──────────────────────────────────────────────────────

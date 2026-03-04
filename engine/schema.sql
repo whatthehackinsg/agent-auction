@@ -22,6 +22,10 @@ CREATE TABLE IF NOT EXISTS auctions (
   nft_contract TEXT,
   nft_token_id TEXT,
   nft_chain_id INTEGER,
+  nft_name TEXT,
+  nft_description TEXT,
+  nft_image_url TEXT,
+  nft_token_uri TEXT,
   created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
