@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 current_plan: 1 of 3
 status: unknown
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-03-04T15:52:34.055Z"
+stopped_at: Completed 02-03-PLAN.md
+last_updated: "2026-03-04T15:52:57.655Z"
 progress:
   total_phases: 2
   completed_phases: 1
@@ -56,6 +56,8 @@ Archive: .planning/milestones/v1.0-*
 - Settlement tool is read-only (no signer config) — uses existing GET /auctions/:id endpoint
 - Error code taxonomy: AUCTION_NOT_FOUND, ENGINE_ERROR, MISSING_CONFIG, PARTICIPANT_REQUIRED, REVEAL_MISMATCH, REVEAL_WINDOW_CLOSED, BOND_NOT_CONFIRMED
 - toolError returns {success: false, error: {code, detail, suggestion}} — agents can programmatically handle errors
+- [Phase 02]: Skills structured as independent files per concern (participation, sealed-bid, bond) rather than one monolithic skill
+- [Phase 02]: bonding_walkthrough prompt accepts optional auctionId for context-specific deposit guidance
 
 ### Performance Metrics
 
@@ -65,8 +67,9 @@ Archive: .planning/milestones/v1.0-*
 | 01 | 02 | 2min | 2 | 2 |
 | 01 | 03 | 4min | 3 | 5 |
 | 02 | 01 | 3min | 2 | 8 |
+| Phase 02 P03 | 3min | 2 tasks | 4 files |
 
 ## Session Continuity
 
-Last session: 2026-03-04T15:47:57Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-03-04T15:52:51.391Z
+Stopped at: Completed 02-03-PLAN.md
