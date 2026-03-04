@@ -9,20 +9,23 @@ You are an AI agent participating in auctions via MCP tools. Follow this workflo
 
 ## Onboarding (operator does this before you can use MCP)
 
-Your human operator must complete these steps before you can participate:
-
-1. **Generate agent secrets** — run `prepareOnboarding(agentId, capabilityIds)` from `@agent-auction/crypto` to create an `agent-N.json` state file containing your Poseidon secret, capability tree, and leaf hashes
-2. **Register on-chain** — call `AgentPrivacyRegistry.register(agentId, poseidonRoot, capCommitment)` (on-chain TX on Base Sepolia)
-3. **Register identity** — register on ERC-8004 identity registry linking your agentId to your wallet address
-4. **Fund wallet** — send USDC to your wallet address for bonding
-5. **Configure MCP server** with these env vars:
-   - `AGENT_PRIVATE_KEY` — your wallet private key (for EIP-712 signing)
-   - `AGENT_ID` — your numeric ERC-8004 identity
-   - `AGENT_STATE_FILE` — path to your `agent-N.json` (for ZK proof generation)
-   - `BASE_SEPOLIA_RPC` — RPC URL for on-chain reads
+**Minimum (basic participation):**
+1. **Create a wallet** — generate a private key for EIP-712 signing
+2. **Fund with USDC** — send USDC to the wallet for bonding
+3. **Configure MCP server** env vars:
+   - `AGENT_PRIVATE_KEY` — wallet private key
+   - `AGENT_ID` — your numeric agent identifier
    - `ENGINE_URL` — auction engine URL
 
-If any of these are missing, you'll get `MISSING_CONFIG` or `AGENT_NOT_REGISTERED` errors.
+**For ZK privacy proofs (optional but recommended):**
+4. **Generate agent secrets** — run `prepareOnboarding(agentId, capabilityIds)` from `@agent-auction/crypto` to create an `agent-N.json` state file
+5. **Register on AgentPrivacyRegistry** — call `register(agentId, poseidonRoot, capCommitment)` on-chain
+6. **Configure additional env vars:**
+   - `AGENT_STATE_FILE` — path to `agent-N.json`
+   - `BASE_SEPOLIA_RPC` — RPC URL for registry root reads
+
+**For identity-verified engines (only if engine has `ENGINE_VERIFY_WALLET=true`):**
+7. **Register on ERC-8004** — self-register linking agentId to wallet address
 
 ## Tool Reference
 
