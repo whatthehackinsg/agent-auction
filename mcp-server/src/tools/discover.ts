@@ -24,6 +24,10 @@ interface AuctionRow {
   nft_contract: string | null
   nft_token_id: string | null
   nft_chain_id: number | null
+  nft_name: string | null
+  nft_description: string | null
+  nft_image_url: string | null
+  nft_token_uri: string | null
 }
 
 interface AuctionsResponse {
@@ -43,15 +47,22 @@ export function registerDiscoverTool(server: McpServer, engine: EngineClient): v
     {
       title: 'Discover Auctions',
       description:
-        'List all auctions from the engine. Returns id, title, status, reserve price, deadline, and auction type for each auction.',
+        'List all auctions from the engine. Returns id, title, status, reserve price, deadline, auction type, ' +
+        'and NFT metadata (name, image URL) for each auction. Supports filtering by status and NFT presence.',
       inputSchema: z.object({
         statusFilter: z
           .enum(['ALL', 'OPEN', 'CLOSED', 'SETTLED', 'CANCELLED'])
           .optional()
           .describe('Filter auctions by status. Defaults to ALL.'),
+        hasNft: z
+          .boolean()
+          .optional()
+          .describe(
+            'Filter to show only auctions with NFT items (true) or without NFTs (false). Omit for all.',
+          ),
       }),
     },
-    async ({ statusFilter }) => {
+    async ({ statusFilter, hasNft: hasNftFilter }) => {
       const data = await engine.get<AuctionsResponse>('/auctions')
       let auctions = data.auctions
 
@@ -63,6 +74,13 @@ export function registerDiscoverTool(server: McpServer, engine: EngineClient): v
           const statusNum = parseInt(targetStatus[0], 10)
           auctions = auctions.filter((a) => a.status === statusNum)
         }
+      }
+
+      if (hasNftFilter !== undefined) {
+        auctions = auctions.filter((a) => {
+          const auctionHasNft = !!(a.nft_contract && a.nft_token_id)
+          return hasNftFilter ? auctionHasNft : !auctionHasNft
+        })
       }
 
       const now = Math.floor(Date.now() / 1000)
@@ -78,9 +96,10 @@ export function registerDiscoverTool(server: McpServer, engine: EngineClient): v
         maxBid: a.max_bid,
         createdAt: a.created_at,
         hasNft: !!(a.nft_contract && a.nft_token_id),
-        itemImageUrl: a.item_image_cid
+        nftName: a.nft_name ?? null,
+        nftImageUrl: a.item_image_cid
           ? `https://gateway.pinata.cloud/ipfs/${a.item_image_cid}`
-          : null,
+          : a.nft_image_url ?? null,
       }))
 
       return {
