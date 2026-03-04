@@ -110,12 +110,13 @@ export async function generateBidRangeProofForAgent(
   bidAmount: bigint,
   reservePrice: bigint,
   maxBudget: bigint,
+  salt?: bigint,
 ): Promise<{ proof: Groth16Proof; publicSignals: string[] }> {
   // Substitute sentinel for uncapped auctions (maxBid: "0" from engine)
   const effectiveMaxBudget = maxBudget === 0n ? BigInt(2 ** 48) : maxBudget
 
-  // Generate a fresh random salt for each bid proof
-  const bidSalt = generateSecret()
+  // Use provided salt (for sealed-bid commit-reveal) or generate a fresh one
+  const bidSalt = salt ?? generateSecret()
 
   return generateBidRangeProof({
     bid: bidAmount,

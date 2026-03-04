@@ -62,6 +62,7 @@ const REVEAL_TYPES = {
     { name: 'bid', type: 'uint256' },
     { name: 'salt', type: 'uint256' },
     { name: 'nonce', type: 'uint256' },
+    { name: 'deadline', type: 'uint256' },
   ],
 } as const
 
@@ -275,6 +276,7 @@ export class ActionSigner {
     bid: bigint
     salt: bigint
     nonce: number
+    deadlineSec?: number
   }): Promise<{
     type: 'REVEAL'
     agentId: string
@@ -282,8 +284,11 @@ export class ActionSigner {
     amount: string
     revealSalt: string
     nonce: number
+    deadline: string
     signature: Hex
   }> {
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + (params.deadlineSec ?? 300))
+
     const signature = await this.account.signTypedData({
       domain: EIP712_DOMAIN,
       types: REVEAL_TYPES,
@@ -293,6 +298,7 @@ export class ActionSigner {
         bid: params.bid,
         salt: params.salt,
         nonce: BigInt(params.nonce),
+        deadline,
       },
     })
 
@@ -303,6 +309,7 @@ export class ActionSigner {
       amount: params.bid.toString(),
       revealSalt: params.salt.toString(),
       nonce: params.nonce,
+      deadline: deadline.toString(),
       signature,
     }
   }

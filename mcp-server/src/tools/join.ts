@@ -19,7 +19,6 @@ import { requireSignerConfig } from '../lib/config.js'
 import {
   loadAgentState,
   generateMembershipProofForAgent,
-  fetchRegistryRoot,
 } from '../lib/proof-generator.js'
 
 interface EngineActionResponse {
@@ -78,7 +77,7 @@ export function registerJoinTool(
           .boolean()
           .optional()
           .describe(
-            'If true, generate membership proof server-side from AGENT_STATE_FILE. Requires AGENT_STATE_FILE and BASE_SEPOLIA_RPC env vars.',
+            'If true, generate membership proof server-side from AGENT_STATE_FILE. Requires AGENT_STATE_FILE env var.',
           ),
       }),
     },
@@ -100,20 +99,15 @@ export function registerJoinTool(
             'Set AGENT_STATE_FILE to the path of your agent-N.json file',
           )
         }
-        if (!config.baseSepoliaRpc) {
-          return zkError(
-            'STALE_ROOT',
-            'BASE_SEPOLIA_RPC env var is not set',
-            'Set BASE_SEPOLIA_RPC to a Base Sepolia RPC URL for on-chain registry root reads',
-          )
-        }
         try {
           const agentState = loadAgentState(config.agentStateFile)
-          const registryRoot = await fetchRegistryRoot(config.baseSepoliaRpc)
+          // Use the agent's own Poseidon capability tree root (stored in local state file).
+          // This is the per-agent root the circuit constrains against — NOT the global
+          // keccak registry root returned by AgentPrivacyRegistry.getRoot().
           resolvedProof = await generateMembershipProofForAgent(
             agentState,
             BigInt(auctionId),
-            registryRoot,
+            agentState.capabilityMerkleRoot,
           )
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
