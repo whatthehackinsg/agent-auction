@@ -57,11 +57,16 @@ interface AuctionRow {
   nft_contract: string | null
   nft_token_id: string | null
   nft_chain_id: number | null
+  nft_name: string | null
+  nft_description: string | null
+  nft_image_url: string | null
+  nft_token_uri: string | null
 }
 
 interface AuctionDetailResponse {
   auction: AuctionRow
   snapshot: RoomSnapshot
+  nftEscrowState: string | null // 'NONE' | 'DEPOSITED' | 'CLAIMED' | 'RETURNED' | 'UNKNOWN' | null
 }
 
 const STATUS_LABELS: Record<number, string> = {
@@ -78,7 +83,8 @@ export function registerDetailsTool(server: McpServer, engine: EngineClient): vo
       title: 'Get Auction Details',
       description:
         'Get full details for a specific auction including current snapshot, highest bid (masked bidder), ' +
-        'time remaining, participant count, competition level, and winner info if closed.',
+        'time remaining, participant count, competition level, NFT metadata (name, description, image), ' +
+        'NFT escrow deposit status, and winner info if closed.',
       inputSchema: z.object({
         auctionId: z.string().describe('The 0x-prefixed bytes32 auction ID'),
       }),
@@ -86,7 +92,7 @@ export function registerDetailsTool(server: McpServer, engine: EngineClient): vo
     async ({ auctionId }) => {
       const data = await engine.get<AuctionDetailResponse>(`/auctions/${auctionId}`)
 
-      const { auction, snapshot } = data
+      const { auction, snapshot, nftEscrowState } = data
       const result = {
         auctionId: auction.auction_id,
         title: auction.title ?? '(untitled)',
@@ -102,10 +108,13 @@ export function registerDetailsTool(server: McpServer, engine: EngineClient): vo
           imageCid: auction.item_image_cid,
           imageUrl: auction.item_image_cid
             ? `https://gateway.pinata.cloud/ipfs/${auction.item_image_cid}`
-            : null,
+            : auction.nft_image_url ?? null,
           nftContract: auction.nft_contract,
           nftTokenId: auction.nft_token_id,
           nftChainId: auction.nft_chain_id,
+          nftName: auction.nft_name ?? null,
+          nftDescription: auction.nft_description ?? null,
+          nftEscrowState: nftEscrowState,
         },
         snapshot: {
           participantCount: snapshot.participantCount,
