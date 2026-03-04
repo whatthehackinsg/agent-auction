@@ -18,6 +18,10 @@ export interface AuctionSummary {
   nft_contract?: string | null
   nft_token_id?: string | null
   nft_chain_id?: number | null
+  nft_name?: string | null
+  nft_description?: string | null
+  nft_image_url?: string | null
+  nft_token_uri?: string | null
 }
 
 export function useAuctions() {

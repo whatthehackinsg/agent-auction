@@ -22,6 +22,7 @@ export interface AuctionDetailResponse {
     snipeWindowActive?: boolean
     extensionsRemaining?: number
   }
+  nftEscrowState?: string | null
 }
 
 export function useAuctionDetail(auctionId: string | undefined) {

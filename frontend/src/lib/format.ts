@@ -57,3 +57,29 @@ export function nftExplorerUrl(
   const base = explorers[chainId ?? 84532] ?? explorers[84532]
   return `${base}/token/${contract}?a=${tokenId}`
 }
+
+export function nftMarketplaceUrl(
+  chainId: number | null | undefined,
+  contract: string | null | undefined,
+  tokenId: string | null | undefined,
+): string | null {
+  if (!contract || !tokenId) return null
+  const testnetChains: Record<number, string> = {
+    84532: 'base-sepolia',
+    11155111: 'sepolia',
+  }
+  const mainnetChains: Record<number, string> = {
+    8453: 'base',
+    1: 'ethereum',
+  }
+  const cid = chainId ?? 84532
+  const testnetSlug = testnetChains[cid]
+  if (testnetSlug) {
+    return `https://testnets.opensea.io/assets/${testnetSlug}/${contract}/${tokenId}`
+  }
+  const mainnetSlug = mainnetChains[cid]
+  if (mainnetSlug) {
+    return `https://opensea.io/assets/${mainnetSlug}/${contract}/${tokenId}`
+  }
+  return null
+}
