@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 Phase: 6 of 6 (Refine Stats Card UI) — COMPLETE
 Plan: 1 of 1 in phase (06-01 complete — shimmer + glow stat cards, 3-card auctions layout)
 Status: All phases complete — v1.0 milestone achieved
-Last activity: 2026-03-04 - Completed quick task 1: Cherry-pick ZK crypto security fixes + sealed-bid commit-reveal
+Last activity: 2026-03-04 - Completed quick task 2: Remove keccak256 registrationCommit, migrate to all-Poseidon
 
 Progress: [██████████] 100%
 
@@ -123,15 +123,16 @@ Recent decisions affecting current work:
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 1 | Cherry-pick ZK crypto security fixes + sealed-bid commit-reveal | 2026-03-04 | 0b767ec | [1-review-feat-zk-crypto-security-fixes-bra](./quick/1-review-feat-zk-crypto-security-fixes-bra/) |
+| 2 | Remove keccak256 registrationCommit, migrate to all-Poseidon | 2026-03-04 | ab47d35 | [2-remove-keccak256-registrationcommit-and-](./quick/2-remove-keccak256-registrationcommit-and-/) |
 
 ### Blockers/Concerns
 
 - EIP-712 nullifier type mismatch (keccak vs Poseidon in signer.ts) — addressed in Phase 2
 - Pre-existing TypeScript errors in packages/crypto build (snarkjs types, ethers Uint8Array incompatibility) — pre-date this phase, out of scope
-- RESOLVED: `AgentPrivacyRegistry.getRoot()` now returns 0xca223b34... (non-zero, Phase 1 Plan 03 complete)
+- RESOLVED: `AgentPrivacyRegistry.getRoot()` removed entirely in quick task 2 (all-Poseidon migration, per-agent roots only)
 
 ## Session Continuity
 
-Last session: 2026-03-04T06:25:00.000Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-03-04T13:17:35Z
+Stopped at: Completed quick task 2 (remove keccak256 registrationCommit)
 Resume file: None
