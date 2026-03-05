@@ -15,6 +15,7 @@ import {
   toHex,
   type Hex,
 } from "viem";
+import { createHash } from "node:crypto";
 import {
   decodeAuctionEndedLog,
   encodeSettlementReport,
@@ -30,7 +31,9 @@ const MOCK_WINNER_WALLET =
   "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" as Hex;
 const MOCK_FINAL_PRICE = 1_000_000n;
 const MOCK_FINAL_LOG_HASH = (`0x${"cd".repeat(32)}`) as Hex;
-const MOCK_REPLAY_HASH = (`0x${"ef".repeat(32)}`) as Hex;
+const MOCK_REPLAY_BUNDLE = Buffer.from("mock-replay-bundle", "utf8");
+const MOCK_REPLAY_BUNDLE_B64 = MOCK_REPLAY_BUNDLE.toString("base64");
+const MOCK_REPLAY_HASH = (`0x${createHash("sha256").update(MOCK_REPLAY_BUNDLE).digest("hex")}`) as Hex;
 const MOCK_TX_HASH = (`0x${"11".repeat(32)}`) as Hex;
 
 const GET_AUCTION_STATE_SELECTOR = keccak256(
@@ -147,7 +150,7 @@ describe("settlement workflow", () => {
 
     httpMock.sendRequest = () => ({
       statusCode: 200,
-      body: Buffer.from("mock-replay-bundle", "utf8").toString("base64"),
+      body: MOCK_REPLAY_BUNDLE_B64,
     });
 
     const runtime = makeRuntime();
@@ -244,7 +247,7 @@ describe("settlement workflow", () => {
 
     httpMock.sendRequest = () => ({
       statusCode: 200,
-      body: Buffer.from("mock-replay-bundle", "utf8").toString("base64"),
+      body: MOCK_REPLAY_BUNDLE_B64,
     });
 
     evmMock.writeReport = () => ({

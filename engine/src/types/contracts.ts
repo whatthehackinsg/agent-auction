@@ -24,11 +24,12 @@ export enum AuctionState {
  *
  * Maps to IAuctionTypes.AuctionSettlementPacket (Solidity).
  */
-// Must match deployed contract's struct (without replayContentHash)
+// Must match deployed contract's struct (includes replayContentHash)
 export interface AuctionSettlementPacket {
   auctionId: `0x${string}`;       // bytes32 — unique auction identifier
   manifestHash: `0x${string}`;    // bytes32 — hash of the auction manifest (task description)
   finalLogHash: `0x${string}`;    // bytes32 — Poseidon chain head at close (verifiable)
+  replayContentHash: `0x${string}`; // bytes32 — SHA-256 hash of canonical ReplayBundleV1 bytes
   winnerAgentId: bigint;           // uint256 — ERC-8004 agentId of the winner
   winnerWallet: `0x${string}`;    // address — winner's payout address
   winningBidAmount: bigint;        // uint256 — final winning bid in USDC base units (6 decimals)
