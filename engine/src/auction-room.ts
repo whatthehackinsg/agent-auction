@@ -129,6 +129,11 @@ export class AuctionRoom implements DurableObject {
   private uniqueBidderCount: number = 0
   private reservePrice: string = '0'
 
+  /** Privacy: zkNullifier of the current highest bidder */
+  private highestBidderNullifier: string = ''
+  /** Privacy: agentId → zkNullifier mapping for participant-tier broadcasts */
+  private agentNullifierMap: Map<string, string> = new Map()
+
   /** Sealed-bid mode: commit phase → reveal window → close */
   private sealedBid: boolean = false
   private revealWindowSec: number = 120
@@ -169,6 +174,8 @@ export class AuctionRoom implements DurableObject {
         sealedBidVal,
         revealWindowSecVal,
         revealWindowDeadlineVal,
+        highestBidderNullifierVal,
+        agentNullifierMapVal,
       ] = await Promise.all([
         this.state.storage.get<number>('seqCounter'),
         this.state.storage.get<string>('chainHead'),
@@ -197,6 +204,8 @@ export class AuctionRoom implements DurableObject {
         this.state.storage.get<boolean>('sealedBid'),
         this.state.storage.get<number>('revealWindowSec'),
         this.state.storage.get<number>('revealWindowDeadline'),
+        this.state.storage.get<string>('highestBidderNullifier'),
+        this.state.storage.get<Record<string, string>>('agentNullifierMap'),
       ])
       this.seqCounter = seq ?? 0
       this.chainHead = head ?? ZERO_HASH_HEX
@@ -248,6 +257,10 @@ export class AuctionRoom implements DurableObject {
       this.sealedBid = sealedBidVal ?? false
       this.revealWindowSec = revealWindowSecVal ?? 120
       this.revealWindowDeadline = revealWindowDeadlineVal ?? 0
+      this.highestBidderNullifier = highestBidderNullifierVal ?? ''
+      if (agentNullifierMapVal) {
+        this.agentNullifierMap = new Map(Object.entries(agentNullifierMapVal))
+      }
     })
   }
 
@@ -523,8 +536,8 @@ export class AuctionRoom implements DurableObject {
     return Response.json(result.results ?? [])
   }
 
-  /** GET /stream — WebSocket upgrade using Hibernatable API (two-tier: public vs participant) */
-  private handleStream(request: Request): Response {
+  /** GET /stream — WebSocket upgrade using Hibernatable API (three-tier: internal, participant, public) */
+  private async handleStream(request: Request): Promise<Response> {
     const upgradeHeader = request.headers.get('Upgrade')
     if (upgradeHeader !== 'websocket') {
       return new Response('Expected WebSocket upgrade', { status: 426 })
@@ -533,22 +546,70 @@ export class AuctionRoom implements DurableObject {
     const url = new URL(request.url)
     const participantToken = url.searchParams.get('participantToken')
 
+    // Validate participantToken against D1 before creating WebSocket
+    let isValidParticipant = false
+    if (participantToken) {
+      try {
+        const joinEvent = await this.env.AUCTION_DB
+          .prepare('SELECT seq FROM events WHERE auction_id = ? AND action_type = ? AND agent_id = ? LIMIT 1')
+          .bind(this.auctionId, 'JOIN', participantToken)
+          .first()
+        isValidParticipant = joinEvent !== null
+      } catch {
+        // D1 query failure — fall back to public tier
+      }
+    }
+
     const pair = new WebSocketPair()
     const [client, server] = Object.values(pair)
 
-    // Tag the WebSocket with participant status for two-tier broadcast
-    const tags = participantToken ? ['participant'] : ['public']
+    // Tag the WebSocket based on validated participant status
+    const tags = isValidParticipant ? ['participant'] : ['public']
     this.state.acceptWebSocket(server, tags)
 
     return new Response(null, { status: 101, webSocket: client })
   }
 
-  /** GET /snapshot — return current room state (masked for public, raw for internal) */
-  private handleSnapshot(request?: Request): Response {
+  /** GET /snapshot — return current room state (masked for public, participant-aware, raw for internal) */
+  private async handleSnapshot(request?: Request): Promise<Response> {
     const serverNow = Math.floor(Date.now() / 1000)
 
     // Internal requests (from close/settlement logic) get raw highestBidder
     const isInternal = request?.headers?.get('X-Internal') === 'true'
+
+    // Check for participant token to provide zkNullifier-based identity
+    const url = request ? new URL(request.url) : null
+    const participantToken = url?.searchParams.get('participantToken') ?? null
+    let isValidParticipant = false
+
+    if (!isInternal && participantToken) {
+      try {
+        const joinEvent = await this.env.AUCTION_DB
+          .prepare('SELECT seq FROM events WHERE auction_id = ? AND action_type = ? AND agent_id = ? LIMIT 1')
+          .bind(this.auctionId, 'JOIN', participantToken)
+          .first()
+        isValidParticipant = joinEvent !== null
+      } catch {
+        // D1 query failure — fall back to public tier
+      }
+    }
+
+    // Determine highestBidder display value based on tier
+    let displayHighestBidder: string
+    let displayWinnerAgentId: string = this.winnerAgentId
+    let displayWinnerWallet: string = this.winnerWallet
+    if (isInternal) {
+      displayHighestBidder = this.highestBidder
+    } else if (isValidParticipant) {
+      displayHighestBidder = this.highestBidderNullifier || 'unknown'
+      // For participant tier, show winner as zkNullifier and omit wallet
+      if (this.winnerAgentId !== '0') {
+        displayWinnerAgentId = this.agentNullifierMap.get(this.winnerAgentId) ?? 'unknown'
+      }
+      displayWinnerWallet = ''
+    } else {
+      displayHighestBidder = this.maskAgentId(this.highestBidder)
+    }
 
     const snapshot: RoomSnapshot = {
       auctionId: this.auctionId,
@@ -556,7 +617,7 @@ export class AuctionRoom implements DurableObject {
       headHash: this.chainHead,
       participantCount: this.participantCount,
       highestBid: this.highestBid,
-      highestBidder: isInternal ? this.highestBidder : this.maskAgentId(this.highestBidder),
+      highestBidder: displayHighestBidder,
       startedAt: this.startedAt,
       deadline: this.deadline,
       status: this.auctionStatus,
@@ -568,8 +629,8 @@ export class AuctionRoom implements DurableObject {
       extensionCount: this.extensionCount,
       roomConfig: this.roomConfig,
       terminalType: this.terminalType,
-      winnerAgentId: this.winnerAgentId,
-      winnerWallet: this.winnerWallet,
+      winnerAgentId: displayWinnerAgentId,
+      winnerWallet: displayWinnerWallet,
       winningBidAmount: this.winningBidAmount,
       // Aggregate fields
       bidCount: this.bidCount,
@@ -607,11 +668,13 @@ export class AuctionRoom implements DurableObject {
     if (action.type === ActionType.BID) {
       this.highestBid = action.amount
       this.highestBidder = action.agentId
+      this.highestBidderNullifier = zkNullifier ?? ''
       this.bidCount += 1
       this.uniqueBidderSet.add(action.agentId)
       this.uniqueBidderCount = this.uniqueBidderSet.size
       await this.state.storage.put('highestBid', this.highestBid)
       await this.state.storage.put('highestBidder', this.highestBidder)
+      await this.state.storage.put('highestBidderNullifier', this.highestBidderNullifier)
       await this.state.storage.put('bidCount', this.bidCount)
       await this.state.storage.put('uniqueBidders', [...this.uniqueBidderSet])
     }
@@ -620,14 +683,22 @@ export class AuctionRoom implements DurableObject {
       if (BigInt(action.amount) > BigInt(this.highestBid)) {
         this.highestBid = action.amount
         this.highestBidder = action.agentId
+        this.highestBidderNullifier = zkNullifier ?? ''
         await this.state.storage.put('highestBid', this.highestBid)
         await this.state.storage.put('highestBidder', this.highestBidder)
+        await this.state.storage.put('highestBidderNullifier', this.highestBidderNullifier)
       }
       this.bidCount += 1
       this.uniqueBidderSet.add(action.agentId)
       this.uniqueBidderCount = this.uniqueBidderSet.size
       await this.state.storage.put('bidCount', this.bidCount)
       await this.state.storage.put('uniqueBidders', [...this.uniqueBidderSet])
+    }
+
+    // Track agentId → zkNullifier mapping for participant-tier privacy
+    if (zkNullifier) {
+      this.agentNullifierMap.set(action.agentId, zkNullifier)
+      await this.state.storage.put('agentNullifierMap', Object.fromEntries(this.agentNullifierMap))
     }
 
     // Track last event timestamp for all actions
@@ -1048,6 +1119,7 @@ export class AuctionRoom implements DurableObject {
         amount: winningBidAmount.toString(),
         wallet: winnerWallet,
         timestamp: Math.floor(Date.now() / 1000),
+        zkNullifier: this.agentNullifierMap.get(winnerAgentId.toString()) ?? undefined,
       })
     }
 
@@ -1193,7 +1265,7 @@ export class AuctionRoom implements DurableObject {
 
   // ─── Broadcast ───────────────────────────────────────────────────────
 
-  /** Broadcast an event to all connected WebSocket clients (two-tier: full for participants, masked for public) */
+  /** Broadcast an event to all connected WebSocket clients (three-tier: participant privacy, masked public) */
   private broadcastEvent(event: {
     seq?: number
     eventHash?: string
@@ -1211,15 +1283,49 @@ export class AuctionRoom implements DurableObject {
     zkNullifier?: string
     bidCommitment?: string
   }): void {
-    // Full event for participants
-    const fullMessage = JSON.stringify({
-      type: 'event',
-      seq: event.seq ?? this.seqCounter,
-      eventHash: event.eventHash ?? this.chainHead,
-      ...event,
-    })
+    // ── Participant-tier message: zkNullifier only, no agentId/wallet ──
+    const participantSockets = this.state.getWebSockets('participant')
+    if (participantSockets.length > 0) {
+      // System events (agentId='0') pass through to participant tier (CLOSE, CANCEL, DEADLINE_EXTENSION, etc.)
+      const isSystemEvent = event.agentId === '0'
 
-    // Masked event for public viewers (strip wallet, mask agentId)
+      if (event.zkNullifier || isSystemEvent) {
+        const participantEvent: Record<string, unknown> = {
+          type: 'event',
+          seq: event.seq ?? this.seqCounter,
+          eventHash: event.eventHash ?? this.chainHead,
+          actionType: event.actionType,
+          amount: event.amount,
+          timestamp: event.timestamp,
+        }
+        // For system events, include agentId='0' (no privacy concern)
+        // For agent events, use zkNullifier as identity replacement
+        if (isSystemEvent) {
+          participantEvent.agentId = '0'
+        }
+        if (event.zkNullifier) {
+          participantEvent.zkNullifier = event.zkNullifier
+        }
+        // Include non-sensitive fields when present
+        if (event.deadline !== undefined) participantEvent.deadline = event.deadline
+        if (event.oldDeadline !== undefined) participantEvent.oldDeadline = event.oldDeadline
+        if (event.extensionCount !== undefined) participantEvent.extensionCount = event.extensionCount
+        if (event.maxExtensions !== undefined) participantEvent.maxExtensions = event.maxExtensions
+        if (event.extensionsRemaining !== undefined) participantEvent.extensionsRemaining = event.extensionsRemaining
+        if (event.reason !== undefined) participantEvent.reason = event.reason
+        if (event.bidCommitment) participantEvent.bidCommitment = event.bidCommitment
+        const participantMessage = JSON.stringify(participantEvent)
+
+        for (const ws of participantSockets) {
+          try { ws.send(participantMessage) } catch { /* ignore */ }
+        }
+      } else {
+        // Agent event without zkNullifier: drop from participant broadcast
+        console.warn('[AuctionRoom] Event without zkNullifier dropped from participant broadcast:', event.actionType, event.agentId)
+      }
+    }
+
+    // ── Public-tier message: masked agentId, no wallet (unchanged from v1.0) ──
     const maskedEvent: Record<string, unknown> = {
       type: 'event',
       seq: event.seq ?? this.seqCounter,
@@ -1240,13 +1346,6 @@ export class AuctionRoom implements DurableObject {
     if (event.bidCommitment) maskedEvent.bidCommitment = event.bidCommitment
     const publicMessage = JSON.stringify(maskedEvent)
 
-    // Send full events to participant sockets
-    const participantSockets = this.state.getWebSockets('participant')
-    for (const ws of participantSockets) {
-      try { ws.send(fullMessage) } catch { /* ignore */ }
-    }
-
-    // Send masked events to public sockets
     const publicSockets = this.state.getWebSockets('public')
     for (const ws of publicSockets) {
       try { ws.send(publicMessage) } catch { /* ignore */ }

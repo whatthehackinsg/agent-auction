@@ -307,22 +307,27 @@ describe('Auction mechanics (Task 4c2)', () => {
     const room = new AuctionRoom(state, env)
     await new Promise((r) => setTimeout(r, 0))
 
-    await room.ingestAction(makeBid({ agentId: '1', wallet: randomWallet(), amount: '100' }))
-    await room.ingestAction(makeBid({ agentId: '2', wallet: winnerWallet, amount: '150' }))
+    const nullifier1 = '0x' + 'a1'.repeat(32)
+    const nullifier2 = '0x' + 'a2'.repeat(32)
+    await room.ingestAction(makeBid({ agentId: '1', wallet: randomWallet(), amount: '100' }), nullifier1)
+    await room.ingestAction(makeBid({ agentId: '2', wallet: winnerWallet, amount: '150' }), nullifier2)
     await room.closeAuction(auctionId)
 
     expect(recordResultOnChain).toHaveBeenCalledTimes(1)
     const messages = socket.sent.map((msg) => JSON.parse(msg) as Record<string, unknown>)
     const closeMessage = messages.find((msg) => msg.actionType === 'CLOSE')
     expect(closeMessage).toBeTruthy()
-    expect(closeMessage?.agentId).toBe('2')
-    expect(closeMessage?.wallet).toBe(winnerWallet)
+    // Participant tier: winner identified by zkNullifier, no raw agentId/wallet
+    expect(closeMessage?.zkNullifier).toBe(nullifier2)
+    expect(closeMessage?.agentId).toBeUndefined()
+    expect(closeMessage?.wallet).toBeUndefined()
     expect(closeMessage?.amount).toBe('150')
 
     const snapshotRes = await room.fetch(new Request(`https://room/snapshot?auctionId=${auctionId}`))
     const snapshot = (await snapshotRes.json()) as Record<string, unknown>
     expect(snapshot.status).toBe(2)
     expect(snapshot.terminalType).toBe('CLOSE')
+    // Public snapshot (no participantToken): raw winner data (used by CRE settlement)
     expect(snapshot.winnerAgentId).toBe('2')
     expect(snapshot.winningBidAmount).toBe('150')
 
