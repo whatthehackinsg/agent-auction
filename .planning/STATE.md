@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Autonomous Agent Onboarding
 current_plan: null
-status: defining_requirements
+status: ready_to_plan
 stopped_at: null
 last_updated: "2026-03-05T00:00:00.000Z"
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,58 +21,48 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Working ZK proofs that actually verify — agents prove registry membership and bid range without revealing identity, demonstrated end-to-end.
-**Current focus:** Milestone v1.1 — Autonomous Agent Onboarding (defining requirements)
+**Current focus:** Phase 7 - Identity Verification
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-05 — Milestone v1.1 started
+Phase: 7 of 11 (Identity Verification)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-03-05 — Roadmap created for v1.1 Autonomous Agent Onboarding
 
-## Pending Todos
+Progress: [░░░░░░░░░░] 0%
+
+## Performance Metrics
+
+**Velocity (v1.0):**
+- Total plans completed: 14
+- Average duration: ~3 min/plan
+- Total execution time: ~42 min
+
+**v1.1:** No data yet.
+
+## Accumulated Context
+
+### Decisions
+
+- [v1.1 roadmap]: Identity verification comes FIRST (Phase 7) — foundational for all downstream phases
+- [v1.1 roadmap]: Participant privacy uses zkNullifier as pseudonym (not string masking) — cryptographically sound
+- [v1.1 roadmap]: SKIL rewrite is last (Phase 11) — documents final state of all tools and flows
+- [v1.1 investigation]: ENGINE_VERIFY_WALLET is OFF by default — any agent can claim any agentId without on-chain proof
+- [v1.1 investigation]: Participant WebSocket broadcasts full agentId + wallet to all participants — privacy leak
+- [v1.0]: All-Poseidon registration — single hash function throughout
+
+### Pending Todos
 
 - Full live E2E demo on Base Sepolia (deferred from v1.0)
 - CCIP Private Transactions future vision narrative (deferred from v1.0)
 
-## Accumulated Context
+### Blockers/Concerns
 
-### Roadmap Evolution
-- v1.0: 6 phases, 14 plans — ZK Privacy E2E shipped 2026-03-04
-- Phase 1 added: Fix NFT support gaps
-- Phase 2 added: Finish MCP server — audit tool coverage, implement missing tools, add tests, write agent skills documentation
-
-### Decisions
-- tokenURI resolution is best-effort after D1 insert -- failures do not block auction creation
-- NftEscrow status read only on GET /auctions/:id (not list) to avoid N+1 on-chain calls
-- IPFS gateway uses Pinata (gateway.pinata.cloud) matching project convention
-- Replaced itemImageUrl with nftImageUrl in discover response for consistent NFT naming
-- Image URL priority: item_image_cid (Pinata) > nft_image_url (tokenURI resolved) > null
-- nftEscrowState placed inside item object alongside other NFT fields
-- Frontend image priority: custom CID > tokenURI-resolved URL > no image
-- NFT name shown as primary heading when no custom title, secondary gold text when both exist
-- Settlement tool is read-only (no signer config) — uses existing GET /auctions/:id endpoint
-- Error code taxonomy: AUCTION_NOT_FOUND, ENGINE_ERROR, MISSING_CONFIG, PARTICIPANT_REQUIRED, REVEAL_MISMATCH, REVEAL_WINDOW_CLOSED, BOND_NOT_CONFIRMED
-- toolError returns {success: false, error: {code, detail, suggestion}} — agents can programmatically handle errors
-- [Phase 02]: Skills structured as independent files per concern (participation, sealed-bid, bond) rather than one monolithic skill
-- [Phase 02]: bonding_walkthrough prompt accepts optional auctionId for context-specific deposit guidance
-- [Phase 02]: makeCapturingMcpServerMulti() captures handlers by name for multi-tool registrations (bond tools)
-- [Phase 02]: parseToolResponse helper centralizes JSON extraction from MCP content array
-- [Phase Q3]: check_identity derives wallet from AGENT_PRIVATE_KEY via viem privateKeyToAccount when wallet param not provided
-- [Phase Q3]: Readiness object includes actionable missingSteps with exact contract addresses
-- All-Poseidon registration (quick task 2) — single hash function throughout
-
-### Performance Metrics
-
-| Phase | Plan | Duration | Tasks | Files |
-|-------|------|----------|-------|-------|
-| 01 | 01 | 4min | 2 | 7 |
-| 01 | 02 | 2min | 2 | 2 |
-| 01 | 03 | 4min | 3 | 5 |
-| 02 | 01 | 3min | 2 | 8 |
-| Phase 02 P03 | 3min | 2 tasks | 4 files |
-| Phase 02 P02 | 3min | 2 tasks | 7 files |
+- 1 pre-existing failing test (bond-watcher.test.ts, predates v1.0)
+- Dead expectedRegistryRoot code block in engine crypto.ts (tech debt from v1.0)
 
 ## Session Continuity
 
-Last activity: 2026-03-05 — Milestone v1.1 Autonomous Agent Onboarding started
+Last activity: 2026-03-05 — Roadmap finalized for v1.1 (5 phases, 18 requirements)
+Resume file: None

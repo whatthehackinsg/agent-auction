@@ -64,8 +64,10 @@ Working ZK proofs that actually verify — agents prove registry membership and 
 **Goal:** Make agents fully autonomous for the per-auction loop — human does one-time setup, agent handles everything via MCP tools with mandatory ZK proofs.
 
 **Target features:**
-- 4 new MCP tools (register_identity, deposit_bond, withdraw_funds, claim_refund)
+- Mandatory identity verification (ENGINE_VERIFY_WALLET=true default, pre-flight gates)
+- Nullifier-based participant privacy (no agentId/wallet leak to other participants)
 - Mandatory ZK proofs on join/bid (ENGINE_REQUIRE_PROOFS=true default)
+- 4 new MCP tools (register_identity, deposit_bond, withdraw_funds, claim_refund)
 - Unified readiness check (merge ZK + identity into single readyToParticipate)
 - Rewritten auction skills with correct onboarding flow
 - Full autonomous per-auction loop
