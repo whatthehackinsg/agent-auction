@@ -10,7 +10,7 @@ Requirements for milestone v1.1. Each maps to roadmap phases.
 ### Identity Verification
 
 - [ ] **IDVR-01**: `ENGINE_VERIFY_WALLET=true` is the default — engine rejects JOIN if wallet doesn't match ERC-8004 `ownerOf(agentId)`
-- [ ] **IDVR-02**: MCP tools (`join_auction`, `place_bid`) pre-flight check identity via `check_identity` before submitting actions — refuse if not verified
+- [x] **IDVR-02**: MCP tools (`join_auction`, `place_bid`) pre-flight check identity via `check_identity` before submitting actions — refuse if not verified
 - [ ] **IDVR-03**: Engine returns clear error when agentId is unregistered, wallet mismatches, or ERC-8004 lookup fails
 - [ ] **IDVR-04**: Edge cases handled: unregistered agentId → clear error, ownership transfer → re-verify on next JOIN, RPC failure → fail-closed (reject action)
 
@@ -72,7 +72,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | IDVR-01 | Phase 7 | Pending |
-| IDVR-02 | Phase 7 | Pending |
+| IDVR-02 | Phase 7 | Complete |
 | IDVR-03 | Phase 7 | Pending |
 | IDVR-04 | Phase 7 | Pending |
 | PRIV-01 | Phase 8 | Pending |
