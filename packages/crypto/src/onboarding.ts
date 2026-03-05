@@ -7,7 +7,7 @@
  *   PRIVATE_KEY=0x... PRIVACY_REGISTRY=0x... npx tsx scripts/onboard-agent.ts
  */
 import { ethers } from "ethers";
-import { poseidonHash } from "./poseidon-chain.js";
+import { poseidonHash, F_MODULUS } from "./poseidon-chain.js";
 
 // ---------- Types ----------
 
@@ -46,10 +46,14 @@ const MERKLE_LEVELS = 20;
 
 // ---------- Core Functions ----------
 
-/** Generate a cryptographically random 256-bit secret as bigint */
+/**
+ * Generate a cryptographically random secret reduced into the BN254 scalar field.
+ * The circuit and poseidonHash() both operate mod F_MODULUS — generating the secret
+ * already reduced ensures the stored value matches what the circuit uses exactly.
+ */
 export function generateSecret(): bigint {
   const bytes = ethers.randomBytes(32);
-  return BigInt("0x" + Buffer.from(bytes).toString("hex"));
+  return BigInt("0x" + Buffer.from(bytes).toString("hex")) % F_MODULUS;
 }
 
 /**

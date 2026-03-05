@@ -15,7 +15,10 @@
 async function sha256(data: Uint8Array): Promise<Uint8Array> {
   const g = globalThis as unknown as { crypto?: { subtle?: { digest?: (alg: string, data: BufferSource) => Promise<ArrayBuffer> } } };
   if (typeof g.crypto?.subtle?.digest === "function") {
-    const buf = await g.crypto.subtle.digest("SHA-256", data);
+    // Re-wrap bytes into a concrete ArrayBuffer-backed view for strict TS BufferSource typing.
+    const view = new Uint8Array(data.byteLength);
+    view.set(data);
+    const buf = await g.crypto.subtle.digest("SHA-256", view);
     return new Uint8Array(buf);
   }
   // Node.js fallback
