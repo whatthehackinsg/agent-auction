@@ -29,7 +29,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 - Integer phases (7, 8, 9, 10, 11): Planned milestone work
 - Decimal phases (7.1, 8.1): Urgent insertions if needed (marked with INSERTED)
 
-- [ ] **Phase 7: Identity Verification** - Make ENGINE_VERIFY_WALLET mandatory, audit identity chain, pre-flight gates, edge cases
+- [x] **Phase 7: Identity Verification** - Make ENGINE_VERIFY_WALLET mandatory, audit identity chain, pre-flight gates, edge cases (completed 2026-03-05)
 - [ ] **Phase 8: Participant Privacy** - Strip identity from participant WebSocket; agents self-recognize by nullifier only
 - [ ] **Phase 9: ZK Enforcement** - Make ZK proofs mandatory on join/bid; unify readiness check
 - [ ] **Phase 10: Autonomous MCP Tools** - Add register_identity, deposit_bond, withdraw_funds, claim_refund tools
@@ -119,7 +119,7 @@ Phases execute in numeric order: 7 -> 7.x -> 8 -> 8.x -> 9 -> 9.x -> 10 -> 10.x 
 | 4. Frontend + Demo | v1.0 | 2/2 | Complete | 2026-03-03 |
 | 5. Key Figures Dashboard | v1.0 | 2/2 | Complete | 2026-03-03 |
 | 6. Refine Stats Card UI | v1.0 | 1/1 | Complete | 2026-03-04 |
-| 7. Identity Verification | v1.1 | 1/2 | In Progress | - |
+| 7. Identity Verification | 2/2 | Complete   | 2026-03-05 | - |
 | 8. Participant Privacy | v1.1 | 0/? | Not started | - |
 | 9. ZK Enforcement | v1.1 | 0/? | Not started | - |
 | 10. Autonomous MCP Tools | v1.1 | 0/? | Not started | - |

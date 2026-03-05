@@ -4,17 +4,17 @@ milestone: v1.1
 milestone_name: Autonomous Agent Onboarding
 current_phase: 7
 current_phase_name: Identity Verification
-current_plan: 1
+current_plan: 2
 status: executing
-stopped_at: Completed 07-02-PLAN.md
-last_updated: "2026-03-05T14:52:51.392Z"
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-03-05T15:04:29.399Z"
 last_activity: 2026-03-05
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
-  percent: 88
+  completed_plans: 2
+  percent: 100
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 **Current Phase:** 7
 **Current Phase Name:** Identity Verification
 **Total Phases:** 11
-**Current Plan:** 1
+**Current Plan:** 2
 **Total Plans in Phase:** 2
 **Status:** Ready to execute
 **Last Activity:** 2026-03-05
 
-**Progress:** [█████████░] 88%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 | Phase/Plan | Duration | Tasks | Files |
 |------------|----------|-------|-------|
 | Phase 07-identity-verification P02 | 7m | 2 tasks | 3 files |
+| Phase 07 P01 | 17 min | 1 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -63,6 +64,9 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 - [v1.0]: All-Poseidon registration — single hash function throughout
 - [Phase 07-identity-verification]: Centralized identity pre-flight in mcp-server/src/lib/identity-check.ts for consistent JOIN/BID gating.
 - [Phase 07-identity-verification]: MCP write tools fail closed when /verify-identity is unreachable; no action submission without verification.
+- [Phase 07]: Wallet verification now runs fresh on-chain per JOIN; DO cache bypass removed.
+- [Phase 07]: ENGINE_VERIFY_WALLET=false is only honored in insecure stub mode.
+- [Phase 07]: Identity lookup transport failures return IDENTITY_RPC_FAILURE and reject JOIN.
 
 ### Pending Todos
 
@@ -77,6 +81,6 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Session Continuity
 
 Last activity: 2026-03-05 — Roadmap finalized for v1.1 (5 phases, 18 requirements)
-**Last session:** 2026-03-05T14:52:51.390Z
-**Stopped At:** Completed 07-02-PLAN.md
-**Resume File:** .planning/phases/07-identity-verification/07-01-PLAN.md
+**Last session:** 2026-03-05T15:04:29.397Z
+**Stopped At:** Completed 07-01-PLAN.md
+**Resume File:** None
