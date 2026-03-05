@@ -26,9 +26,20 @@ export async function resolveAgentWallet(
       return null
     }
     return owner as `0x${string}`
-  } catch {
+  } catch (err) {
     // ownerOf reverts for non-existent tokens (ERC-721 spec)
-    return null
+    const message = err instanceof Error ? err.message : String(err)
+    const looksLikeMissingToken =
+      message.includes('ERC721') ||
+      message.includes('nonexistent') ||
+      message.includes('invalid token')
+
+    if (looksLikeMissingToken) {
+      return null
+    }
+
+    // Other errors are likely RPC/network issues and should fail closed upstream.
+    throw err
   }
 }
 
@@ -42,13 +53,20 @@ export async function resolveAgentWallet(
 export async function verifyAgentWallet(
   agentId: string,
   wallet: string,
-): Promise<{ verified: boolean; resolvedWallet: string | null }> {
+): Promise<{
+  verified: boolean
+  resolvedWallet: string | null
+  reason?: 'not_registered' | 'mismatch' | 'verified'
+}> {
   const resolvedWallet = await resolveAgentWallet(agentId)
   if (!resolvedWallet) {
-    return { verified: false, resolvedWallet: null }
+    return { verified: false, resolvedWallet: null, reason: 'not_registered' }
   }
   const verified = resolvedWallet.toLowerCase() === wallet.toLowerCase()
-  return { verified, resolvedWallet }
+  if (!verified) {
+    return { verified: false, resolvedWallet, reason: 'mismatch' }
+  }
+  return { verified: true, resolvedWallet, reason: 'verified' }
 }
 
 /**

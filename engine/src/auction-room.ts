@@ -24,6 +24,23 @@ const DEFAULT_SNIPE_WINDOW_SEC = 60
 const DEFAULT_EXTENSION_SEC = 30
 const DEFAULT_MAX_EXTENSIONS = 5
 
+export function resolveVerifyWalletSetting(
+  env: Pick<Env, 'ENGINE_VERIFY_WALLET' | 'ENGINE_ALLOW_INSECURE_STUBS'>,
+): boolean {
+  let verifyWallet = env.ENGINE_VERIFY_WALLET !== 'false'
+  if (!verifyWallet && env.ENGINE_ALLOW_INSECURE_STUBS !== 'true') {
+    console.info(
+      JSON.stringify({
+        component: 'AuctionRoom',
+        event: 'wallet_verify_override',
+        reason: 'ENGINE_VERIFY_WALLET=false requires ENGINE_ALLOW_INSECURE_STUBS=true',
+      }),
+    )
+    verifyWallet = true
+  }
+  return verifyWallet
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -485,10 +502,10 @@ export class AuctionRoom implements DurableObject {
         }
       }
 
-      // Per-agent Poseidon root is fetched inside handleJoin() directly from DO storage cache
+      // Per-agent Poseidon root is fetched inside handleJoin() directly from chain reads
       const validationCtx: ValidationContext = {
         requireProofs: this.env.ENGINE_REQUIRE_PROOFS === 'true',
-        verifyWallet: this.env.ENGINE_VERIFY_WALLET === 'true',
+        verifyWallet: resolveVerifyWalletSetting(this.env),
       }
       const validation = await validateAction(
         action,
@@ -1050,11 +1067,14 @@ export class AuctionRoom implements DurableObject {
       })
     }
 
+    const replayBytes = serializeReplayBundle(this.auctionId, replayEvents)
+    const replayContentHash = toHex(await computeContentHash(replayBytes)) as `0x${string}`
     const closeTimestamp = BigInt(Math.floor(Date.now() / 1000))
     const packet: AuctionSettlementPacket = {
       auctionId: this.auctionId as `0x${string}`,
       manifestHash: auctionRow.manifest_hash as `0x${string}`,
       finalLogHash: this.chainHead as `0x${string}`,
+      replayContentHash,
       winnerAgentId,
       winnerWallet,
       winningBidAmount,

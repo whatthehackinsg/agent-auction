@@ -6,7 +6,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import fs from 'node:fs'
 import { ActionType, type ActionRequest } from '../src/types/engine'
 import {
   checkNonce,
@@ -18,6 +17,7 @@ import {
   validateAction,
 } from '../src/handlers/actions'
 import * as identityLib from '../src/lib/identity'
+import * as cryptoLib from '../src/lib/crypto'
 
 // ─── Mock Helpers ─────────────────────────────────────────────────────
 
@@ -161,6 +161,7 @@ describe('handleJoin', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     delete process.env.ENGINE_ALLOW_INSECURE_STUBS
   })
 
@@ -203,13 +204,15 @@ describe('handleJoin', () => {
   })
 
   it('accepts join when requireProofs=true and valid membership proof provided', async () => {
-    const proofFixture = JSON.parse(
-      fs.readFileSync(new URL('./fixtures/membership-proof.json', import.meta.url), 'utf-8'),
-    )
+    vi.spyOn(cryptoLib, 'verifyMembershipProof').mockResolvedValue({
+      valid: true,
+      registryRoot: '0x' + '11'.repeat(32),
+      nullifier: '0x' + '22'.repeat(32),
+    })
     const action = makeAction({
       type: ActionType.JOIN,
       nonce: 0,
-      proof: proofFixture,
+      proof: { mocked: true },
     })
     // Note: ENGINE_ALLOW_INSECURE_STUBS=true bypasses EIP-712 sig check,
     // so only the proof verification path is tested here
@@ -294,9 +297,11 @@ describe('handleJoin wallet verification', () => {
   })
 
   it('does not read or write walletVerified:/poseidonRoot: cache keys', async () => {
-    const proofFixture = JSON.parse(
-      fs.readFileSync(new URL('./fixtures/membership-proof.json', import.meta.url), 'utf-8'),
-    )
+    vi.spyOn(cryptoLib, 'verifyMembershipProof').mockResolvedValue({
+      valid: true,
+      registryRoot: '0x' + '11'.repeat(32),
+      nullifier: '0x' + '22'.repeat(32),
+    })
     vi.spyOn(identityLib, 'verifyAgentWallet').mockResolvedValue({
       verified: true,
       resolvedWallet: TEST_WALLET,
@@ -306,7 +311,7 @@ describe('handleJoin wallet verification', () => {
 
     const getSpy = vi.spyOn(storage, 'get')
     const putSpy = vi.spyOn(storage, 'put')
-    const action = makeAction({ type: ActionType.JOIN, nonce: 0, proof: proofFixture })
+    const action = makeAction({ type: ActionType.JOIN, nonce: 0, proof: { mocked: true } })
 
     await expect(
       handleJoin(action, storage, TEST_AUCTION_ID, { verifyWallet: true, requireProofs: true }),
@@ -350,6 +355,7 @@ describe('handleBid', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     delete process.env.ENGINE_ALLOW_INSECURE_STUBS
   })
 
@@ -435,14 +441,17 @@ describe('handleBid', () => {
   })
 
   it('accepts bid when requireProofs=true and valid bid range proof provided', async () => {
-    const proofFixture = JSON.parse(
-      fs.readFileSync(new URL('./fixtures/bidrange-proof.json', import.meta.url), 'utf-8'),
-    )
+    vi.spyOn(cryptoLib, 'verifyBidRangeProof').mockResolvedValue({
+      valid: true,
+      reservePrice: '0',
+      maxBudget: '0',
+      bidCommitment: '0',
+    })
     const action = makeAction({
       type: ActionType.BID,
       nonce: 0,
       amount: '2000000',
-      proof: proofFixture,
+      proof: { mocked: true },
     })
     const result = await handleBid(action, storage, TEST_AUCTION_ID, '1000000', '0', {
       requireProofs: true,

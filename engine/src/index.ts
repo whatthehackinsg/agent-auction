@@ -31,7 +31,8 @@ export interface Env {
   X402_FACILITATOR_URL?: string     // default: https://www.x402.org/facilitator
   ENGINE_ADMIN_KEY?: string
   ENGINE_REQUIRE_PROOFS?: string    // 'true' to reject null ZK proofs (default: false)
-  ENGINE_VERIFY_WALLET?: string     // 'true' to verify wallet via ERC-8004 on JOIN (default: false)
+  ENGINE_VERIFY_WALLET?: string     // Verify wallet via ERC-8004 on JOIN (default: true, set 'false' to disable — requires ENGINE_ALLOW_INSECURE_STUBS)
+  ENGINE_ALLOW_INSECURE_STUBS?: string
   ENGINE_X402_DISCOVERY?: string    // 'true' to enable x402 on discovery routes (default: off)
   ENGINE_X402_DISCOVERY_PRICE?: string  // price for /auctions list (default $0.001)
   ENGINE_X402_DETAIL_PRICE?: string     // price for /auctions/:id detail (default $0.001)
@@ -881,16 +882,42 @@ app.post('/verify-identity', async (c) => {
   }
 
   const { verifyAgentWallet, getAgentPoseidonRoot } = await import('./lib/identity')
+  try {
+    const { verified, resolvedWallet, reason } = await verifyAgentWallet(body.agentId, body.wallet)
+    const poseidonRoot = await getAgentPoseidonRoot(body.agentId)
 
-  const { verified, resolvedWallet } = await verifyAgentWallet(body.agentId, body.wallet)
-  const poseidonRoot = await getAgentPoseidonRoot(body.agentId)
+    const response: {
+      verified: boolean
+      resolvedWallet: string | null
+      privacyRegistered: boolean
+      poseidonRoot: string | null
+      errorCode?: 'AGENT_NOT_REGISTERED' | 'WALLET_MISMATCH'
+    } = {
+      verified,
+      resolvedWallet,
+      privacyRegistered: poseidonRoot !== null,
+      poseidonRoot,
+    }
 
-  return c.json({
-    verified,
-    resolvedWallet,
-    privacyRegistered: poseidonRoot !== null,
-    poseidonRoot,
-  })
+    if (!verified) {
+      if (reason === 'not_registered') {
+        response.errorCode = 'AGENT_NOT_REGISTERED'
+      } else if (reason === 'mismatch') {
+        response.errorCode = 'WALLET_MISMATCH'
+      }
+    }
+
+    return c.json(response)
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    return c.json(
+      {
+        error: 'IDENTITY_RPC_FAILURE',
+        detail,
+      },
+      502,
+    )
+  }
 })
 
 app.get('/auctions/:id/stream', async (c) => {

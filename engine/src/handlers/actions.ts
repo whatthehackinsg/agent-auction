@@ -22,6 +22,7 @@ import {
 import { ActionType } from '../types/engine'
 import type { ActionRequest, ValidatedAction } from '../types/engine'
 import { toBytes, toHex } from 'viem'
+import { ADDRESSES } from '../lib/addresses'
 
 export interface ValidationContext {
   /** When true, null/missing ZK proof is rejected. */
@@ -246,8 +247,8 @@ async function verifyMembership(
  * derive fallback nullifier if needed, verify signature, check nullifier not spent,
  * check nonce.
  *
- * Phase 3: fetches per-agent Poseidon root from chain (cached in DO storage)
- * and cross-checks against the proof's registryRoot public signal.
+ * Phase 3: fetches per-agent Poseidon root from chain and cross-checks
+ * against the proof's registryRoot public signal.
  */
 export async function handleJoin(
   action: ActionRequest,
@@ -257,33 +258,42 @@ export async function handleJoin(
 ): Promise<ValidationResult> {
   // 0. Verify wallet matches ERC-8004 on-chain identity (if enabled)
   if (ctx?.verifyWallet) {
-    const cached = await storage.get<boolean>(`walletVerified:${action.agentId}`)
-    if (!cached) {
-      const { verifyAgentWallet } = await import('../lib/identity')
-      const { verified } = await verifyAgentWallet(action.agentId, action.wallet)
-      if (!verified) {
+    const { verifyAgentWallet } = await import('../lib/identity')
+    try {
+      const result = await verifyAgentWallet(action.agentId, action.wallet)
+      if (!result.verified) {
+        if (result.reason === 'not_registered' || result.resolvedWallet === null) {
+          throw new Error(
+            `[AGENT_NOT_REGISTERED] agentId ${action.agentId} is not registered on ERC-8004 (${ADDRESSES.identityRegistry}). Register via register_identity MCP tool or call register(string) on the contract.`,
+          )
+        }
         throw new Error(
-          `Wallet ${action.wallet} does not match on-chain owner for agentId ${action.agentId}`,
+          `[WALLET_MISMATCH] Wallet ${action.wallet} does not match on-chain owner ${result.resolvedWallet} for agentId ${action.agentId}. Use the wallet that owns this agentId on ERC-8004.`,
         )
       }
-      await storage.put(`walletVerified:${action.agentId}`, true)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.includes('[AGENT_NOT_REGISTERED]') || message.includes('[WALLET_MISMATCH]')) {
+        throw err
+      }
+      throw new Error(
+        `[IDENTITY_RPC_FAILURE] Could not verify identity for agentId ${action.agentId}: ${message}. Check RPC connectivity. Action rejected (fail-closed).`,
+      )
     }
   }
 
-  // 0b. Fetch per-agent Poseidon root for proof cross-check (cached in DO storage, 24h TTL)
-  //     Only needed when proofs are required — saves an RPC call in non-ZK mode.
+  // 0b. Fetch per-agent Poseidon root for proof cross-check (no DO cache).
+  //     Fail-open on RPC errors to preserve existing proof behavior.
   let agentPoseidonRoot: string | undefined
   if (ctx?.requireProofs) {
-    const cached = await storage.get<string>(`poseidonRoot:${action.agentId}`)
-    if (cached) {
-      agentPoseidonRoot = cached
-    } else {
+    try {
       const { getAgentPoseidonRoot } = await import('../lib/identity')
       const root = await getAgentPoseidonRoot(action.agentId)
       if (root) {
         agentPoseidonRoot = root
-        await storage.put(`poseidonRoot:${action.agentId}`, root)
       }
+    } catch {
+      agentPoseidonRoot = undefined
     }
   }
 
