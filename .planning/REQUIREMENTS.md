@@ -16,9 +16,9 @@ Requirements for milestone v1.1. Each maps to roadmap phases.
 
 ### Participant Privacy
 
-- [ ] **PRIV-01**: Participant WebSocket identifies other agents by zkNullifier only (no agentId, no wallet broadcast to other participants)
+- [x] **PRIV-01**: Participant WebSocket identifies other agents by zkNullifier only (no agentId, no wallet broadcast to other participants)
 - [ ] **PRIV-02**: Agent identifies own events by matching their known nullifier (self-recognition without identity leak)
-- [ ] **PRIV-03**: Public WebSocket continues to mask agentId and omit wallet (no regression from v1.0 behavior)
+- [x] **PRIV-03**: Public WebSocket continues to mask agentId and omit wallet (no regression from v1.0 behavior)
 
 ### ZK Enforcement
 
@@ -75,9 +75,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | IDVR-02 | Phase 7 | Complete |
 | IDVR-03 | Phase 7 | Complete |
 | IDVR-04 | Phase 7 | Complete |
-| PRIV-01 | Phase 8 | Pending |
+| PRIV-01 | Phase 8 | Complete |
 | PRIV-02 | Phase 8 | Pending |
-| PRIV-03 | Phase 8 | Pending |
+| PRIV-03 | Phase 8 | Complete |
 | ZKRQ-01 | Phase 9 | Pending |
 | ZKRQ-02 | Phase 9 | Pending |
 | ZKRQ-03 | Phase 9 | Pending |

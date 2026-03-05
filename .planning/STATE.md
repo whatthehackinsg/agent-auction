@@ -4,17 +4,17 @@ milestone: v1.1
 milestone_name: Autonomous Agent Onboarding
 current_phase: 8
 current_phase_name: participant privacy
-current_plan: Not started
-status: planning
-stopped_at: Phase 8 plans created and verified
-last_updated: "2026-03-05T18:20:47.777Z"
+current_plan: 2
+status: executing
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-03-05T19:20:50.124Z"
 last_activity: 2026-03-05
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 4
-  completed_plans: 2
-  percent: 100
+  completed_plans: 3
+  percent: 90
 ---
 
 # Project State
@@ -24,19 +24,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Working ZK proofs that actually verify — agents prove registry membership and bid range without revealing identity, demonstrated end-to-end.
-**Current focus:** Phase 7 - Identity Verification
+**Current focus:** Phase 8 - Participant Privacy
 
 ## Current Position
 
 **Current Phase:** 8
 **Current Phase Name:** participant privacy
 **Total Phases:** 11
-**Current Plan:** Not started
+**Current Plan:** 2
 **Total Plans in Phase:** 2
-**Status:** Ready to plan
+**Status:** Ready to execute
 **Last Activity:** 2026-03-05
 
-**Progress:** [██████████] 100%
+**Progress:** [█████████░] 90%
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 |------------|----------|-------|-------|
 | Phase 07-identity-verification P02 | 7m | 2 tasks | 3 files |
 | Phase 07 P01 | 17 min | 1 tasks | 5 files |
+| Phase 08 P01 | 12m | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,9 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 - [Phase 07]: Wallet verification now runs fresh on-chain per JOIN; DO cache bypass removed.
 - [Phase 07]: ENGINE_VERIFY_WALLET=false is only honored in insecure stub mode.
 - [Phase 07]: Identity lookup transport failures return IDENTITY_RPC_FAILURE and reject JOIN.
+- [Phase 08]: System events (agentId=0) pass through to participant sockets unmodified -- not privacy-sensitive
+- [Phase 08]: D1 events table gets zk_nullifier column for /events masking (migration 0004)
+- [Phase 08]: agentNullifierMap persisted to DO storage for robustness across hibernation
 
 ### Pending Todos
 
@@ -93,6 +97,6 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Session Continuity
 
 Last activity: 2026-03-05 — Roadmap finalized for v1.1 (5 phases, 18 requirements)
-**Last session:** 2026-03-05T18:20:47.770Z
-**Stopped At:** Phase 8 plans created and verified
-**Resume File:** .planning/phases/08-participant-privacy/08-01-PLAN.md
+**Last session:** 2026-03-05T19:20:50.122Z
+**Stopped At:** Completed 08-01-PLAN.md
+**Resume File:** None
