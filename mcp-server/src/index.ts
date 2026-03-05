@@ -26,6 +26,7 @@ import { registerJoinTool } from './tools/join.js'
 import { registerBidTool } from './tools/bid.js'
 import { registerBondTools } from './tools/bond.js'
 import { registerEventsTool } from './tools/events.js'
+import { registerMonitorTool } from './tools/monitor.js'
 import { registerRevealTool } from './tools/reveal.js'
 import { registerSettlementTool } from './tools/settlement.js'
 import { registerIdentityTool } from './tools/identity.js'
@@ -58,6 +59,7 @@ function createServer(): McpServer {
   registerBondTools(server, engine, config)
   registerRevealTool(server, engine, config, nonceTracker)
   registerEventsTool(server, engine)
+  registerMonitorTool(server, engine, config)
   registerSettlementTool(server, engine)
   registerIdentityTool(server, engine, config)
 
