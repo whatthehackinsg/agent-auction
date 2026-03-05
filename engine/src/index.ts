@@ -842,6 +842,27 @@ app.post('/auctions/:id/bonds', async (c) => {
   }
 
   try {
+    const auction = await c.env.AUCTION_DB
+      .prepare('SELECT deposit_amount FROM auctions WHERE auction_id = ?')
+      .bind(auctionId)
+      .first<{ deposit_amount: string }>()
+    if (!auction) {
+      return c.json({ error: 'auction not found' }, 404)
+    }
+
+    const requiredBond = auction.deposit_amount ?? '0'
+    if (BigInt(requiredBond) === 0n) {
+      return c.json({ error: 'auction does not require a bond' }, 400)
+    }
+    if (body.amount !== requiredBond) {
+      return c.json(
+        {
+          error: `bond amount mismatch: expected ${requiredBond}, got ${body.amount}`,
+        },
+        400,
+      )
+    }
+
     // Enforce identity binding: bond depositor wallet must match ERC-8004 ownerOf(agentId).
     const { verifyAgentWallet } = await import('./lib/identity')
     const { verified, resolvedWallet } = await verifyAgentWallet(body.agentId, body.depositor)
@@ -862,7 +883,7 @@ app.post('/auctions/:id/bonds', async (c) => {
         auctionId,
         agentId: body.agentId,
         depositor: body.depositor,
-        amount: body.amount,
+        amount: requiredBond,
         txHash: body.txHash as `0x${string}`,
       },
     )

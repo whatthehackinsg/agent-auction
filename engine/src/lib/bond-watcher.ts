@@ -46,16 +46,31 @@ export async function registerPendingBond(
     amount: string
     now?: number
   },
+  options?: {
+    /** When true, force-reset any existing row back to PENDING with fresh observation window. */
+    resetObservation?: boolean
+  },
 ): Promise<void> {
   const now = params.now ?? Math.floor(Date.now() / 1000)
-  await db
-    .prepare(
-      `INSERT INTO bond_observations (auction_id, agent_id, depositor, amount, status, requested_at)
+  const resetObservation = options?.resetObservation ?? false
+  const query = resetObservation
+    ? `INSERT INTO bond_observations (auction_id, agent_id, depositor, amount, status, requested_at)
        VALUES (?, ?, ?, ?, 'PENDING', ?)
        ON CONFLICT(auction_id, agent_id) DO UPDATE SET
          depositor = excluded.depositor,
-         amount = excluded.amount`,
-    )
+         amount = excluded.amount,
+         status = 'PENDING',
+         requested_at = excluded.requested_at,
+         confirmed_at = NULL,
+         observed_tx_hash = NULL,
+         observed_log_index = NULL`
+    : `INSERT INTO bond_observations (auction_id, agent_id, depositor, amount, status, requested_at)
+       VALUES (?, ?, ?, ?, 'PENDING', ?)
+       ON CONFLICT(auction_id, agent_id) DO UPDATE SET
+         depositor = excluded.depositor,
+         amount = excluded.amount`
+  await db
+    .prepare(query)
     .bind(params.auctionId, params.agentId, params.depositor, params.amount, now)
     .run()
 }
@@ -128,6 +143,57 @@ export async function enforceJoinBondObservation(
 ): Promise<void> {
   const now = params.now ?? Math.floor(Date.now() / 1000)
   const timeout = params.timeoutSeconds ?? DEFAULT_BOND_TIMEOUT_SECONDS
+  const status = await getBondStatus(db, params.auctionId, params.agentId, {
+    now,
+    timeoutSeconds: timeout,
+  })
+
+  if (status.status === 'CONFIRMED') {
+    const requiredAmount = BigInt(params.amount)
+    const observedAmount = BigInt(status.amount ?? '0')
+    const observedDepositor = (status.depositor ?? '').toLowerCase()
+    const expectedDepositor = params.wallet.toLowerCase()
+    if (observedDepositor === expectedDepositor && observedAmount >= requiredAmount) {
+      return
+    }
+    // Stale or mismatched confirmation (different wallet / insufficient amount): restart observation.
+    await registerPendingBond(
+      db,
+      {
+        auctionId: params.auctionId,
+        agentId: params.agentId,
+        depositor: params.wallet,
+        amount: params.amount,
+        now,
+      },
+      { resetObservation: true },
+    )
+    throw new Error('bond pending: transfer to escrow not observed yet')
+  }
+
+  if (status.status === 'TIMEOUT') {
+    throw new Error('bond observation timeout (>60s)')
+  }
+
+  if (status.status === 'PENDING') {
+    const observedDepositor = (status.depositor ?? '').toLowerCase()
+    const expectedDepositor = params.wallet.toLowerCase()
+    const observedAmount = status.amount ?? '0'
+    if (observedDepositor !== expectedDepositor || observedAmount !== params.amount) {
+      await registerPendingBond(
+        db,
+        {
+          auctionId: params.auctionId,
+          agentId: params.agentId,
+          depositor: params.wallet,
+          amount: params.amount,
+          now,
+        },
+        { resetObservation: true },
+      )
+    }
+    throw new Error('bond pending: transfer to escrow not observed yet')
+  }
 
   await registerPendingBond(db, {
     auctionId: params.auctionId,
@@ -137,17 +203,6 @@ export async function enforceJoinBondObservation(
     now,
   })
 
-  const status = await getBondStatus(db, params.auctionId, params.agentId, {
-    now,
-    timeoutSeconds: timeout,
-  })
-
-  if (status.status === 'CONFIRMED') {
-    return
-  }
-  if (status.status === 'TIMEOUT') {
-    throw new Error('bond observation timeout (>60s)')
-  }
   throw new Error('bond pending: transfer to escrow not observed yet')
 }
 
@@ -232,6 +287,7 @@ export async function verifyBondFromReceipt(
       `INSERT INTO bond_observations (auction_id, agent_id, depositor, amount, status, requested_at, confirmed_at, observed_tx_hash, observed_log_index)
        VALUES (?, ?, ?, ?, 'CONFIRMED', ?, ?, ?, ?)
        ON CONFLICT(auction_id, agent_id) DO UPDATE SET
+         depositor = excluded.depositor, amount = excluded.amount,
          status = 'CONFIRMED', confirmed_at = excluded.confirmed_at,
          observed_tx_hash = excluded.observed_tx_hash, observed_log_index = excluded.observed_log_index`,
     )

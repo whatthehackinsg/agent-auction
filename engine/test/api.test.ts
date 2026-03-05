@@ -645,6 +645,64 @@ describe('API routes (Hono)', () => {
     expect(confirmed.observedLogIndex).toBe(3)
   })
 
+  it('POST /auctions/:id/bonds rejects amount that does not match required auction bond', async () => {
+    const auctionId = randomAuctionId()
+    await db
+      .prepare(
+        'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .bind(auctionId, '0x' + 'aa'.repeat(32), 1, '1000000', '500000', Math.floor(Date.now() / 1000) + 60)
+      .run()
+
+    const res = await app.request(
+      `http://localhost/auctions/${auctionId}/bonds`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: '101',
+          depositor: '0x' + '11'.repeat(20),
+          amount: '1',
+          txHash: '0x' + '22'.repeat(32),
+        }),
+      },
+      env,
+    )
+
+    expect(res.status).toBe(400)
+    const json = await res.json()
+    expect(json.error).toContain('bond amount mismatch')
+  })
+
+  it('POST /auctions/:id/bonds rejects requests for auctions with zero required bond', async () => {
+    const auctionId = randomAuctionId()
+    await db
+      .prepare(
+        'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .bind(auctionId, '0x' + 'aa'.repeat(32), 1, '1000000', '0', Math.floor(Date.now() / 1000) + 60)
+      .run()
+
+    const res = await app.request(
+      `http://localhost/auctions/${auctionId}/bonds`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: '101',
+          depositor: '0x' + '11'.repeat(20),
+          amount: '0',
+          txHash: '0x' + '22'.repeat(32),
+        }),
+      },
+      env,
+    )
+
+    expect(res.status).toBe(400)
+    const json = await res.json()
+    expect(json.error).toContain('does not require a bond')
+  })
+
   it('GET /auctions/:id/stream proxies upgrade request to room', async () => {
     const auctionId = randomAuctionId()
     const res = await app.request(
