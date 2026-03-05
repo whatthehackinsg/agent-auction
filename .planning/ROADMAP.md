@@ -46,10 +46,11 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
   2. MCP tools (`join_auction`, `place_bid`) pre-flight check identity and refuse to submit actions if agent is not ERC-8004 verified
   3. Engine returns structured error codes for: unregistered agentId, wallet mismatch, ERC-8004 lookup failure
   4. Ownership transfer invalidates cached verification — next JOIN re-verifies on-chain; RPC failure fails closed (rejects action)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 07-01: TBD
+- [ ] 07-01-PLAN.md — Engine identity hardening: default verify=true, structured error codes, remove cache, edge cases
+- [ ] 07-02-PLAN.md — MCP pre-flight identity checks in join_auction and place_bid tools
 
 ### Phase 8: Participant Privacy
 **Goal**: Participants see only zkNullifiers for other agents — no agentId or wallet leaks on the participant WebSocket tier
@@ -118,7 +119,7 @@ Phases execute in numeric order: 7 -> 7.x -> 8 -> 8.x -> 9 -> 9.x -> 10 -> 10.x 
 | 4. Frontend + Demo | v1.0 | 2/2 | Complete | 2026-03-03 |
 | 5. Key Figures Dashboard | v1.0 | 2/2 | Complete | 2026-03-03 |
 | 6. Refine Stats Card UI | v1.0 | 1/1 | Complete | 2026-03-04 |
-| 7. Identity Verification | v1.1 | 0/? | Not started | - |
+| 7. Identity Verification | v1.1 | 0/2 | Planning | - |
 | 8. Participant Privacy | v1.1 | 0/? | Not started | - |
 | 9. ZK Enforcement | v1.1 | 0/? | Not started | - |
 | 10. Autonomous MCP Tools | v1.1 | 0/? | Not started | - |
