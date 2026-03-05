@@ -488,7 +488,8 @@ export class AuctionRoom implements DurableObject {
       // Per-agent Poseidon root is fetched inside handleJoin() directly from DO storage cache
       const validationCtx: ValidationContext = {
         requireProofs: this.env.ENGINE_REQUIRE_PROOFS === 'true',
-        verifyWallet: this.env.ENGINE_VERIFY_WALLET === 'true',
+        // Default secure posture: verify wallet unless explicitly disabled.
+        verifyWallet: this.env.ENGINE_VERIFY_WALLET !== 'false',
       }
       const validation = await validateAction(
         action,
@@ -1050,11 +1051,15 @@ export class AuctionRoom implements DurableObject {
       })
     }
 
+    const replayBytes = serializeReplayBundle(this.auctionId, replayEvents)
+    const replayContentHash = toHex(await computeContentHash(replayBytes)) as `0x${string}`
+
     const closeTimestamp = BigInt(Math.floor(Date.now() / 1000))
     const packet: AuctionSettlementPacket = {
       auctionId: this.auctionId as `0x${string}`,
       manifestHash: auctionRow.manifest_hash as `0x${string}`,
       finalLogHash: this.chainHead as `0x${string}`,
+      replayContentHash,
       winnerAgentId,
       winnerWallet,
       winningBidAmount,

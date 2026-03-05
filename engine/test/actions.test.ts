@@ -187,11 +187,11 @@ describe('handleJoin', () => {
     const first = await handleJoin(action, storage, TEST_AUCTION_ID)
     await commitValidationMutation(first.mutation, storage)
 
-    // Second join from same wallet — nullifier already spent
+    // Second join from same wallet — blocked by canonical join marker (path-independent)
     const action2 = makeAction({ type: ActionType.JOIN, nonce: 1 })
     await expect(
       handleJoin(action2, storage, TEST_AUCTION_ID),
-    ).rejects.toThrow('Nullifier already spent')
+    ).rejects.toThrow('already joined')
   })
 
   it('rejects join when requireProofs=true and no proof provided', async () => {

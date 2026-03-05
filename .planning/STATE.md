@@ -62,7 +62,19 @@ Progress: [░░░░░░░░░░] 0%
 - 1 pre-existing failing test (bond-watcher.test.ts, predates v1.0)
 - Dead expectedRegistryRoot code block in engine crypto.ts (tech debt from v1.0)
 
+### Fixes Applied (2026-03-05)
+
+- **REVEAL EIP-712 deadline bug** (Critical) — engine `verifySignature` was missing `deadline` in
+  the Reveal message and skipping deadline expiry checks for REVEAL. All REVEAL actions from any
+  signer were rejected. Fixed in `engine/src/handlers/actions.ts`.
+- **CRE replay verification blocking local demo** (High) — `config.json` sim config now has
+  `skipReplayVerification: true` so Phase C does not attempt to fetch from the deployed Workers URL
+  during local development. Production config unchanged.
+- **Settlement watcher missed events** (High) — `cre/scripts/settlement-watcher.ts` now runs a
+  500-block backfill on startup, replaying any `AuctionEnded` events missed while the watcher was
+  offline. See `docs/zk-fix-changes.md` Phase 6 for full details.
+
 ## Session Continuity
 
-Last activity: 2026-03-05 — Roadmap finalized for v1.1 (5 phases, 18 requirements)
+Last activity: 2026-03-05 — Post-audit fixes applied (REVEAL deadline, CRE sim config, watcher backfill)
 Resume file: None

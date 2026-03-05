@@ -13,7 +13,6 @@
 import { toHex, type Hex } from 'viem'
 import {
   generateSecret as generatePoseidonSecret,
-  computeRegistrationCommit as poseidonCommit,
   computeLeaf,
   computeCapabilityCommitment,
   buildPoseidonMerkleTree,
@@ -31,17 +30,16 @@ const privacyRegistryAbi = [
     stateMutability: 'nonpayable',
     inputs: [
       { name: 'agentId', type: 'uint256' },
-      { name: 'commit', type: 'bytes32' },
       { name: 'poseidonRoot', type: 'bytes32' },
       { name: 'capCommitment', type: 'bytes32' },
     ],
     outputs: [],
   },
   {
-    name: 'getRoot',
+    name: 'getAgentPoseidonRoot',
     type: 'function',
     stateMutability: 'view',
-    inputs: [],
+    inputs: [{ name: 'agentId', type: 'uint256' }],
     outputs: [{ name: '', type: 'bytes32' }],
   },
 ] as const
@@ -68,7 +66,6 @@ export async function preparePrivacyState(
   capabilityIds: bigint[] = [1n],
 ): Promise<AgentPrivateState> {
   const agentSecret = generatePoseidonSecret()
-  const salt = generatePoseidonSecret()
 
   // Build circuit-compatible leaves: Poseidon(capabilityId, agentSecret, leafIndex)
   const leafHashes: bigint[] = []
@@ -78,18 +75,12 @@ export async function preparePrivacyState(
   const treeResult = await buildPoseidonMerkleTree(leafHashes)
   const capabilityMerkleRoot = treeResult.root
 
-  // Commitment: keccak256(agentSecret, capabilityMerkleRoot, salt)
-  // computeRegistrationCommit returns a 0x-prefixed hex string
-  const registrationCommit = poseidonCommit(agentSecret, capabilityMerkleRoot, salt) as Hex
-
   return {
     agentId,
     agentSecret,
-    salt,
     capabilities: capabilityIds.map((id) => ({ capabilityId: id })),
     leafHashes,
     capabilityMerkleRoot,
-    registrationCommit,
   }
 }
 
@@ -123,7 +114,6 @@ export async function registerPrivacy(
       functionName: 'register',
       args: [
         privateState.agentId,
-        privateState.registrationCommit as Hex,
         poseidonRootHex,
         capCommitmentHex,
       ],
@@ -141,13 +131,14 @@ export async function registerPrivacy(
 }
 
 /**
- * Read the current registry root from AgentPrivacyRegistry.
+ * Read the per-agent Poseidon root from AgentPrivacyRegistry.
  */
-export async function readRegistryRoot(): Promise<Hex> {
+export async function readRegistryRoot(agentId: bigint): Promise<Hex> {
   const root = await publicClient.readContract({
     address: ADDRESSES.agentPrivacyRegistry,
     abi: privacyRegistryAbi,
-    functionName: 'getRoot',
+    functionName: 'getAgentPoseidonRoot',
+    args: [agentId],
   })
   return root as Hex
 }

@@ -4,7 +4,7 @@
   "auctionEscrowAddress": "0x20944f46AB83F7eA40923D7543AF742Da829743c",
   "replayBundleBaseUrl": "https://auction-engine.zengyuzhi2002-efc.workers.dev",
   "gasLimit": "500000",
-  "skipReplayVerification": "false",
+  "skipReplayVerification": "true",
   "isTestnet": "true",
   "useFinalized": "false"
 }

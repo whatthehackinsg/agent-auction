@@ -31,7 +31,7 @@ export interface Env {
   X402_FACILITATOR_URL?: string     // default: https://www.x402.org/facilitator
   ENGINE_ADMIN_KEY?: string
   ENGINE_REQUIRE_PROOFS?: string    // 'true' to reject null ZK proofs (default: false)
-  ENGINE_VERIFY_WALLET?: string     // 'true' to verify wallet via ERC-8004 on JOIN (default: false)
+  ENGINE_VERIFY_WALLET?: string     // 'false' to disable wallet verification on JOIN (default: true)
   ENGINE_X402_DISCOVERY?: string    // 'true' to enable x402 on discovery routes (default: off)
   ENGINE_X402_DISCOVERY_PRICE?: string  // price for /auctions list (default $0.001)
   ENGINE_X402_DETAIL_PRICE?: string     // price for /auctions/:id detail (default $0.001)
@@ -842,6 +842,19 @@ app.post('/auctions/:id/bonds', async (c) => {
   }
 
   try {
+    // Enforce identity binding: bond depositor wallet must match ERC-8004 ownerOf(agentId).
+    const { verifyAgentWallet } = await import('./lib/identity')
+    const { verified, resolvedWallet } = await verifyAgentWallet(body.agentId, body.depositor)
+    if (!verified) {
+      return c.json(
+        {
+          error: `identity mismatch: depositor ${body.depositor} is not owner of agent ${body.agentId}`,
+          resolvedWallet,
+        },
+        403,
+      )
+    }
+
     const confirmed = await verifyBondFromReceipt(
       c.env.AUCTION_DB,
       c.env.SEQUENCER_PRIVATE_KEY as `0x${string}`,

@@ -229,7 +229,7 @@ Both the engine's fallback and the signer now use the same formula.
 
 **Added:**
 - `signBidCommit()` — signs `BidCommit` typed data with `encryptedBidHash` and `zkRangeProofHash` as zero bytes32 (future fields, not yet implemented; both signer and engine use zeroes to ensure consistency)
-- `signReveal()` — signs `Reveal` typed data (no `deadline` field — by protocol design, reveals must be accepted in a time window without a per-message deadline)
+- `signReveal()` — signs `Reveal` typed data including `deadline` field (matches engine's `AUCTION_EIP712_TYPES.Reveal`)
 
 ---
 
@@ -277,6 +277,83 @@ The `PRIVACY_REGISTRY_ABI` constant was also updated to reflect the new 4-argume
 
 ---
 
+## Phase 6 — Post-Audit Fixes (2026-03-05)
+
+### 6a. REVEAL EIP-712 deadline missing in engine verifier
+
+**File:** `engine/src/handlers/actions.ts`
+
+**Problem:** `verifySignature()` built the `Reveal` message without `deadline`, but
+`AUCTION_EIP712_TYPES.Reveal` includes `deadline: uint256`. All signers (MCP server,
+agent-client, packages/crypto) sign with a non-zero deadline. viem's `verifyTypedData`
+defaults the missing field to `0`, producing a different hash from the signer. Result:
+**every REVEAL action was rejected** with an invalid signature error.
+
+Additionally, the deadline expiry check had an explicit `action.type !== ActionType.REVEAL`
+carve-out, which meant expired REVEAL signatures would also have been accepted.
+
+**Changed from:**
+```ts
+// deadline check skipped REVEAL:
+if (deadline > 0n && action.type !== ActionType.REVEAL) { ... }
+
+// message for REVEAL had no deadline:
+case ActionType.REVEAL:
+  message = { auctionId, bid, salt, nonce }
+```
+
+**Changed to:**
+```ts
+// deadline check applies to all actions including REVEAL:
+if (deadline > 0n) { ... }
+
+// deadline included in REVEAL message:
+case ActionType.REVEAL:
+  message = { auctionId, bid, salt, nonce, deadline }
+```
+
+---
+
+### 6b. CRE simulation skips replay bundle fetch (local dev)
+
+**File:** `cre/workflows/settlement/config.json`
+
+**Problem:** The simulation config had `skipReplayVerification: "false"` with
+`replayBundleBaseUrl` pointing to the deployed Cloudflare Workers URL. When running
+the engine locally (`wrangler dev`), the deployed URL has no local auction data, so
+Phase C always fails — blocking settlement in every local demo run.
+
+The production config (`config.production.json`) uses the same URL with the DON reading
+finalized blocks, where the engine IS deployed at that URL.
+
+**Changed from:** `"skipReplayVerification": "false"` in `config.json`
+**Changed to:** `"skipReplayVerification": "true"` in `config.json` (simulation only)
+
+The on-chain `replayContentHash` is already committed by the trusted sequencer in
+`recordResult()`, so skipping the HTTP fetch in local simulation does not weaken
+the settlement guarantee for demo purposes. The production config is unchanged.
+
+---
+
+### 6c. Settlement watcher startup backfill
+
+**File:** `cre/scripts/settlement-watcher.ts`
+
+**Problem:** If the watcher process was down when an `AuctionEnded` event was emitted,
+restarting it would silently miss those events — the auction stays CLOSED indefinitely
+with no settlement path.
+
+**Added:** `backfill(blocks = 500)` function called before `client.watchEvent()`:
+1. Fetches the current block number
+2. Calls `client.getLogs()` scanning `[latest - 500, latest]` for `AuctionEnded` events
+3. Runs each missed event through the existing `handleLog()` → `runCRESimulate()` path
+4. The in-memory `processed` set prevents duplicates between backfill and live watch
+
+500 blocks ≈ 15–20 minutes on Base Sepolia (2 s/block). Non-fatal — if the RPC call
+fails, the watcher logs the error and continues to the live watch.
+
+---
+
 ## Test Results (Post-Fix)
 
 ```
@@ -301,3 +378,6 @@ The single `bond-watcher.test.ts` failure is unrelated to ZK changes: `pollAndRe
 | 6 | capabilityCommitment not verified by engine | Medium | Partially fixed — stored on-chain, engine can verify |
 | 7 | `pathIndices` not boolean-constrained | Medium | Fixed — `x*(1-x)===0` constraint added |
 | 8 | Legacy nullifier used wallet instead of agentId, type 0 | Medium | Fixed — agentId + type=1 in both signer and engine |
+| 9 | REVEAL EIP-712 deadline missing in engine verifier | **Critical** | Fixed (Phase 6a) — deadline added to Reveal message and check |
+| 10 | CRE Phase C blocks local demo (wrong replayBundleBaseUrl) | High | Fixed (Phase 6b) — `skipReplayVerification: true` in sim config |
+| 11 | Settlement watcher misses events if offline at auction close | High | Fixed (Phase 6c) — 500-block startup backfill added |

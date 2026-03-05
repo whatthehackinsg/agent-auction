@@ -105,6 +105,37 @@ async function handleLog(log: Log) {
   await runCRESimulate(txHash, eventIndex)
 }
 
+/** Scan recent blocks on startup to catch any events missed while the watcher was down */
+async function backfill(blocks = 500) {
+  try {
+    const latest = await client.getBlockNumber()
+    const fromBlock = latest > BigInt(blocks) ? latest - BigInt(blocks) : 0n
+    console.log(`[watcher] backfill: scanning blocks ${fromBlock}–${latest}...`)
+
+    const logs = await client.getLogs({
+      address: AUCTION_REGISTRY as `0x${string}`,
+      event: auctionEndedEvent,
+      fromBlock,
+      toBlock: latest,
+    })
+
+    if (logs.length === 0) {
+      console.log('[watcher] backfill: no missed events found\n')
+      return
+    }
+
+    console.log(`[watcher] backfill: found ${logs.length} missed event(s), replaying...`)
+    for (const log of logs) {
+      await handleLog(log).catch((err) =>
+        console.error('[watcher] backfill error handling log:', err),
+      )
+    }
+    console.log('[watcher] backfill: complete\n')
+  } catch (err) {
+    console.error('[watcher] backfill failed (non-fatal):', err)
+  }
+}
+
 async function main() {
   console.log('============================================================')
   console.log('  CRE Settlement Watcher')
@@ -117,6 +148,9 @@ async function main() {
   console.log('  Watching for AuctionEnded events...')
   console.log('  Press Ctrl+C to stop')
   console.log('============================================================\n')
+
+  // Catch any events missed while the watcher was offline
+  await backfill(500)
 
   client.watchEvent({
     address: AUCTION_REGISTRY as `0x${string}`,
