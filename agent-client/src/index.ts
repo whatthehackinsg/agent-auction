@@ -25,7 +25,6 @@ import { createAgentSignerAdapters, type WalletSignerAdapter } from './wallet-ad
 import {
   loadAgentState,
   getAgentStateFiles,
-  fetchRegistryRoot,
   generateMembershipProofForAgent,
   generateBidRangeProofForAgent,
   validateBidRange,
@@ -71,10 +70,6 @@ async function main() {
     logStep('zk', `loaded state for agentId=${state.agentId.toString()} from ${f}`)
     return state
   })
-
-  // Fetch current on-chain registry root (cached for 5 min)
-  const registryRoot = await fetchRegistryRoot(RPC_URL)
-  logStep('zk', `registry root: ${registryRoot.toString(16).slice(0, 16)}...`)
 
   const runs: AgentRun[] = []
 
@@ -142,10 +137,13 @@ async function main() {
     // Generate RegistryMembership proof
     logStep('zk', `${labels[i]} generating RegistryMembership proof...`)
     const t0 = Date.now()
+    // Use the agent's own Poseidon capability tree root (stored in local state file).
+    // This is the per-agent root the circuit constrains against — NOT the global
+    // keccak registry root returned by AgentPrivacyRegistry.getRoot().
     const membershipProof = await generateMembershipProofForAgent(
       agent.agentState,
       BigInt(auction.auctionId),
-      registryRoot,
+      agent.agentState.capabilityMerkleRoot,
     )
     logStep('zk', `${labels[i]} membership proof generated in ${Date.now() - t0}ms`)
 
@@ -174,60 +172,81 @@ async function main() {
 
   // Agent-A bid: 100 USDC
   const bidAmountA = BigInt(100) * USDC
+  const bidNonceA = 0
   logStep('zk', `${runs[0].name} pre-validating bid range...`)
   validateBidRange(bidAmountA, RESERVE_PRICE, MAX_BUDGET)
   logStep('zk', `${runs[0].name} generating BidRange proof...`)
   const t1A = Date.now()
-  const bidProofA = await generateBidRangeProofForAgent(bidAmountA, RESERVE_PRICE, MAX_BUDGET)
+  const bidProofA = await generateBidRangeProofForAgent(
+    bidAmountA,
+    RESERVE_PRICE,
+    MAX_BUDGET,
+    BigInt(bidNonceA),
+  )
   logStep('zk', `${runs[0].name} bid range proof generated in ${Date.now() - t1A}ms`)
 
   await placeBid({
     auctionId: auction.auctionId,
     agentId: runs[0].agentId,
     amount: bidAmountA,
-    nonce: 0,
+    nonce: bidNonceA,
     signer: runs[0].signer,
     proofPayload: bidProofA,
+    proofSalt: BigInt(bidNonceA),
   })
   logStep('bid', `Agent-A bid ${formatUnits(bidAmountA, 6)} USDC with ZK range proof`)
   await sleep(800)
 
   // Agent-B bid: 150 USDC
   const bidAmountB = BigInt(150) * USDC
+  const bidNonceB = 0
   logStep('zk', `${runs[1].name} pre-validating bid range...`)
   validateBidRange(bidAmountB, RESERVE_PRICE, MAX_BUDGET)
   logStep('zk', `${runs[1].name} generating BidRange proof...`)
   const t1B = Date.now()
-  const bidProofB = await generateBidRangeProofForAgent(bidAmountB, RESERVE_PRICE, MAX_BUDGET)
+  const bidProofB = await generateBidRangeProofForAgent(
+    bidAmountB,
+    RESERVE_PRICE,
+    MAX_BUDGET,
+    BigInt(bidNonceB),
+  )
   logStep('zk', `${runs[1].name} bid range proof generated in ${Date.now() - t1B}ms`)
 
   await placeBid({
     auctionId: auction.auctionId,
     agentId: runs[1].agentId,
     amount: bidAmountB,
-    nonce: 0,
+    nonce: bidNonceB,
     signer: runs[1].signer,
     proofPayload: bidProofB,
+    proofSalt: BigInt(bidNonceB),
   })
   logStep('bid', `Agent-B bid ${formatUnits(bidAmountB, 6)} USDC with ZK range proof`)
   await sleep(800)
 
   // Agent-C bid: 200 USDC
   const bidAmountC = BigInt(200) * USDC
+  const bidNonceC = 0
   logStep('zk', `${runs[2].name} pre-validating bid range...`)
   validateBidRange(bidAmountC, RESERVE_PRICE, MAX_BUDGET)
   logStep('zk', `${runs[2].name} generating BidRange proof...`)
   const t1C = Date.now()
-  const bidProofC = await generateBidRangeProofForAgent(bidAmountC, RESERVE_PRICE, MAX_BUDGET)
+  const bidProofC = await generateBidRangeProofForAgent(
+    bidAmountC,
+    RESERVE_PRICE,
+    MAX_BUDGET,
+    BigInt(bidNonceC),
+  )
   logStep('zk', `${runs[2].name} bid range proof generated in ${Date.now() - t1C}ms`)
 
   await placeBid({
     auctionId: auction.auctionId,
     agentId: runs[2].agentId,
     amount: bidAmountC,
-    nonce: 0,
+    nonce: bidNonceC,
     signer: runs[2].signer,
     proofPayload: bidProofC,
+    proofSalt: BigInt(bidNonceC),
   })
   logStep('bid', `Agent-C bid ${formatUnits(bidAmountC, 6)} USDC with ZK range proof`)
 
@@ -239,7 +258,7 @@ async function main() {
     const duplicateProof = await generateMembershipProofForAgent(
       agentStates[0],
       BigInt(auction.auctionId),
-      registryRoot,
+      agentStates[0].capabilityMerkleRoot,
     )
     const dupNullifier = duplicateProof.publicSignals[MEMBERSHIP_SIGNALS.NULLIFIER]
 

@@ -1,20 +1,22 @@
 /**
  * ZK privacy registration for agents.
  *
- * Uses AgentPrivacyRegistry to register Poseidon commitments on-chain.
- * The agent generates agentSecret locally (NEVER shared), builds a
- * capability tree, and stores private state for ZK proof generation
- * at JOIN time.
+ * Uses AgentPrivacyRegistry to register a Poseidon commitment on-chain.
+ * The agent generates agentSecret + salt locally (NEVER shared),
+ * builds a capability tree, and stores private state for ZK proof
+ * generation at JOIN time.
  *
- * All-Poseidon: no keccak256 registration commits.
+ * Uses @agent-auction/crypto Poseidon primitives for all commitment
+ * computation — replaces the previous keccak256 path.
  */
 
-import { pad, toHex } from 'viem'
+import { toHex, type Hex } from 'viem'
 import {
   generateSecret as generatePoseidonSecret,
-  buildPoseidonMerkleTree,
-  computeCapabilityCommitment,
+  computeRegistrationCommit as poseidonCommit,
   computeLeaf,
+  computeCapabilityCommitment,
+  buildPoseidonMerkleTree,
   type AgentPrivateState,
 } from '@agent-auction/crypto'
 import { ADDRESSES, publicClient, type createWalletForPrivateKey } from './config.js'
@@ -29,10 +31,18 @@ const privacyRegistryAbi = [
     stateMutability: 'nonpayable',
     inputs: [
       { name: 'agentId', type: 'uint256' },
+      { name: 'commit', type: 'bytes32' },
       { name: 'poseidonRoot', type: 'bytes32' },
       { name: 'capCommitment', type: 'bytes32' },
     ],
     outputs: [],
+  },
+  {
+    name: 'getRoot',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'bytes32' }],
   },
 ] as const
 
@@ -46,40 +56,45 @@ export type { AgentPrivateState }
 /**
  * Prepare ZK privacy state for an agent using Poseidon primitives.
  *
- * Generates agentSecret, builds capability Merkle tree, but does NOT
- * send any transaction. The caller must register on-chain separately
- * via registerPrivacy().
+ * Generates secrets, builds capability Merkle tree, computes the
+ * Poseidon-based on-chain commitment, but does NOT send any transaction.
+ * The caller must register on-chain separately via registerPrivacy().
+ *
+ * Commitment = Poseidon(agentSecret, capabilityMerkleRoot, salt)
+ * This matches the RegistryMembership circuit's expected commitment.
  */
 export async function preparePrivacyState(
   agentId: bigint,
   capabilityIds: bigint[] = [1n],
 ): Promise<AgentPrivateState> {
   const agentSecret = generatePoseidonSecret()
+  const salt = generatePoseidonSecret()
 
-  // Build the Poseidon Merkle tree from capability leaf hashes
-  // Each leaf = Poseidon(capabilityId, agentSecret, leafIndex)
+  // Build circuit-compatible leaves: Poseidon(capabilityId, agentSecret, leafIndex)
   const leafHashes: bigint[] = []
   for (let i = 0; i < capabilityIds.length; i++) {
-    const leaf = await computeLeaf(capabilityIds[i], agentSecret, BigInt(i))
-    leafHashes.push(leaf)
+    leafHashes.push(await computeLeaf(capabilityIds[i], agentSecret, BigInt(i)))
   }
   const treeResult = await buildPoseidonMerkleTree(leafHashes)
   const capabilityMerkleRoot = treeResult.root
 
+  // Commitment: keccak256(agentSecret, capabilityMerkleRoot, salt)
+  // computeRegistrationCommit returns a 0x-prefixed hex string
+  const registrationCommit = poseidonCommit(agentSecret, capabilityMerkleRoot, salt) as Hex
+
   return {
     agentId,
     agentSecret,
+    salt,
     capabilities: capabilityIds.map((id) => ({ capabilityId: id })),
     leafHashes,
     capabilityMerkleRoot,
+    registrationCommit,
   }
 }
 
 /**
- * Register an agent's Poseidon privacy commitment on-chain via AgentPrivacyRegistry.
- *
- * Passes the Poseidon capability tree root and capability commitment
- * so the engine can cross-check ZK membership proof public signals.
+ * Register an agent's privacy commitment on-chain via AgentPrivacyRegistry.
  *
  * @param walletClient - Wallet client with account for signing
  * @param privateState - Privacy state from preparePrivacyState()
@@ -90,22 +105,28 @@ export async function registerPrivacy(
 ): Promise<void> {
   logStep('privacy', `registering commitment for agentId=${privateState.agentId.toString()}`)
 
-  // Convert Poseidon root (bigint) to bytes32 hex
-  const poseidonRootHex = pad(toHex(privateState.capabilityMerkleRoot), { size: 32 })
-
-  // Compute capabilityCommitment = Poseidon(capabilityId, agentSecret)
-  const capCommitmentBig = await computeCapabilityCommitment(
-    privateState.capabilities[0].capabilityId,
-    privateState.agentSecret,
-  )
-  const capCommitmentHex = pad(toHex(capCommitmentBig), { size: 32 })
-
   try {
+    const poseidonRootHex = toHex(privateState.capabilityMerkleRoot, { size: 32 }) as Hex
+    const primaryCapability = privateState.capabilities[0]
+    if (!primaryCapability) {
+      throw new Error('privacy state has no capabilities; cannot derive capability commitment')
+    }
+    const capCommitment = await computeCapabilityCommitment(
+      primaryCapability.capabilityId,
+      privateState.agentSecret,
+    )
+    const capCommitmentHex = toHex(capCommitment, { size: 32 }) as Hex
+
     const txHash = await walletClient.writeContract({
       address: ADDRESSES.agentPrivacyRegistry,
       abi: privacyRegistryAbi,
       functionName: 'register',
-      args: [privateState.agentId, poseidonRootHex, capCommitmentHex],
+      args: [
+        privateState.agentId,
+        privateState.registrationCommit as Hex,
+        poseidonRootHex,
+        capCommitmentHex,
+      ],
     })
     await publicClient.waitForTransactionReceipt({ hash: txHash })
     logStep('privacy', `registered successfully`)
@@ -117,4 +138,16 @@ export async function registerPrivacy(
     }
     throw err
   }
+}
+
+/**
+ * Read the current registry root from AgentPrivacyRegistry.
+ */
+export async function readRegistryRoot(): Promise<Hex> {
+  const root = await publicClient.readContract({
+    address: ADDRESSES.agentPrivacyRegistry,
+    abi: privacyRegistryAbi,
+    functionName: 'getRoot',
+  })
+  return root as Hex
 }

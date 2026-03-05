@@ -46,13 +46,13 @@ const BID_TYPES = {
   ],
 } as const
 
-/** Derive nullifier matching engine's deriveNullifier(wallet, auctionId, actionType=0) */
-function deriveJoinNullifier(wallet: Address, auctionId: `0x${string}`): bigint {
-  const walletBytes = toBytes(wallet, { size: 32 })
+/** Derive nullifier matching engine fallback: keccak256(agentId, auctionId, ActionType.JOIN=1). */
+function deriveJoinNullifier(agentId: bigint, auctionId: `0x${string}`): bigint {
+  const agentIdBytes = toBytes(agentId, { size: 32 })
   const auctionBytes = toBytes(auctionId, { size: 32 })
 
   let secret = 0n
-  for (const b of walletBytes) {
+  for (const b of agentIdBytes) {
     secret = (secret << 8n) | BigInt(b)
   }
   let auction = 0n
@@ -66,7 +66,7 @@ function deriveJoinNullifier(wallet: Address, auctionId: `0x${string}`): bigint 
       { name: 'auction', type: 'uint256' },
       { name: 'actionType', type: 'uint256' },
     ],
-    [secret, auction, 0n],
+    [secret, auction, 1n],
   )
   return BigInt(keccak256(encoded))
 }
@@ -218,7 +218,7 @@ export async function joinAuction(params: {
     nullifier = BigInt(params.proofPayload.publicSignals[MEMBERSHIP_SIGNALS.NULLIFIER])
   } else {
     // Legacy keccak256 fallback for non-ZK joins
-    nullifier = deriveJoinNullifier(wallet, params.auctionId)
+    nullifier = deriveJoinNullifier(params.agentId, params.auctionId)
   }
 
   const signature = await params.signer.signTypedData({
@@ -278,6 +278,7 @@ export async function placeBid(params: {
   nonce: number
   signer: WalletSignerAdapter
   proofPayload?: { proof: unknown; publicSignals: string[] }
+  proofSalt?: bigint
 }): Promise<EngineActionResponse> {
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 300)
   const wallet = await params.signer.getAddress()
@@ -293,19 +294,24 @@ export async function placeBid(params: {
     },
   })
 
+  const payload: Record<string, unknown> = {
+    type: 'BID',
+    agentId: params.agentId.toString(),
+    wallet,
+    amount: params.amount.toString(),
+    nonce: params.nonce,
+    deadline: deadline.toString(),
+    signature,
+    proof: params.proofPayload ?? null,
+  }
+  if (params.proofPayload && params.proofSalt !== undefined) {
+    payload.revealSalt = params.proofSalt.toString()
+  }
+
   return engineFetch<EngineActionResponse>(`/auctions/${params.auctionId}/action`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      type: 'BID',
-      agentId: params.agentId.toString(),
-      wallet,
-      amount: params.amount.toString(),
-      nonce: params.nonce,
-      deadline: deadline.toString(),
-      signature,
-      proof: params.proofPayload ?? null,
-    }),
+    body: JSON.stringify(payload),
   })
 }
 
