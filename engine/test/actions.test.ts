@@ -5,7 +5,7 @@
  * and the validateAction dispatcher.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import { ActionType, type ActionRequest } from '../src/types/engine'
 import {
@@ -17,6 +17,7 @@ import {
   handleDeliver,
   validateAction,
 } from '../src/handlers/actions'
+import * as identityLib from '../src/lib/identity'
 
 // ─── Mock Helpers ─────────────────────────────────────────────────────
 
@@ -225,6 +226,118 @@ describe('handleJoin', () => {
     expect(result.mutation.zkNullifier).toBeUndefined()
     // But nullifierHash is still set (keccak fallback)
     expect(result.mutation.nullifierHash).toMatch(/^0x[0-9a-f]+$/)
+  })
+})
+
+describe('handleJoin wallet verification', () => {
+  let storage: ReturnType<typeof createMockStorage>
+
+  beforeEach(() => {
+    storage = createMockStorage()
+    process.env.ENGINE_ALLOW_INSECURE_STUBS = 'true'
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    delete process.env.ENGINE_ALLOW_INSECURE_STUBS
+  })
+
+  it('throws AGENT_NOT_REGISTERED when agent is missing on ERC-8004', async () => {
+    vi.spyOn(identityLib, 'verifyAgentWallet').mockResolvedValue({
+      verified: false,
+      resolvedWallet: null,
+      reason: 'not_registered',
+    })
+
+    const action = makeAction({ type: ActionType.JOIN, nonce: 0 })
+    await expect(
+      handleJoin(action, storage, TEST_AUCTION_ID, { verifyWallet: true }),
+    ).rejects.toThrow('AGENT_NOT_REGISTERED')
+  })
+
+  it('throws WALLET_MISMATCH and includes resolved wallet', async () => {
+    vi.spyOn(identityLib, 'verifyAgentWallet').mockResolvedValue({
+      verified: false,
+      resolvedWallet: '0x1111111111111111111111111111111111111111',
+      reason: 'mismatch',
+    })
+
+    const action = makeAction({ type: ActionType.JOIN, nonce: 0 })
+    await expect(
+      handleJoin(action, storage, TEST_AUCTION_ID, { verifyWallet: true }),
+    ).rejects.toThrow('WALLET_MISMATCH')
+    await expect(
+      handleJoin(action, storage, TEST_AUCTION_ID, { verifyWallet: true }),
+    ).rejects.toThrow('0x1111111111111111111111111111111111111111')
+  })
+
+  it('throws IDENTITY_RPC_FAILURE when identity RPC fails', async () => {
+    vi.spyOn(identityLib, 'verifyAgentWallet').mockRejectedValue(new Error('fetch failed'))
+
+    const action = makeAction({ type: ActionType.JOIN, nonce: 0 })
+    await expect(
+      handleJoin(action, storage, TEST_AUCTION_ID, { verifyWallet: true }),
+    ).rejects.toThrow('IDENTITY_RPC_FAILURE')
+  })
+
+  it('succeeds when verifyWallet returns verified=true', async () => {
+    vi.spyOn(identityLib, 'verifyAgentWallet').mockResolvedValue({
+      verified: true,
+      resolvedWallet: TEST_WALLET,
+      reason: 'verified',
+    })
+
+    const action = makeAction({ type: ActionType.JOIN, nonce: 0 })
+    await expect(
+      handleJoin(action, storage, TEST_AUCTION_ID, { verifyWallet: true }),
+    ).resolves.toBeDefined()
+  })
+
+  it('does not read or write walletVerified:/poseidonRoot: cache keys', async () => {
+    const proofFixture = JSON.parse(
+      fs.readFileSync(new URL('./fixtures/membership-proof.json', import.meta.url), 'utf-8'),
+    )
+    vi.spyOn(identityLib, 'verifyAgentWallet').mockResolvedValue({
+      verified: true,
+      resolvedWallet: TEST_WALLET,
+      reason: 'verified',
+    })
+    vi.spyOn(identityLib, 'getAgentPoseidonRoot').mockResolvedValue(null)
+
+    const getSpy = vi.spyOn(storage, 'get')
+    const putSpy = vi.spyOn(storage, 'put')
+    const action = makeAction({ type: ActionType.JOIN, nonce: 0, proof: proofFixture })
+
+    await expect(
+      handleJoin(action, storage, TEST_AUCTION_ID, { verifyWallet: true, requireProofs: true }),
+    ).resolves.toBeDefined()
+
+    const watchedCalls = [
+      ...getSpy.mock.calls.map(([key]) => String(key)),
+      ...putSpy.mock.calls.map(([key]) => String(key)),
+    ]
+    expect(watchedCalls.some((key) => key.startsWith('walletVerified:'))).toBe(false)
+    expect(watchedCalls.some((key) => key.startsWith('poseidonRoot:'))).toBe(false)
+  })
+})
+
+describe('verifyWallet defaults', () => {
+  it('defaults to true when ENGINE_VERIFY_WALLET is unset', async () => {
+    const roomModule = (await import('../src/auction-room')) as {
+      resolveVerifyWalletSetting: (env: {
+        ENGINE_VERIFY_WALLET?: string
+        ENGINE_ALLOW_INSECURE_STUBS?: string
+      }) => boolean
+    }
+
+    expect(roomModule.resolveVerifyWalletSetting({})).toBe(true)
+    expect(
+      roomModule.resolveVerifyWalletSetting({
+        ENGINE_VERIFY_WALLET: 'false',
+        ENGINE_ALLOW_INSECURE_STUBS: 'true',
+      }),
+    ).toBe(false)
+    expect(roomModule.resolveVerifyWalletSetting({ ENGINE_VERIFY_WALLET: 'false' })).toBe(true)
   })
 })
 
