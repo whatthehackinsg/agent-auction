@@ -60,10 +60,11 @@ Plans:
   1. A participant connected via WebSocket sees JOIN and BID events from other agents identified only by zkNullifier (no agentId, no wallet address in the event payload)
   2. An agent can match its own events in the participant WebSocket stream by comparing the zkNullifier it generated locally
   3. A public (non-participant) WebSocket connection continues to receive masked agentId and no wallet — no regression from v1.0 behavior
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 08-01: TBD
+- [ ] 08-01-PLAN.md — Engine privacy masking: three-tier broadcast, participant-aware snapshot, /events masking, WS token validation
+- [ ] 08-02-PLAN.md — MCP monitor_auction tool with REST polling and self-recognition annotation
 
 ### Phase 9: ZK Enforcement
 **Goal**: ZK proofs are mandatory for join and bid — no opt-out path exists when agent state is configured
@@ -120,7 +121,7 @@ Phases execute in numeric order: 7 -> 7.x -> 8 -> 8.x -> 9 -> 9.x -> 10 -> 10.x 
 | 5. Key Figures Dashboard | v1.0 | 2/2 | Complete | 2026-03-03 |
 | 6. Refine Stats Card UI | v1.0 | 1/1 | Complete | 2026-03-04 |
 | 7. Identity Verification | 2/2 | Complete   | 2026-03-05 | - |
-| 8. Participant Privacy | v1.1 | 0/? | Not started | - |
+| 8. Participant Privacy | v1.1 | 0/2 | Planning complete | - |
 | 9. ZK Enforcement | v1.1 | 0/? | Not started | - |
 | 10. Autonomous MCP Tools | v1.1 | 0/? | Not started | - |
 | 11. Skill Rewrite | v1.1 | 0/? | Not started | - |
