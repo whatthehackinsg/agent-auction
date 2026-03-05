@@ -182,6 +182,7 @@ describe('Sequencer (ingestAction)', () => {
       '12345',                 // agent_id
       '0x1234567890abcdef1234567890abcdef12345678', // wallet
       '1000000',               // amount
+      null,                    // zk_nullifier
     ])
   })
 

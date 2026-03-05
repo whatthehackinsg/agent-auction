@@ -385,6 +385,108 @@ describe('API routes (Hono)', () => {
     expect(json.events).toHaveLength(2)
   })
 
+  // ── Participant privacy masking on /events ─────────────────────────
+
+  it('GET /events with participantToken returns privacy-masked events (zkNullifier replaces agent_id, wallet omitted)', async () => {
+    const auctionId = randomAuctionId()
+    const agentId = '42'
+    const nullifier = '0x' + 'ff'.repeat(32)
+
+    // Insert a JOIN event
+    await db
+      .prepare(
+        'INSERT INTO events (auction_id, seq, prev_hash, event_hash, payload_hash, action_type, agent_id, wallet, amount, zk_nullifier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(auctionId, 1, '0x' + '00'.repeat(32), '0x' + '11'.repeat(32), '0x' + '22'.repeat(32), 'JOIN', agentId, '0x' + '11'.repeat(20), '0', nullifier)
+      .run()
+
+    // Insert a BID event with zk_nullifier
+    await db
+      .prepare(
+        'INSERT INTO events (auction_id, seq, prev_hash, event_hash, payload_hash, action_type, agent_id, wallet, amount, zk_nullifier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(auctionId, 2, '0x' + '11'.repeat(32), '0x' + '33'.repeat(32), '0x' + '44'.repeat(32), 'BID', agentId, '0x' + '11'.repeat(20), '100', nullifier)
+      .run()
+
+    const res = await app.request(
+      `http://localhost/auctions/${auctionId}/events?participantToken=${agentId}`,
+      {},
+      env,
+    )
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.events).toHaveLength(2)
+
+    // Privacy-masked: agent_id replaced by zk_nullifier, wallet omitted
+    for (const event of json.events) {
+      expect(event.agent_id).toBe(nullifier)
+      expect(event.wallet).toBeUndefined()
+    }
+  })
+
+  it('GET /events with admin key returns full unmasked events (no regression)', async () => {
+    const auctionId = randomAuctionId()
+    const wallet = '0x' + '11'.repeat(20)
+    const nullifier = '0x' + 'aa'.repeat(32)
+
+    await db
+      .prepare(
+        'INSERT INTO events (auction_id, seq, prev_hash, event_hash, payload_hash, action_type, agent_id, wallet, amount, zk_nullifier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(auctionId, 1, '0x' + '00'.repeat(32), '0x' + '11'.repeat(32), '0x' + '22'.repeat(32), 'BID', '99', wallet, '500', nullifier)
+      .run()
+
+    const res = await app.request(
+      `http://localhost/auctions/${auctionId}/events`,
+      { headers: { 'X-ENGINE-ADMIN-KEY': TEST_ADMIN_KEY } },
+      env,
+    )
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.events).toHaveLength(1)
+
+    // Admin gets full unmasked data
+    expect(json.events[0].agent_id).toBe('99')
+    expect(json.events[0].wallet).toBe(wallet)
+    expect(json.events[0].zk_nullifier).toBe(nullifier)
+  })
+
+  it('GET /events: system events (agent_id=0) pass through unmodified in participant response', async () => {
+    const auctionId = randomAuctionId()
+    const agentId = '42'
+    const nullifier = '0x' + 'ff'.repeat(32)
+
+    // INSERT JOIN event to establish participation
+    await db
+      .prepare(
+        'INSERT INTO events (auction_id, seq, prev_hash, event_hash, payload_hash, action_type, agent_id, wallet, amount, zk_nullifier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(auctionId, 1, '0x' + '00'.repeat(32), '0x' + '11'.repeat(32), '0x' + '22'.repeat(32), 'JOIN', agentId, '0x' + '11'.repeat(20), '0', nullifier)
+      .run()
+
+    // Insert a system event (agent_id='0', e.g. CLOSE/CANCEL)
+    await db
+      .prepare(
+        'INSERT INTO events (auction_id, seq, prev_hash, event_hash, payload_hash, action_type, agent_id, wallet, amount, zk_nullifier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(auctionId, 2, '0x' + '11'.repeat(32), '0x' + '33'.repeat(32), '0x' + '44'.repeat(32), 'CLOSE', '0', '0x' + '00'.repeat(20), '0', null)
+      .run()
+
+    const res = await app.request(
+      `http://localhost/auctions/${auctionId}/events?participantToken=${agentId}`,
+      {},
+      env,
+    )
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.events).toHaveLength(2)
+
+    // System event passes through unmodified
+    const systemEvent = json.events.find((e: Record<string, unknown>) => e.action_type === 'CLOSE')
+    expect(systemEvent).toBeTruthy()
+    expect(systemEvent.agent_id).toBe('0')
+  })
+
   it('manifest endpoint is open when x402 mode is off; events requires auth', async () => {
     const auctionId = randomAuctionId()
     await db

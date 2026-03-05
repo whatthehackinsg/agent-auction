@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS events (
   agent_id TEXT NOT NULL,
   wallet TEXT NOT NULL,
   amount TEXT NOT NULL,
+  zk_nullifier TEXT,
   created_at INTEGER NOT NULL DEFAULT (unixepoch()),
   UNIQUE(auction_id, seq)
 );

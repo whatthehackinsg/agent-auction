@@ -746,7 +746,7 @@ export class AuctionRoom implements DurableObject {
     // Persist to D1
     await this.env.AUCTION_DB
       .prepare(
-        'INSERT INTO events (auction_id, seq, prev_hash, event_hash, payload_hash, action_type, agent_id, wallet, amount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO events (auction_id, seq, prev_hash, event_hash, payload_hash, action_type, agent_id, wallet, amount, zk_nullifier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .bind(
         this.auctionId,
@@ -758,6 +758,7 @@ export class AuctionRoom implements DurableObject {
         action.agentId,
         action.wallet,
         action.amount,
+        zkNullifier ?? null,
       )
       .run()
 

@@ -759,7 +759,15 @@ app.get('/auctions/:id/events', async (c) => {
         .prepare('SELECT * FROM events WHERE auction_id = ? ORDER BY seq')
         .bind(auctionId)
         .all()
-      return c.json({ events: result.results ?? [] })
+      // Privacy masking: replace agent_id with zk_nullifier, omit wallet
+      const maskedEvents = (result.results ?? []).map((e: Record<string, unknown>) => {
+        // System events (agent_id='0') pass through unmodified
+        if (e.agent_id === '0') return e
+        // Replace agent_id with zk_nullifier, remove wallet
+        const { agent_id, wallet, ...rest } = e
+        return { ...rest, agent_id: e.zk_nullifier || 'unknown' }
+      })
+      return c.json({ events: maskedEvents })
     }
   }
 
