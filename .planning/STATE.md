@@ -5,16 +5,16 @@ milestone_name: Autonomous Agent Onboarding
 current_phase: 8
 current_phase_name: participant privacy
 current_plan: 2
-status: executing
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-03-05T19:20:50.124Z"
+status: verifying
+stopped_at: Completed 08-02-PLAN.md
+last_updated: "2026-03-05T19:28:03.903Z"
 last_activity: 2026-03-05
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
-  percent: 90
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -33,10 +33,10 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 **Total Phases:** 11
 **Current Plan:** 2
 **Total Plans in Phase:** 2
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 **Last Activity:** 2026-03-05
 
-**Progress:** [█████████░] 90%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 | Phase 07-identity-verification P02 | 7m | 2 tasks | 3 files |
 | Phase 07 P01 | 17 min | 1 tasks | 5 files |
 | Phase 08 P01 | 12m | 2 tasks | 7 files |
+| Phase 08 P02 | 4m | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,9 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 - [Phase 08]: System events (agentId=0) pass through to participant sockets unmodified -- not privacy-sensitive
 - [Phase 08]: D1 events table gets zk_nullifier column for /events masking (migration 0004)
 - [Phase 08]: agentNullifierMap persisted to DO storage for robustness across hibernation
+- [Phase 08]: Self-recognition uses Set of hex-encoded nullifiers computed from agentSecret + auctionId
+- [Phase 08]: Events tool maps agent_id to zkNullifier field, wallet intentionally omitted from output
+- [Phase 08]: isOwn annotation omitted entirely when AGENT_STATE_FILE absent (graceful degradation, not misleading false)
 
 ### Pending Todos
 
@@ -97,6 +101,6 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Session Continuity
 
 Last activity: 2026-03-05 — Roadmap finalized for v1.1 (5 phases, 18 requirements)
-**Last session:** 2026-03-05T19:20:50.122Z
-**Stopped At:** Completed 08-01-PLAN.md
+**Last session:** 2026-03-05T19:28:03.901Z
+**Stopped At:** Completed 08-02-PLAN.md
 **Resume File:** None
