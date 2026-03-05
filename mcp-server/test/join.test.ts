@@ -81,6 +81,14 @@ function makeCapturingEngine(overrides?: {
 
   const mockEngine = {
     post: async (path: string, body: unknown) => {
+      if (path === '/verify-identity') {
+        return {
+          verified: true,
+          resolvedWallet: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+          privacyRegistered: true,
+          poseidonRoot: '0x1234',
+        }
+      }
       capturedPayloads.push(body)
       if (overrides?.postImpl) {
         return overrides.postImpl(path, body)

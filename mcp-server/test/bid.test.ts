@@ -81,6 +81,14 @@ function makeCapturingEngine(overrides?: {
 
   const mockEngine = {
     post: async (path: string, body: unknown) => {
+      if (path === '/verify-identity') {
+        return {
+          verified: true,
+          resolvedWallet: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+          privacyRegistered: true,
+          poseidonRoot: '0x1234',
+        }
+      }
       capturedPayloads.push(body)
       if (overrides?.postImpl) {
         return overrides.postImpl(path, body)
@@ -114,6 +122,7 @@ describe('place_bid proof pass-through', () => {
       auctionId: TEST_AUCTION_ID,
       amount: '100000000',
       proofPayload: bidrangeFixture,
+      salt: '500',
     })
 
     expect(capturedPayloads).toHaveLength(1)
@@ -175,6 +184,7 @@ describe('place_bid proof pass-through', () => {
       auctionId: TEST_AUCTION_ID,
       amount: '100000000',
       proofPayload: bidrangeFixture,
+      salt: '500',
     })
 
     const enginePayload = capturedPayloads[0] as Record<string, unknown>
@@ -206,6 +216,7 @@ describe('place_bid structured errors', () => {
       auctionId: TEST_AUCTION_ID,
       amount: '100000000',
       proofPayload: bidrangeFixture,
+      salt: '500',
     })) as { content: Array<{ text: string }> }
 
     const body = JSON.parse(result.content[0].text)

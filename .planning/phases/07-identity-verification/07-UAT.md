@@ -35,15 +35,11 @@ result: pass
 
 ### 6. join_auction pre-flight blocks unverified agents
 expected: Calling join_auction MCP tool when agent is not ERC-8004 verified returns a structured error (toolError with code, detail, suggestion) BEFORE any action is submitted to the engine. Error message includes actionable next steps.
-result: issue
-reported: "8 MCP tests fail — existing join/bid tests don't mock /verify-identity so pre-flight intercepts before engine action. Tests expect proof pass-through and engine errors (NULLIFIER_REUSED, PROOF_INVALID) but get IDENTITY_CHECK_FAILED from pre-flight."
-severity: major
+result: pass
 
 ### 7. place_bid pre-flight blocks unverified agents
 expected: Calling place_bid MCP tool when agent is not verified returns a structured error BEFORE submitting the bid. Works even in restart scenarios where agent calls bid without prior join.
-result: issue
-reported: "Same root cause as Test 6 — bid.test.ts tests don't mock /verify-identity, so pre-flight blocks all test scenarios that need to reach the engine."
-severity: major
+result: pass
 
 ### 8. Pre-flight fails closed when engine unreachable
 expected: If the engine's /verify-identity endpoint is unreachable, both join_auction and place_bid refuse to proceed (fail closed). They do NOT silently skip verification.
@@ -52,29 +48,11 @@ result: pass
 ## Summary
 
 total: 8
-passed: 6
-issues: 2
+passed: 8
+issues: 0
 pending: 0
 skipped: 0
 
 ## Gaps
 
-- truth: "join_auction pre-flight blocks unverified agents and existing tests still pass"
-  status: failed
-  reason: "User reported: 8 MCP tests fail — existing join/bid tests don't mock /verify-identity so pre-flight intercepts before engine action. Tests expect proof pass-through and engine errors (NULLIFIER_REUSED, PROOF_INVALID) but get IDENTITY_CHECK_FAILED from pre-flight."
-  severity: major
-  test: 6
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
-
-- truth: "place_bid pre-flight blocks unverified agents and existing tests still pass"
-  status: failed
-  reason: "User reported: Same root cause as Test 6 — bid.test.ts tests don't mock /verify-identity, so pre-flight blocks all test scenarios that need to reach the engine."
-  severity: major
-  test: 7
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+[none — all tests passed after fixing test mocks]
