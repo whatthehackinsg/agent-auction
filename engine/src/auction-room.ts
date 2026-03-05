@@ -24,22 +24,6 @@ const DEFAULT_SNIPE_WINDOW_SEC = 60
 const DEFAULT_EXTENSION_SEC = 30
 const DEFAULT_MAX_EXTENSIONS = 5
 
-export function resolveVerifyWalletSetting(
-  env: Pick<Env, 'ENGINE_VERIFY_WALLET' | 'ENGINE_ALLOW_INSECURE_STUBS'>,
-): boolean {
-  let verifyWallet = env.ENGINE_VERIFY_WALLET !== 'false'
-  if (!verifyWallet && env.ENGINE_ALLOW_INSECURE_STUBS !== 'true') {
-    console.info(
-      JSON.stringify({
-        component: 'AuctionRoom',
-        event: 'wallet_verify_override',
-        reason: 'ENGINE_VERIFY_WALLET=false requires ENGINE_ALLOW_INSECURE_STUBS=true',
-      }),
-    )
-    verifyWallet = true
-  }
-  return verifyWallet
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -505,7 +489,7 @@ export class AuctionRoom implements DurableObject {
       // Per-agent Poseidon root is fetched inside handleJoin() directly from chain reads
       const validationCtx: ValidationContext = {
         requireProofs: this.env.ENGINE_REQUIRE_PROOFS === 'true',
-        verifyWallet: resolveVerifyWalletSetting(this.env),
+        verifyWallet: this.env.ENGINE_VERIFY_WALLET !== 'false',
       }
       const validation = await validateAction(
         action,

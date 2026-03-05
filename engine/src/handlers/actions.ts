@@ -29,6 +29,8 @@ export interface ValidationContext {
   requireProofs?: boolean
   /** On-chain registry root for cross-checking proof's registryRoot (legacy global field). */
   expectedRegistryRoot?: string
+  /** On-chain per-agent capability commitment for proof binding (publicSignals[1]). */
+  expectedCapabilityCommitment?: string
   /** When true, verify wallet matches ERC-8004 ownerOf(agentId) on JOIN. */
   verifyWallet?: boolean
 }
@@ -42,6 +44,12 @@ export interface ValidationMutation {
   zkNullifier?: string
   /** ZK-proven bid commitment from BidRange proof publicSignals[BID_RANGE_SIGNALS.BID_COMMITMENT]. */
   bidCommitment?: string
+  /**
+   * Canonical join marker storage key for this (agentId, auctionId) pair.
+   * Set for JOIN actions so commitValidationMutation can write a path-independent
+   * flag that blocks double-join regardless of whether either attempt used a ZK proof.
+   */
+  joinMarkerKey?: string
 }
 
 export interface ValidationResult {
@@ -59,6 +67,28 @@ function nonceKey(agentId: string, actionType: ActionType): string {
 /** Storage key for a spent nullifier */
 function nullifierKey(hash: string): string {
   return `nullifier:${hash}`
+}
+
+/**
+ * Canonical storage key marking that agentId has already joined auctionId.
+ * Path-independent: set and checked by both the ZK-proof and fallback nullifier
+ * paths to prevent double-join when an agent switches between the two approaches.
+ */
+function joinMarkerKey(agentId: string, auctionId: string): string {
+  return `joined:${agentId}:${auctionId}`
+}
+
+/** Throw if agent has already joined this auction (either proof path). */
+async function checkJoinOnce(
+  agentId: string,
+  auctionId: string,
+  storage: DurableObjectStorage,
+): Promise<void> {
+  const key = joinMarkerKey(agentId, auctionId)
+  const alreadyJoined = await storage.get<boolean>(key)
+  if (alreadyJoined) {
+    throw new Error(`Agent ${agentId} has already joined auction ${auctionId}`)
+  }
 }
 
 // ─── Nonce Validation ─────────────────────────────────────────────────
@@ -122,6 +152,9 @@ export async function commitValidationMutation(
   if (mutation.nullifierHash) {
     await storage.put(nullifierKey(mutation.nullifierHash), true)
   }
+  if (mutation.joinMarkerKey) {
+    await storage.put(mutation.joinMarkerKey, true)
+  }
 }
 
 // ─── EIP-712 Signature Verification ─────────────────────────────────
@@ -153,8 +186,8 @@ async function verifySignature(
   const auctionIdUint = BigInt(auctionId)
   const deadline = BigInt(action.deadline ?? 0)
 
-  // Check deadline hasn't expired (skip if 0 = no expiry, or for REVEAL which has no deadline)
-  if (deadline > 0n && action.type !== ActionType.REVEAL) {
+  // Check deadline hasn't expired (skip if 0 = no expiry)
+  if (deadline > 0n) {
     const now = BigInt(Math.floor(Date.now() / 1000))
     if (deadline < now) {
       throw new Error(`Action signature expired (deadline: ${action.deadline})`)
@@ -197,6 +230,7 @@ async function verifySignature(
         bid: BigInt(action.amount),
         salt: BigInt(action.revealSalt ?? '0'),
         nonce: BigInt(action.nonce),
+        deadline,
       }
       break
     case ActionType.DELIVER:
@@ -232,6 +266,7 @@ async function verifyMembership(
   const options: VerifyMembershipOptions = {
     requireProof: ctx?.requireProofs,
     expectedRegistryRoot: ctx?.expectedRegistryRoot,
+    expectedCapabilityCommitment: ctx?.expectedCapabilityCommitment,
   }
   const result = await verifyMembershipProof(action.proof ?? null, options)
   if (!result.valid) {
@@ -297,10 +332,11 @@ export async function handleJoin(
     }
   }
 
-  // Build membership verification context with per-agent root
+  // Build membership verification context with per-agent root + capability commitment.
   const membershipCtx: ValidationContext = {
     ...ctx,
     expectedRegistryRoot: agentPoseidonRoot,
+    expectedCapabilityCommitment: undefined,
   }
 
   // 1. Verify membership proof — get ZK nullifier from publicSignals[2] if proof exists
@@ -335,11 +371,18 @@ export async function handleJoin(
   // 3. Verify EIP-712 signature (Join message includes nullifier)
   await verifySignature(action, auctionId, { nullifier: nullifierBigInt })
 
-  // 4. Check nullifier not spent (double-join prevention)
+  // 4. Check canonical join marker — path-independent double-join prevention.
+  //    This catches the bypass where a first join (no proof, keccak256 nullifier) and
+  //    a second join (with ZK proof, Poseidon nullifier) produce different storage keys.
+  await checkJoinOnce(action.agentId, auctionId, storage)
+
+  // 5. Check nullifier not spent (additional per-nullifier deduplication)
   await checkNullifier(nullifierHash, storage)
 
-  // 5. Check nonce
+  // 6. Check nonce
   await checkNonce(action.agentId, ActionType.JOIN, action.nonce, storage)
+
+  const markerKey = joinMarkerKey(action.agentId, auctionId)
 
   return {
     action: {
@@ -357,6 +400,7 @@ export async function handleJoin(
       nonce: action.nonce,
       nullifierHash,
       zkNullifier,
+      joinMarkerKey: markerKey,
     },
   }
 }

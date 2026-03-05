@@ -13,6 +13,7 @@ npm-debug.log*
 .claude/*
 !.claude/skills/
 .sisyphus/
+.codex/
 
 # OS junk
 .DS_Store
