@@ -1,7 +1,8 @@
 /**
  * Tests for get_auction_events tool.
  *
- * Covers: event log retrieval, participant token passing, limit, 403 error.
+ * Covers: event log retrieval, participant token passing, limit, 403 error,
+ * privacy-masked responses (zkNullifier instead of agentId, no wallet).
  */
 
 import { describe, it, expect } from 'vitest'
@@ -17,8 +18,8 @@ function makeEvent(seq: number, overrides: Record<string, unknown> = {}) {
     seq,
     auction_id: TEST_AUCTION_ID,
     action_type: seq === 1 ? 'JOIN' : 'BID',
-    agent_id: '1',
-    wallet: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+    agent_id: '0xabc123',  // After privacy masking, agent_id contains zkNullifier
+    // wallet intentionally omitted — privacy-masked responses don't include it
     amount: seq === 1 ? '50000000' : String(100_000_000 + seq * 10_000_000),
     event_hash: `0x${seq.toString(16).padStart(64, '0')}`,
     prev_hash: seq === 1 ? '0x' + '00'.repeat(32) : `0x${(seq - 1).toString(16).padStart(64, '0')}`,
@@ -31,7 +32,7 @@ function makeEvent(seq: number, overrides: Record<string, unknown> = {}) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('get_auction_events', () => {
-  it('returns event log', async () => {
+  it('returns event log with zkNullifier field', async () => {
     const { mockServer, getHandler } = makeCapturingMcpServer()
     const { mockEngine } = makeMockEngine({
       getImpl: async () => ({
@@ -46,14 +47,54 @@ describe('get_auction_events', () => {
     const body = parseToolResponse(result)
 
     expect(body.count).toBe(3)
-    const events = body.events as Array<{ seq: number; actionType: string; agentId: string; amount: string }>
+    const events = body.events as Array<{ seq: number; actionType: string; zkNullifier: string; amount: string }>
     expect(events[0].seq).toBe(1)
     expect(events[0].actionType).toBe('JOIN')
+    expect(events[0].zkNullifier).toBe('0xabc123')
     expect(events[1].actionType).toBe('BID')
     expect(events[2].seq).toBe(3)
   })
 
-  it('passes participant token as query param', async () => {
+  it('maps agent_id field as zkNullifier (not agentId) in output', async () => {
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+    const { mockEngine } = makeMockEngine({
+      getImpl: async () => ({
+        events: [makeEvent(1, { agent_id: '0xnullifier789' })],
+      }),
+    })
+
+    registerEventsTool(mockServer, mockEngine)
+    const handler = getHandler()
+
+    const result = await handler({ auctionId: TEST_AUCTION_ID, agentId: '1' })
+    const body = parseToolResponse(result)
+
+    const events = body.events as Array<Record<string, unknown>>
+    expect(events[0].zkNullifier).toBe('0xnullifier789')
+    // agentId should NOT be present in the output
+    expect(events[0]).not.toHaveProperty('agentId')
+  })
+
+  it('does not include wallet field in mapped event output', async () => {
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+    const { mockEngine } = makeMockEngine({
+      getImpl: async () => ({
+        // Even if engine somehow returns wallet, it should not be mapped through
+        events: [makeEvent(1, { wallet: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266' })],
+      }),
+    })
+
+    registerEventsTool(mockServer, mockEngine)
+    const handler = getHandler()
+
+    const result = await handler({ auctionId: TEST_AUCTION_ID, agentId: '1' })
+    const body = parseToolResponse(result)
+
+    const events = body.events as Array<Record<string, unknown>>
+    expect(events[0]).not.toHaveProperty('wallet')
+  })
+
+  it('uses agentId as participantToken in engine GET URL', async () => {
     const { mockServer, getHandler } = makeCapturingMcpServer()
     const { mockEngine, capturedGetPaths } = makeMockEngine({
       getImpl: async () => ({ events: [] }),
