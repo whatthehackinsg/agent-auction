@@ -1,12 +1,15 @@
 /**
- * get_auction_events — Retrieve the event log for an auction.
+ * get_auction_events — Retrieve the privacy-masked event log for an auction.
  *
  * Gated to participants: the calling agent must have joined the auction
- * (verified via bond status or JOIN event) to access the full event log.
+ * (verified via bond status or JOIN event) to access the event log.
  * Non-participants get a 403 from the engine's participant gate.
  *
- * GET /auctions/:id/events?participantToken=<agentId> -> returns the append-only event log
- * with seq numbers, action types, agent IDs, amounts, and hashes.
+ * After privacy masking (Phase 08), the engine returns events where the
+ * `agent_id` field contains the zkNullifier (not the real agentId) and
+ * the `wallet` field is omitted. This tool maps accordingly.
+ *
+ * GET /auctions/:id/events?participantToken=<agentId> -> returns privacy-masked event log
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -18,13 +21,14 @@ interface EventRow {
   seq: number
   auction_id: string
   action_type: string
-  agent_id: string
-  wallet: string
+  agent_id: string        // Contains zkNullifier when participant-masked
+  wallet?: string          // Omitted in participant-masked responses
   amount: string
   event_hash: string
   prev_hash: string
   payload_hash: string
   created_at: number
+  zk_nullifier?: string   // May be present in raw (admin) responses
 }
 
 interface EventsResponse {
@@ -37,10 +41,9 @@ export function registerEventsTool(server: McpServer, engine: EngineClient): voi
     {
       title: 'Get Auction Events',
       description:
-        'Retrieve the append-only event log for an auction. ' +
-        'Requires the calling agent to be a participant (must have joined the auction). ' +
-        'Events are ordered by sequence number and include action type (JOIN/BID/DELIVER), ' +
-        'agent ID, wallet, amount, and hash chain data.',
+        'Retrieve the privacy-masked event log for an auction. ' +
+        'Events identify agents by zkNullifier only (no agentId or wallet). ' +
+        'Requires the calling agent to be a participant.',
       inputSchema: z.object({
         auctionId: z.string().describe('The 0x-prefixed bytes32 auction ID'),
         agentId: z
@@ -79,12 +82,12 @@ export function registerEventsTool(server: McpServer, engine: EngineClient): voi
       const result = events.map((e) => ({
         seq: e.seq,
         actionType: e.action_type,
-        agentId: e.agent_id,
-        wallet: e.wallet,
+        zkNullifier: e.agent_id,   // After privacy masking, agent_id IS the nullifier
         amount: e.amount,
         eventHash: e.event_hash,
         prevHash: e.prev_hash,
         createdAt: e.created_at,
+        // wallet intentionally omitted — privacy masking
       }))
 
       return {
