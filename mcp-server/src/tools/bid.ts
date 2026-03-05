@@ -12,12 +12,14 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { Hex } from 'viem'
+import { privateKeyToAccount } from 'viem/accounts'
 import type { EngineClient } from '../lib/engine.js'
 import { ActionSigner } from '../lib/signer.js'
 import type { ServerConfig } from '../lib/config.js'
 import { requireSignerConfig } from '../lib/config.js'
 import { loadAgentState, generateBidRangeProofForAgent } from '../lib/proof-generator.js'
 import { generateSecret, BID_RANGE_SIGNALS } from '@agent-auction/crypto'
+import { verifyIdentityPreFlight } from '../lib/identity-check.js'
 
 interface EngineActionResponse {
   seq: number
@@ -96,6 +98,11 @@ export function registerBidTool(
     },
     async ({ auctionId, amount, sealed, salt: saltParam, proofPayload, generateProof }) => {
       const { agentPrivateKey, agentId } = requireSignerConfig(config)
+      const account = privateKeyToAccount(agentPrivateKey)
+      const preflight = await verifyIdentityPreFlight(engine, agentId, account.address)
+      if (!preflight.ok) {
+        return preflight.error
+      }
       const signer = new ActionSigner(agentPrivateKey)
       const bidNonceKey = `BID:${agentId}`
       const bidNonce = nonceTracker.get(bidNonceKey) ?? 0
