@@ -12,20 +12,10 @@ const CRYPTO_PATH = resolve(TEST_DIR, '../src/lib/crypto.ts')
 const MEMBERSHIP_FIXTURE_PATH = resolve(TEST_DIR, './fixtures/membership-proof.json')
 const BID_RANGE_FIXTURE_PATH = resolve(TEST_DIR, './fixtures/bidrange-proof.json')
 
-type MembershipWorkerResult = {
+type WorkerResult = {
   valid: boolean
   reason?: string
   detail?: string
-  registryRoot?: string
-  capabilityCommitment?: string
-  nullifier?: string
-}
-
-type BidRangeWorkerResult = {
-  valid: boolean
-  bidCommitment?: string
-  reservePrice?: string
-  maxBudget?: string
 }
 
 let tempDir: string
@@ -44,6 +34,17 @@ async function buildWorkerBundle(): Promise<string> {
       import bidRangeFixture from ${JSON.stringify(BID_RANGE_FIXTURE_PATH)}
       import { verifyMembershipProof, verifyBidRangeProof } from ${JSON.stringify(CRYPTO_PATH)}
 
+      function makeTamperedBidRangeFixture() {
+        return {
+          ...bidRangeFixture,
+          publicSignals: [
+            ...bidRangeFixture.publicSignals.slice(0, 1),
+            (BigInt(bidRangeFixture.publicSignals[1]) + 1n).toString(),
+            ...bidRangeFixture.publicSignals.slice(2),
+          ],
+        }
+      }
+
       export default {
         async fetch(request) {
           const url = new URL(request.url)
@@ -54,6 +55,18 @@ async function buildWorkerBundle(): Promise<string> {
 
           if (url.pathname === '/bid-range') {
             return Response.json(await verifyBidRangeProof(bidRangeFixture, { requireProof: true }))
+          }
+
+          if (url.pathname === '/membership-missing') {
+            return Response.json(await verifyMembershipProof(null, { requireProof: true }))
+          }
+
+          if (url.pathname === '/membership-malformed') {
+            return Response.json(await verifyMembershipProof({ garbage: true }, { requireProof: true }))
+          }
+
+          if (url.pathname === '/bid-range-tampered') {
+            return Response.json(await verifyBidRangeProof(makeTamperedBidRangeFixture(), { requireProof: true }))
           }
 
           return new Response('not found', { status: 404 })
@@ -82,6 +95,7 @@ async function buildWorkerBundle(): Promise<string> {
     external: nodeBuiltinExternals,
     loader: {
       '.json': 'json',
+      '.wasm': 'copy',
     },
     logLevel: 'silent',
   })
@@ -89,15 +103,22 @@ async function buildWorkerBundle(): Promise<string> {
   return workerBundlePath
 }
 
-function expectWorkerProofVerification(
-  label: string,
-  result: { valid: boolean; detail?: string; reason?: string },
-): void {
-  if (!result.valid) {
-    const reason = result.reason ? ` (${result.reason})` : ''
-    const detail = result.detail ? `: ${result.detail}` : ''
-    throw new Error(`${label} failed inside Worker runtime${reason}${detail}`)
+function expectWorkerFailClosed(label: string, result: WorkerResult, reason: string): void {
+  if (result.valid) {
+    throw new Error(`${label} unexpectedly verified inside Worker runtime`)
   }
+
+  expect(result.reason).toBe(reason)
+}
+
+function expectWorkerSuccess(label: string, result: WorkerResult): void {
+  if (!result.valid) {
+    throw new Error(
+      `${label} failed inside Worker runtime (${result.reason ?? 'unknown'}): ${result.detail ?? 'no detail'}`,
+    )
+  }
+
+  expect(result.reason).toBe('valid')
 }
 
 describe('Proof runtime compatibility (workerd via Miniflare)', () => {
@@ -109,6 +130,7 @@ describe('Proof runtime compatibility (workerd via Miniflare)', () => {
       scriptPath: bundlePath,
       compatibilityDate: '2024-12-01',
       compatibilityFlags: ['nodejs_compat'],
+      modulesRules: [{ type: 'CompiledWasm', include: ['**/*.wasm'] }],
     })
   })
 
@@ -117,25 +139,50 @@ describe('Proof runtime compatibility (workerd via Miniflare)', () => {
     await rm(tempDir, { recursive: true, force: true })
   })
 
-  it('verifies a membership proof on the shared Worker loader path', async () => {
+  it('verifies membership proofs through the shared Worker runtime loader', async () => {
     const response = await mf.dispatchFetch('http://localhost/membership')
     expect(response.status).toBe(200)
 
-    const result = (await response.json()) as MembershipWorkerResult
-    expectWorkerProofVerification('membership proof', result)
-    expect(result).toMatchObject({
-      valid: true,
-    })
+    expectWorkerSuccess('membership proof', (await response.json()) as WorkerResult)
   })
 
-  it('verifies a bid-range proof on the shared Worker loader path', async () => {
+  it('verifies bid-range proofs through the shared Worker runtime loader', async () => {
     const response = await mf.dispatchFetch('http://localhost/bid-range')
     expect(response.status).toBe(200)
 
-    const result = (await response.json()) as BidRangeWorkerResult
-    expectWorkerProofVerification('bid-range proof', result)
-    expect(result).toMatchObject({
-      valid: true,
-    })
+    expectWorkerSuccess('bid-range proof', (await response.json()) as WorkerResult)
+  })
+
+  it('keeps missing membership proofs fail-closed inside the Worker runtime', async () => {
+    const response = await mf.dispatchFetch('http://localhost/membership-missing')
+    expect(response.status).toBe(200)
+
+    expectWorkerFailClosed(
+      'missing membership proof',
+      (await response.json()) as WorkerResult,
+      'missing_proof',
+    )
+  })
+
+  it('keeps malformed membership proofs fail-closed inside the Worker runtime', async () => {
+    const response = await mf.dispatchFetch('http://localhost/membership-malformed')
+    expect(response.status).toBe(200)
+
+    expectWorkerFailClosed(
+      'malformed membership proof',
+      (await response.json()) as WorkerResult,
+      'malformed_proof',
+    )
+  })
+
+  it('keeps tampered bid-range proofs fail-closed inside the Worker runtime', async () => {
+    const response = await mf.dispatchFetch('http://localhost/bid-range-tampered')
+    expect(response.status).toBe(200)
+
+    expectWorkerFailClosed(
+      'tampered bid-range proof',
+      (await response.json()) as WorkerResult,
+      'groth16_invalid',
+    )
   })
 })

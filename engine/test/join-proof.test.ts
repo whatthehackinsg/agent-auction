@@ -4,6 +4,7 @@ import { ActionType } from '../src/types/engine'
 import { AuctionRoom } from '../src/auction-room'
 import { generateTestMembershipProof, setupTestProofs } from '../src/test-helpers/proof-fixtures'
 import * as identityLib from '../src/lib/identity'
+import { verifyMembershipProof } from '../src/lib/crypto'
 
 const TEST_AUCTION_ID = '0x' + 'ab'.repeat(32)
 const TEST_WALLET = '0x1234567890abcdef1234567890abcdef12345678'
@@ -113,9 +114,11 @@ describe('JOIN proof enforcement', () => {
 
   it('accepts JOIN with a valid Groth16 membership proof', async () => {
     const proofPayload = await generateTestMembershipProof(BigInt(TEST_AGENT), 0)
-    vi.spyOn(identityLib, 'getAgentPoseidonRoot').mockResolvedValue(
-      toHex(BigInt(proofPayload.publicSignals[0]), { size: 32 }),
-    )
+    vi.spyOn(identityLib, 'readAgentPrivacyState').mockResolvedValue({
+      status: 'ok',
+      poseidonRoot: toHex(BigInt(proofPayload.publicSignals[0]), { size: 32 }),
+      capabilityCommitment: toHex(BigInt(proofPayload.publicSignals[1]), { size: 32 }),
+    })
 
     const response = await room.fetch(makeJoinRequest(proofPayload))
     const body = await response.json()
@@ -125,4 +128,57 @@ describe('JOIN proof enforcement', () => {
     expect(await state._storage.get(`joined:${TEST_AGENT}:${TEST_AUCTION_ID}`)).toBe(true)
     expect(await state._storage.get(`nullifier:${proofPayload.publicSignals[2]}`)).toBe(true)
   }, 120000)
+
+  it('reports registry_root_mismatch when proof root differs from expected on-chain root', async () => {
+    const proofPayload = await generateTestMembershipProof(BigInt(TEST_AGENT), 0)
+    const result = await verifyMembershipProof(proofPayload, {
+      requireProof: true,
+      expectedRegistryRoot: toHex(BigInt(proofPayload.publicSignals[0]) + 1n, { size: 32 }),
+      expectedCapabilityCommitment: toHex(BigInt(proofPayload.publicSignals[1]), { size: 32 }),
+    })
+
+    expect(result).toMatchObject({
+      valid: false,
+      reason: 'registry_root_mismatch',
+      registryRoot: proofPayload.publicSignals[0],
+      capabilityCommitment: proofPayload.publicSignals[1],
+      expectedRegistryRoot: (BigInt(proofPayload.publicSignals[0]) + 1n).toString(),
+    })
+  })
+
+  it('reports capability_commitment_mismatch when proof commitment differs from expected on-chain commitment', async () => {
+    const proofPayload = await generateTestMembershipProof(BigInt(TEST_AGENT), 0)
+    const result = await verifyMembershipProof(proofPayload, {
+      requireProof: true,
+      expectedRegistryRoot: toHex(BigInt(proofPayload.publicSignals[0]), { size: 32 }),
+      expectedCapabilityCommitment: toHex(BigInt(proofPayload.publicSignals[1]) + 1n, { size: 32 }),
+    })
+
+    expect(result).toMatchObject({
+      valid: false,
+      reason: 'capability_commitment_mismatch',
+      registryRoot: proofPayload.publicSignals[0],
+      capabilityCommitment: proofPayload.publicSignals[1],
+      expectedCapabilityCommitment: (BigInt(proofPayload.publicSignals[1]) + 1n).toString(),
+    })
+  })
+
+  it('reports groth16_invalid for a tampered proof payload', async () => {
+    const proofPayload = await generateTestMembershipProof(BigInt(TEST_AGENT), 0)
+    const tampered = {
+      ...proofPayload,
+      publicSignals: [...proofPayload.publicSignals],
+    }
+    tampered.publicSignals[2] = (BigInt(proofPayload.publicSignals[2]) + 1n).toString()
+
+    const result = await verifyMembershipProof(tampered, { requireProof: true })
+
+    expect(result).toMatchObject({
+      valid: false,
+      reason: 'groth16_invalid',
+      registryRoot: tampered.publicSignals[0],
+      capabilityCommitment: tampered.publicSignals[1],
+      nullifier: tampered.publicSignals[2],
+    })
+  })
 })

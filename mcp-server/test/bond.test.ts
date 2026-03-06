@@ -5,15 +5,59 @@
  * Covers: bond status check, fallback agentId, missing config, engine errors, bond posting.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   makeCapturingMcpServerMulti,
   makeMockEngine,
   makeConfig,
+  makeFakeReceipt,
+  makeFakeTxHash,
+  makeOnchainClients,
   parseToolResponse,
   TEST_AUCTION_ID,
+  TEST_WALLET,
 } from './helpers.js'
 import { registerBondTools } from '../src/tools/bond.js'
+
+function makeBondFlowEngine(options?: {
+  bondStatuses?: Array<'NONE' | 'PENDING' | 'CONFIRMED' | 'TIMEOUT'>
+  depositAmount?: string
+  postResult?: { status: string; txHash: string }
+}) {
+  const capturedGetPaths: string[] = []
+  const capturedPosts: Array<{ path: string; body: unknown }> = []
+  const statuses = [...(options?.bondStatuses ?? ['NONE', 'CONFIRMED'])]
+  let lastStatus = statuses[statuses.length - 1] ?? 'NONE'
+
+  const mockEngine = {
+    get: async (path: string) => {
+      capturedGetPaths.push(path)
+      if (path === `/auctions/${TEST_AUCTION_ID}`) {
+        return {
+          auction: {
+            deposit_amount: options?.depositAmount ?? '50000000',
+          },
+        }
+      }
+      if (path.includes('/bonds/')) {
+        const status = statuses.shift() ?? lastStatus
+        lastStatus = status
+        return { status }
+      }
+      throw new Error(`Unexpected GET ${path}`)
+    },
+    post: async (path: string, body: unknown) => {
+      capturedPosts.push({ path, body })
+      if (path === `/auctions/${TEST_AUCTION_ID}/bonds`) {
+        const txHash = (body as { txHash: string }).txHash
+        return options?.postResult ?? { status: 'CONFIRMED', txHash }
+      }
+      throw new Error(`Unexpected POST ${path}`)
+    },
+  }
+
+  return { mockEngine, capturedGetPaths, capturedPosts }
+}
 
 // ── Tests: get_bond_status ────────────────────────────────────────────────────
 
@@ -107,6 +151,7 @@ describe('post_bond', () => {
 
     const result = await handler({
       auctionId: TEST_AUCTION_ID,
+      agentId: '5',
       amount: '50000000',
       txHash: '0xtx123',
     })
@@ -114,14 +159,14 @@ describe('post_bond', () => {
 
     expect(body.success).toBe(true)
     expect(body.auctionId).toBe(TEST_AUCTION_ID)
-    expect(body.agentId).toBe('1')
+    expect(body.agentId).toBe('5')
     expect(body.amount).toBe('50000000')
     expect(body.bondStatus).toBe('CONFIRMED')
 
     // Verify engine POST payload
     expect(capturedPayloads).toHaveLength(1)
     const payload = capturedPayloads[0] as Record<string, unknown>
-    expect(payload.agentId).toBe('1')
+    expect(payload.agentId).toBe('5')
     expect(payload.depositor).toBeTruthy()
     expect(payload.amount).toBe('50000000')
     expect(payload.txHash).toBe('0xtx123')
@@ -145,5 +190,147 @@ describe('post_bond', () => {
     expect(body.success).toBe(false)
     const error = body.error as { code: string }
     expect(error.code).toBe('MISSING_CONFIG')
+  })
+})
+
+describe('deposit_bond', () => {
+  it('auto-loads depositAmount, transfers USDC to escrow, and records a confirmed bond', async () => {
+    const txHash = makeFakeTxHash('44')
+    const { clients, writeCalls } = makeOnchainClients({
+      readContractImpl: async () => TEST_WALLET,
+      writeContractImpl: async () => txHash,
+      waitForReceiptImpl: async (hash) => makeFakeReceipt({ transactionHash: hash }),
+    })
+    const { mockEngine, capturedGetPaths, capturedPosts } = makeBondFlowEngine()
+    const { mockServer, getHandler } = makeCapturingMcpServerMulti()
+
+    registerBondTools(
+      mockServer,
+      mockEngine as any,
+      makeConfig({
+        agentId: '1',
+        baseSepoliaRpc: 'https://base-sepolia.example',
+      }),
+      {
+        createClients: () => clients,
+        smartWaitAttempts: 1,
+        pollDelayMs: 0,
+      },
+    )
+    const handler = getHandler('deposit_bond')
+
+    const result = await handler({
+      auctionId: TEST_AUCTION_ID,
+      agentId: '5',
+    })
+    const body = parseToolResponse(result)
+
+    expect(body.success).toBe(true)
+    expect(body.agentId).toBe('5')
+    expect(body.amount).toBe('50000000')
+    expect(body.bondStatus).toBe('CONFIRMED')
+    expect(body.txHash).toBe(txHash)
+    expect(body.nextAction).toBe('join_auction')
+
+    expect(writeCalls).toHaveLength(1)
+    const transferCall = writeCalls[0] as {
+      functionName: string
+      args: [string, bigint]
+    }
+    expect(transferCall.functionName).toBe('transfer')
+    expect(transferCall.args[1]).toBe(50000000n)
+
+    expect(capturedPosts).toHaveLength(1)
+    expect(capturedPosts[0]?.path).toBe(`/auctions/${TEST_AUCTION_ID}/bonds`)
+    expect(capturedPosts[0]?.body).toMatchObject({
+      agentId: '5',
+      depositor: TEST_WALLET,
+      amount: '50000000',
+      txHash,
+    })
+    expect(capturedGetPaths).toContain(`/auctions/${TEST_AUCTION_ID}`)
+    expect(capturedGetPaths.some((path) => path.endsWith('/bonds/5'))).toBe(true)
+  })
+
+  it.each(['PENDING', 'CONFIRMED'] as const)(
+    'returns existing %s bond state without sending another transfer',
+    async (status) => {
+      const { clients, writeCalls } = makeOnchainClients({
+        readContractImpl: async () => TEST_WALLET,
+      })
+      const createClients = vi.fn(() => clients)
+      const { mockEngine, capturedPosts } = makeBondFlowEngine({
+        bondStatuses: [status],
+      })
+      const { mockServer, getHandler } = makeCapturingMcpServerMulti()
+
+      registerBondTools(
+        mockServer,
+        mockEngine as any,
+        makeConfig({
+          baseSepoliaRpc: 'https://base-sepolia.example',
+        }),
+        {
+          createClients,
+          smartWaitAttempts: 1,
+          pollDelayMs: 0,
+        },
+      )
+      const handler = getHandler('deposit_bond')
+
+      const result = await handler({
+        auctionId: TEST_AUCTION_ID,
+        agentId: '5',
+      })
+      const body = parseToolResponse(result)
+
+      expect(body.success).toBe(true)
+      expect(body.bondStatus).toBe(status)
+      expect(body.idempotent).toBe(true)
+      expect(writeCalls).toHaveLength(0)
+      expect(capturedPosts).toHaveLength(0)
+      expect(createClients).not.toHaveBeenCalled()
+    },
+  )
+
+  it('returns PENDING with next-step guidance when observation is still in flight', async () => {
+    const txHash = makeFakeTxHash('55')
+    const { clients, writeCalls } = makeOnchainClients({
+      readContractImpl: async () => TEST_WALLET,
+      writeContractImpl: async () => txHash,
+      waitForReceiptImpl: async (hash) => makeFakeReceipt({ transactionHash: hash }),
+    })
+    const { mockEngine, capturedPosts } = makeBondFlowEngine({
+      bondStatuses: ['NONE', 'PENDING'],
+      postResult: { status: 'PENDING', txHash },
+    })
+    const { mockServer, getHandler } = makeCapturingMcpServerMulti()
+
+    registerBondTools(
+      mockServer,
+      mockEngine as any,
+      makeConfig({
+        baseSepoliaRpc: 'https://base-sepolia.example',
+      }),
+      {
+        createClients: () => clients,
+        smartWaitAttempts: 1,
+        pollDelayMs: 0,
+      },
+    )
+    const handler = getHandler('deposit_bond')
+
+    const result = await handler({
+      auctionId: TEST_AUCTION_ID,
+      agentId: '5',
+    })
+    const body = parseToolResponse(result)
+
+    expect(body.success).toBe(true)
+    expect(body.bondStatus).toBe('PENDING')
+    expect(body.txHash).toBe(txHash)
+    expect(body.nextAction).toBe('get_bond_status')
+    expect(writeCalls).toHaveLength(1)
+    expect(capturedPosts).toHaveLength(1)
   })
 })

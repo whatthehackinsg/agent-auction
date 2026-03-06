@@ -16,10 +16,13 @@ import { privateKeyToAccount } from 'viem/accounts'
 import type { EngineClient } from '../lib/engine.js'
 import { ActionSigner } from '../lib/signer.js'
 import type { ServerConfig } from '../lib/config.js'
-import { requireSignerConfig } from '../lib/config.js'
+import { resolveWriteTarget } from '../lib/agent-target.js'
 import { verifyParticipationReadiness } from '../lib/identity-check.js'
+import { parseEngineStructuredError } from '../lib/proof-errors.js'
 import {
   loadAgentState,
+  computeLocalProofState,
+  fetchOnchainProofState,
   generateMembershipProofForAgent,
 } from '../lib/proof-generator.js'
 
@@ -30,15 +33,71 @@ interface EngineActionResponse {
   sequencerSig?: string
 }
 
-function zkError(code: string, detail: string, suggestion: string) {
+function zkError(
+  code: string,
+  detail: string,
+  suggestion: string,
+  extras?: Record<string, unknown>,
+) {
   return {
     content: [
       {
         type: 'text' as const,
-        text: JSON.stringify({ success: false, error: { code, detail, suggestion } }, null, 2),
+        text: JSON.stringify(
+          { success: false, error: { code, detail, suggestion, ...extras } },
+          null,
+          2,
+        ),
       },
     ],
   }
+}
+
+function readinessBoundaryNote() {
+  return (
+    'check_identity only confirms ERC-8004 ownership and privacy visibility. ' +
+    'join_auction also requires the local proof state to match the on-chain privacy registration.'
+  )
+}
+
+function parseToolErrorResponse(
+  payload: unknown,
+): { code: string; detail: string; suggestion: string } | null {
+  if (
+    !payload
+    || typeof payload !== 'object'
+    || !('content' in payload)
+    || !Array.isArray((payload as { content?: unknown[] }).content)
+  ) {
+    return null
+  }
+
+  const first = (payload as { content: Array<{ text?: string }> }).content[0]
+  if (!first || typeof first.text !== 'string') {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(first.text) as {
+      error?: { code?: string; detail?: string; suggestion?: string }
+    }
+    if (
+      parsed.error
+      && typeof parsed.error.code === 'string'
+      && typeof parsed.error.detail === 'string'
+      && typeof parsed.error.suggestion === 'string'
+    ) {
+      return {
+        code: parsed.error.code,
+        detail: parsed.error.detail,
+        suggestion: parsed.error.suggestion,
+      }
+    }
+  } catch {
+    // Ignore malformed tool content.
+  }
+
+  return null
 }
 
 export function registerJoinTool(
@@ -60,6 +119,14 @@ export function registerJoinTool(
         bondAmount: z
           .string()
           .describe('Bond amount in USDC base units (6 decimals). E.g. "50000000" for 50 USDC'),
+        agentId: z
+          .string()
+          .optional()
+          .describe('Optional explicit agent ID override. Defaults to AGENT_ID.'),
+        agentStateFile: z
+          .string()
+          .optional()
+          .describe('Optional explicit agent-N.json path override for proof generation.'),
         proofPayload: z
           .object({
             proof: z.object({
@@ -77,17 +144,53 @@ export function registerJoinTool(
           ),
       }),
     },
-    async ({ auctionId, bondAmount, proofPayload }) => {
-      const { agentPrivateKey, agentId } = requireSignerConfig(config)
-      const account = privateKeyToAccount(agentPrivateKey)
-      const preflight = await verifyParticipationReadiness(engine, agentId, account.address, {
-        agentStateFile: config.agentStateFile,
+    async ({ auctionId, bondAmount, agentId: inputAgentId, agentStateFile, proofPayload }) => {
+      const target = resolveWriteTarget(config, {
+        agentId: inputAgentId,
+        agentStateFile,
+      })
+      const account = privateKeyToAccount(target.agentPrivateKey)
+      const preflight = await verifyParticipationReadiness(engine, target.agentId, account.address, {
+        agentStateFile: target.agentStateFile,
         requireLocalState: !proofPayload,
       })
       if (!preflight.ok) {
+        const preflightError = parseToolErrorResponse(preflight.error)
+        if (
+          !proofPayload
+          && config.baseSepoliaRpc
+          && preflightError?.code === 'PRIVACY_NOT_REGISTERED'
+        ) {
+          const onchainProofState = await fetchOnchainProofState(
+            config.baseSepoliaRpc,
+            BigInt(target.agentId),
+          )
+          if (onchainProofState.status === 'unreadable') {
+            return zkError(
+              'PRIVACY_STATE_UNREADABLE',
+              onchainProofState.detail,
+              'Update the configured AgentPrivacyRegistry deployment or address, then rerun register_identity for this agent before retrying join_auction.',
+              {
+                reason: 'privacy_state_unreadable',
+                readinessBoundary: readinessBoundaryNote(),
+              },
+            )
+          }
+          if (onchainProofState.status === 'missing') {
+            return zkError(
+              'PRIVACY_STATE_MISSING',
+              `On-chain privacy proof state is incomplete for agentId ${target.agentId}: missing ${onchainProofState.missing.join(', ')}.`,
+              'Register the agent on the per-agent AgentPrivacyRegistry, then rerun register_identity/check_identity before joining.',
+              {
+                reason: 'privacy_state_missing',
+                readinessBoundary: readinessBoundaryNote(),
+              },
+            )
+          }
+        }
         return preflight.error
       }
-      const signer = new ActionSigner(agentPrivateKey)
+      const signer = new ActionSigner(target.agentPrivateKey)
 
       let resolvedProof: { proof: unknown; publicSignals: string[] } | undefined
 
@@ -97,14 +200,85 @@ export function registerJoinTool(
       } else {
         // Server-side generation
         try {
-          const agentState = loadAgentState(config.agentStateFile!)
+          const agentState = loadAgentState(target.agentStateFile!)
+          if (agentState.agentId !== BigInt(target.agentId)) {
+            return zkError(
+              'PROOF_STATE_MISMATCH',
+              `AGENT_STATE_FILE ${target.agentStateFile} belongs to agentId ${agentState.agentId}, not target agentId ${target.agentId}.`,
+              'Use the stateFilePath returned by register_identity for this exact agentId, then retry join_auction.',
+              {
+                reason: 'agent_state_file_mismatch',
+                readinessBoundary: readinessBoundaryNote(),
+              },
+            )
+          }
+
+          let validatedRegistryRoot = agentState.capabilityMerkleRoot
+          if (config.baseSepoliaRpc) {
+            const localProofState = await computeLocalProofState(agentState)
+            const onchainProofState = await fetchOnchainProofState(
+              config.baseSepoliaRpc,
+              BigInt(target.agentId),
+            )
+
+            if (onchainProofState.status === 'unreadable') {
+              return zkError(
+                'PRIVACY_STATE_UNREADABLE',
+                onchainProofState.detail,
+                'Update the configured AgentPrivacyRegistry deployment or address, then rerun register_identity for this agent before retrying join_auction.',
+                {
+                  reason: 'privacy_state_unreadable',
+                  readinessBoundary: readinessBoundaryNote(),
+                },
+              )
+            }
+
+            if (onchainProofState.status === 'missing') {
+              return zkError(
+                'PRIVACY_STATE_MISSING',
+                `On-chain privacy proof state is incomplete for agentId ${target.agentId}: missing ${onchainProofState.missing.join(', ')}.`,
+                'Register the agent on the per-agent AgentPrivacyRegistry, then rerun register_identity/check_identity before joining.',
+                {
+                  reason: 'privacy_state_missing',
+                  readinessBoundary: readinessBoundaryNote(),
+                },
+              )
+            }
+
+            if (localProofState.poseidonRoot !== onchainProofState.poseidonRoot) {
+              return zkError(
+                'PROOF_STATE_MISMATCH',
+                `Local Poseidon root ${localProofState.poseidonRoot} does not match on-chain Poseidon root ${onchainProofState.poseidonRoot} for agentId ${target.agentId}.`,
+                'Use the stateFilePath returned by register_identity for this agent. If this is already the correct file, rerun register_identity to refresh privacy state before joining.',
+                {
+                  reason: 'registry_root_mismatch',
+                  readinessBoundary: readinessBoundaryNote(),
+                },
+              )
+            }
+
+            if (localProofState.capabilityCommitment !== onchainProofState.capabilityCommitment) {
+              return zkError(
+                'PROOF_STATE_MISMATCH',
+                `Local capability commitment ${localProofState.capabilityCommitment} does not match on-chain capability commitment ${onchainProofState.capabilityCommitment} for agentId ${target.agentId}.`,
+                'Use the matching agent state file for this identity or rerun register_identity so local witness state and on-chain privacy registration are aligned.',
+                {
+                  reason: 'capability_commitment_mismatch',
+                  readinessBoundary: readinessBoundaryNote(),
+                },
+              )
+            }
+
+            validatedRegistryRoot = onchainProofState.poseidonRoot
+          }
+
           // Use the agent's own Poseidon capability tree root (stored in local state file).
           // This is the per-agent root the circuit constrains against — NOT the global
           // keccak registry root returned by AgentPrivacyRegistry.getRoot().
           resolvedProof = await generateMembershipProofForAgent(
             agentState,
             BigInt(auctionId),
-            agentState.capabilityMerkleRoot,
+            validatedRegistryRoot,
           )
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
@@ -116,12 +290,12 @@ export function registerJoinTool(
         }
       }
 
-      const nonceKey = `JOIN:${agentId}`
+      const nonceKey = `JOIN:${target.agentId}`
       const nonce = nonceTracker.get(nonceKey) ?? 0
 
       const payload = await signer.signJoin({
         auctionId: auctionId as Hex,
-        agentId,
+        agentId: target.agentId,
         bondAmount: BigInt(bondAmount),
         nonce,
         proofPayload: resolvedProof,
@@ -132,6 +306,18 @@ export function registerJoinTool(
         result = await engine.post<EngineActionResponse>(`/auctions/${auctionId}/action`, payload)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+        const structured = parseEngineStructuredError(msg)
+        if (structured) {
+          return zkError(
+            structured.error,
+            `${structured.detail} ${readinessBoundaryNote()}`.trim(),
+            structured.suggestion,
+            {
+              ...(structured.reason ? { reason: structured.reason } : {}),
+              ...(structured.diagnostics ? { diagnostics: structured.diagnostics } : {}),
+            },
+          )
+        }
         if (msg.includes('Nullifier already')) {
           return zkError(
             'NULLIFIER_REUSED',
@@ -146,7 +332,7 @@ export function registerJoinTool(
           return zkError(
             'PROOF_INVALID',
             msg,
-            'The ZK proof or signature is invalid. Regenerate the proof and try again.',
+            'The ZK proof or signature is invalid. Regenerate the proof from the correct agent-N.json and retry. A green check_identity result does not guarantee JOIN proof-state alignment.',
           )
         }
         throw err // Re-throw non-ZK errors
@@ -159,7 +345,7 @@ export function registerJoinTool(
         success: true,
         action: 'JOIN',
         auctionId,
-        agentId,
+        agentId: target.agentId,
         wallet: signer.address,
         bondAmount,
         nonce,

@@ -16,8 +16,9 @@ import { privateKeyToAccount } from 'viem/accounts'
 import type { EngineClient } from '../lib/engine.js'
 import { ActionSigner } from '../lib/signer.js'
 import type { ServerConfig } from '../lib/config.js'
-import { requireSignerConfig } from '../lib/config.js'
+import { resolveWriteTarget } from '../lib/agent-target.js'
 import { loadAgentState, generateBidRangeProofForAgent } from '../lib/proof-generator.js'
+import { parseEngineStructuredError } from '../lib/proof-errors.js'
 import { generateSecret, BID_RANGE_SIGNALS } from '@agent-auction/crypto'
 import { verifyParticipationReadiness } from '../lib/identity-check.js'
 
@@ -37,12 +38,17 @@ interface AuctionDetailResponse {
   maxBid?: string | null
 }
 
-function zkError(code: string, detail: string, suggestion: string) {
+function zkError(
+  code: string,
+  detail: string,
+  suggestion: string,
+  extras?: Record<string, unknown>,
+) {
   return {
     content: [
       {
         type: 'text' as const,
-        text: JSON.stringify({ success: false, error: { code, detail, suggestion } }, null, 2),
+        text: JSON.stringify({ success: false, error: { code, detail, suggestion, ...extras } }, null, 2),
       },
     ],
   }
@@ -67,6 +73,14 @@ export function registerBidTool(
         amount: z
           .string()
           .describe('Bid amount in USDC base units (6 decimals). E.g. "100000000" for 100 USDC'),
+        agentId: z
+          .string()
+          .optional()
+          .describe('Optional explicit agent ID override. Defaults to AGENT_ID.'),
+        agentStateFile: z
+          .string()
+          .optional()
+          .describe('Optional explicit agent-N.json path override for proof generation.'),
         sealed: z
           .boolean()
           .optional()
@@ -90,20 +104,31 @@ export function registerBidTool(
           .describe('Advanced: pre-built proof override. Omit to auto-generate.'),
       }),
     },
-    async ({ auctionId, amount, sealed, salt: saltParam, proofPayload }) => {
-      const { agentPrivateKey, agentId } = requireSignerConfig(config)
-      const account = privateKeyToAccount(agentPrivateKey)
-      const preflight = await verifyParticipationReadiness(engine, agentId, account.address, {
-        agentStateFile: config.agentStateFile,
+    async ({
+      auctionId,
+      amount,
+      agentId: inputAgentId,
+      agentStateFile,
+      sealed,
+      salt: saltParam,
+      proofPayload,
+    }) => {
+      const target = resolveWriteTarget(config, {
+        agentId: inputAgentId,
+        agentStateFile,
+      })
+      const account = privateKeyToAccount(target.agentPrivateKey)
+      const preflight = await verifyParticipationReadiness(engine, target.agentId, account.address, {
+        agentStateFile: target.agentStateFile,
         requireLocalState: !proofPayload,
       })
       if (!preflight.ok) {
         return preflight.error
       }
-      const signer = new ActionSigner(agentPrivateKey)
-      const bidNonceKey = `BID:${agentId}`
+      const signer = new ActionSigner(target.agentPrivateKey)
+      const bidNonceKey = `BID:${target.agentId}`
       const bidNonce = nonceTracker.get(bidNonceKey) ?? 0
-      const commitNonceKey = `BID_COMMIT:${agentId}`
+      const commitNonceKey = `BID_COMMIT:${target.agentId}`
       const commitNonce = nonceTracker.get(commitNonceKey) ?? 0
 
       let resolvedProof: { proof: unknown; publicSignals: string[] } | undefined
@@ -128,7 +153,7 @@ export function registerBidTool(
         plainBidProofSalt = providedSalt
       } else {
         try {
-          loadAgentState(config.agentStateFile!)
+          loadAgentState(target.agentStateFile!)
           // Fetch auction params for range proof
           const detail = await engine.get<AuctionDetailResponse>(
             `/auctions/${auctionId}`,
@@ -195,7 +220,7 @@ export function registerBidTool(
 
         const payload = await signer.signBidCommit({
           auctionId: auctionId as Hex,
-          agentId,
+          agentId: target.agentId,
           bidCommitment,
           nonce: commitNonce,
         })
@@ -221,7 +246,7 @@ export function registerBidTool(
                 success: true,
                 action: 'BID_COMMIT',
                 auctionId,
-                agentId,
+                agentId: target.agentId,
                 wallet: signer.address,
                 bidCommitment: bidCommitment.toString(),
                 revealSalt: finalRevealSalt.toString(),
@@ -240,7 +265,7 @@ export function registerBidTool(
       // Sign first — BID EIP-712 type has no nullifier, so proof doesn't affect signature
       const payload = await signer.signBid({
         auctionId: auctionId as Hex,
-        agentId,
+        agentId: target.agentId,
         amount: BigInt(amount),
         nonce: bidNonce,
       })
@@ -259,6 +284,18 @@ export function registerBidTool(
         )
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+        const structured = parseEngineStructuredError(msg)
+        if (structured) {
+          return zkError(
+            structured.error,
+            structured.detail,
+            structured.suggestion,
+            {
+              ...(structured.reason ? { reason: structured.reason } : {}),
+              ...(structured.diagnostics ? { diagnostics: structured.diagnostics } : {}),
+            },
+          )
+        }
         if (msg.includes('Invalid bid range proof')) {
           return zkError(
             'PROOF_INVALID',
@@ -276,7 +313,7 @@ export function registerBidTool(
         success: true,
         action: 'BID',
         auctionId,
-        agentId,
+        agentId: target.agentId,
         wallet: signer.address,
         amount,
         nonce: bidNonce,

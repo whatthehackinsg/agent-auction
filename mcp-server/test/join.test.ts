@@ -1,20 +1,46 @@
 /**
- * Integration tests for join_auction ZK proof pass-through.
+ * Integration tests for join_auction proof handling.
  *
  * Tests:
  * 1. signJoin() nullifier derivation — Poseidon vs keccak256
- * 2. Proof payload passes through to engine POST body
+ * 2. Real MCP flows: auto-generate from AGENT_STATE_FILE or fail closed
  * 3. Structured ZK error codes for failure cases
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import fs from 'node:fs'
-import { ActionSigner, deriveJoinNullifier } from '../src/lib/signer.js'
-import { MEMBERSHIP_SIGNALS } from '@agent-auction/crypto'
+import { fileURLToPath } from 'node:url'
+import { ActionSigner } from '../src/lib/signer.js'
+import { MEMBERSHIP_SIGNALS, computeCapabilityCommitment } from '@agent-auction/crypto'
 import type { EngineClient } from '../src/lib/engine.js'
 import type { ServerConfig } from '../src/lib/config.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { registerJoinTool } from '../src/tools/join.js'
+
+const { generatedMembershipProof } = vi.hoisted(() => ({
+  generatedMembershipProof: {
+    proof: {
+      pi_a: ['1', '2', '1'],
+      pi_b: [['3', '4'], ['5', '6']],
+      pi_c: ['7', '8', '1'],
+      protocol: 'groth16',
+      curve: 'bn128',
+    },
+    publicSignals: ['11', '22', '33'],
+  },
+}))
+
+vi.mock('../src/lib/proof-generator.js', async () => {
+  const actual = await vi.importActual<typeof import('../src/lib/proof-generator.js')>(
+    '../src/lib/proof-generator.js',
+  )
+  return {
+    ...actual,
+    generateMembershipProofForAgent: vi.fn().mockResolvedValue(generatedMembershipProof),
+  }
+})
+
+const proofGenerator = await import('../src/lib/proof-generator.js')
+const { registerJoinTool } = await import('../src/tools/join.js')
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -30,6 +56,10 @@ const membershipFixture = JSON.parse(
   fs.readFileSync(new URL('./fixtures/membership-proof.json', import.meta.url), 'utf-8'),
 ) as { proof: unknown; publicSignals: string[] }
 
+const TEST_AGENT_STATE_FILE = fileURLToPath(
+  new URL('../../packages/crypto/test-agents/agent-1.json', import.meta.url),
+)
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function makeConfig(overrides?: Partial<ServerConfig>): ServerConfig {
@@ -39,7 +69,9 @@ function makeConfig(overrides?: Partial<ServerConfig>): ServerConfig {
     agentId: TEST_AGENT_ID,
     port: 3100,
     engineAdminKey: null,
+    bondFundingPrivateKey: null,
     agentStateFile: null,
+    agentStateDir: null,
     baseSepoliaRpc: null,
     ...overrides,
   }
@@ -106,6 +138,10 @@ function makeCapturingEngine(overrides?: {
 // ── Tests: signJoin nullifier derivation ─────────────────────────────────────
 
 describe('signJoin nullifier derivation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('uses Poseidon nullifier when proofPayload is provided', async () => {
     const signer = new ActionSigner(TEST_PRIVATE_KEY)
 
@@ -190,6 +226,10 @@ describe('signJoin nullifier derivation', () => {
 // ── Tests: join_auction proof pass-through to engine ─────────────────────────
 
 describe('join_auction proof pass-through to engine', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('sends proof in engine POST body when proofPayload provided', async () => {
     const { mockServer, getHandler } = makeCapturingMcpServer()
     const { mockEngine, capturedPayloads } = makeCapturingEngine()
@@ -215,33 +255,96 @@ describe('join_auction proof pass-through to engine', () => {
     expect(proofData.publicSignals).toHaveLength(3)
   })
 
-  it('sends proof: null when no proof provided', async () => {
+  it('auto-generates a membership proof from AGENT_STATE_FILE when no manual proof is provided', async () => {
     const { mockServer, getHandler } = makeCapturingMcpServer()
     const { mockEngine, capturedPayloads } = makeCapturingEngine()
-    const config = makeConfig()
+    const config = makeConfig({ agentStateFile: TEST_AGENT_STATE_FILE })
     const nonceTracker = new Map<string, number>()
 
     registerJoinTool(mockServer, mockEngine, config, nonceTracker)
     const handler = getHandler()
 
-    await handler({
+    const result = (await handler({
       auctionId: TEST_AUCTION_ID,
       bondAmount: '50000000',
-      // No proofPayload, no generateProof
-    })
+    })) as { content: Array<{ text: string }> }
 
+    expect(proofGenerator.generateMembershipProofForAgent).toHaveBeenCalledOnce()
     expect(capturedPayloads).toHaveLength(1)
     const payload = capturedPayloads[0] as Record<string, unknown>
-    expect(payload.proof).toBeNull()
+    expect(payload.proof).toEqual(generatedMembershipProof)
+
+    const body = JSON.parse(result.content[0].text)
+    expect(body.success).toBe(true)
+    expect(body.action).toBe('JOIN')
+  })
+
+  it('accepts explicit agentId and agentStateFile overrides for multi-identity participation', async () => {
+    const verifyBodies: unknown[] = []
+    const capturedPayloads: unknown[] = []
+    const mockEngine = {
+      post: async (path: string, body: unknown) => {
+        if (path === '/verify-identity') {
+          verifyBodies.push(body)
+          return {
+            verified: true,
+            resolvedWallet: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+            privacyRegistered: true,
+            poseidonRoot: '0x1234',
+          }
+        }
+        capturedPayloads.push(body)
+        return { seq: 1, eventHash: '0xabc', prevHash: '0x000' }
+      },
+      get: async (_path: string) => {
+        return { reservePrice: '50', maxBid: '500' }
+      },
+    } as unknown as EngineClient
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+    const config = makeConfig({ agentStateFile: null })
+    const nonceTracker = new Map<string, number>()
+    const tempStateDir = fs.mkdtempSync('/tmp/join-tool-')
+    const explicitStateFile = `${tempStateDir}/agent-9.json`
+    const explicitState = JSON.parse(fs.readFileSync(TEST_AGENT_STATE_FILE, 'utf-8')) as Record<string, unknown>
+    explicitState.agentId = '9n'
+    fs.writeFileSync(explicitStateFile, JSON.stringify(explicitState, null, 2))
+
+    registerJoinTool(mockServer, mockEngine, config, nonceTracker)
+    const handler = getHandler()
+
+    const result = (await handler({
+      auctionId: TEST_AUCTION_ID,
+      bondAmount: '50000000',
+      agentId: '9',
+      agentStateFile: explicitStateFile,
+    })) as { content: Array<{ text: string }> }
+
+    const body = JSON.parse(result.content[0].text)
+    expect(body.success).toBe(true)
+    expect(body.agentId).toBe('9')
+    expect(verifyBodies).toEqual([
+      {
+        agentId: '9',
+        wallet: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+      },
+    ])
+    expect(capturedPayloads).toHaveLength(1)
+    const payload = capturedPayloads[0] as Record<string, unknown>
+    expect(payload.agentId).toBe('9')
+    expect(proofGenerator.generateMembershipProofForAgent).toHaveBeenCalledOnce()
   })
 })
 
 // ── Tests: join_auction structured errors ─────────────────────────────────────
 
 describe('join_auction structured errors', () => {
-  it('returns AGENT_NOT_REGISTERED when generateProof=true but no AGENT_STATE_FILE', async () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('returns ZK_STATE_REQUIRED when no proof source is available', async () => {
     const { mockServer, getHandler } = makeCapturingMcpServer()
-    const { mockEngine } = makeCapturingEngine()
+    const { mockEngine, capturedPayloads } = makeCapturingEngine()
     // agentStateFile explicitly null
     const config = makeConfig({ agentStateFile: null })
     const nonceTracker = new Map<string, number>()
@@ -252,12 +355,13 @@ describe('join_auction structured errors', () => {
     const result = (await handler({
       auctionId: TEST_AUCTION_ID,
       bondAmount: '50000000',
-      generateProof: true,
     })) as { content: Array<{ text: string }> }
 
     const body = JSON.parse(result.content[0].text)
     expect(body.success).toBe(false)
-    expect(body.error.code).toBe('AGENT_NOT_REGISTERED')
+    expect(body.error.code).toBe('ZK_STATE_REQUIRED')
+    expect(capturedPayloads).toHaveLength(0)
+    expect(proofGenerator.generateMembershipProofForAgent).not.toHaveBeenCalled()
   })
 
   it('returns NULLIFIER_REUSED for engine nullifier error', async () => {
@@ -306,5 +410,209 @@ describe('join_auction structured errors', () => {
     const body = JSON.parse(result.content[0].text)
     expect(body.success).toBe(false)
     expect(body.error.code).toBe('PROOF_INVALID')
+  })
+
+  it('returns PROOF_RUNTIME_UNAVAILABLE for engine runtime outage while keeping the readiness boundary note', async () => {
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+    const { mockEngine } = makeCapturingEngine({
+      postImpl: async () => {
+        throw new Error(
+          'Engine POST failed (400): {"error":"PROOF_RUNTIME_UNAVAILABLE","detail":"Membership proof verification runtime is unavailable for agent 1: Wasm code generation disallowed by embedder","suggestion":"Retry once the Worker proof runtime is healthy.","reason":"proof_runtime_unavailable","diagnostics":{"verificationDetail":"Wasm code generation disallowed by embedder"}}',
+        )
+      },
+    })
+    const config = makeConfig()
+    const nonceTracker = new Map<string, number>()
+
+    registerJoinTool(mockServer, mockEngine, config, nonceTracker)
+    const handler = getHandler()
+
+    const result = (await handler({
+      auctionId: TEST_AUCTION_ID,
+      bondAmount: '50000000',
+      proofPayload: membershipFixture,
+    })) as { content: Array<{ text: string }> }
+
+    const body = JSON.parse(result.content[0].text)
+    expect(body.success).toBe(false)
+    expect(body.error.code).toBe('PROOF_RUNTIME_UNAVAILABLE')
+    expect(body.error.reason).toBe('proof_runtime_unavailable')
+    expect(body.error.detail).toContain('Wasm code generation disallowed by embedder')
+    expect(body.error.detail).toContain('check_identity only confirms ERC-8004 ownership')
+  })
+
+  it('returns the engine structured privacy-state error instead of flattening it to PROOF_INVALID', async () => {
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+    const { mockEngine } = makeCapturingEngine({
+      postImpl: async () => {
+        throw new Error(
+          'Engine POST failed (400): {"error":"PRIVACY_STATE_UNREADABLE","detail":"Configured AgentPrivacyRegistry appears to be a legacy global-root contract. getRoot() succeeds but per-agent getters are unavailable.","suggestion":"Update the configured AgentPrivacyRegistry deployment or address, then rerun register_identity for this agent."}',
+        )
+      },
+    })
+    const config = makeConfig()
+    const nonceTracker = new Map<string, number>()
+
+    registerJoinTool(mockServer, mockEngine, config, nonceTracker)
+    const handler = getHandler()
+
+    const result = (await handler({
+      auctionId: TEST_AUCTION_ID,
+      bondAmount: '50000000',
+      proofPayload: membershipFixture,
+    })) as { content: Array<{ text: string }> }
+
+    const body = JSON.parse(result.content[0].text)
+    expect(body.success).toBe(false)
+    expect(body.error.code).toBe('PRIVACY_STATE_UNREADABLE')
+    expect(body.error.detail).toContain('legacy global-root contract')
+    expect(body.error.suggestion).toContain('rerun register_identity')
+  })
+
+  it('fails before engine POST when local poseidon root differs from on-chain proof state', async () => {
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+    const { mockEngine, capturedPayloads } = makeCapturingEngine()
+    const config = makeConfig({
+      agentStateFile: TEST_AGENT_STATE_FILE,
+      baseSepoliaRpc: 'https://sepolia.base.org',
+    })
+    const nonceTracker = new Map<string, number>()
+    const localState = proofGenerator.loadAgentState(TEST_AGENT_STATE_FILE)
+    const localCommitment = await computeCapabilityCommitment(
+      localState.capabilities[0].capabilityId,
+      localState.agentSecret,
+    )
+
+    vi.spyOn(proofGenerator, 'fetchOnchainProofState').mockResolvedValue({
+      status: 'ok',
+      poseidonRoot: localState.capabilityMerkleRoot + 1n,
+      capabilityCommitment: localCommitment,
+    })
+
+    registerJoinTool(mockServer, mockEngine, config, nonceTracker)
+    const handler = getHandler()
+
+    const result = (await handler({
+      auctionId: TEST_AUCTION_ID,
+      bondAmount: '50000000',
+    })) as { content: Array<{ text: string }> }
+
+    const body = JSON.parse(result.content[0].text)
+    expect(body.success).toBe(false)
+    expect(body.error.code).toBe('PROOF_STATE_MISMATCH')
+    expect(body.error.detail).toContain('Poseidon root')
+    expect(capturedPayloads).toHaveLength(0)
+  })
+
+  it('fails before engine POST when local capability commitment differs from on-chain proof state', async () => {
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+    const { mockEngine, capturedPayloads } = makeCapturingEngine()
+    const config = makeConfig({
+      agentStateFile: TEST_AGENT_STATE_FILE,
+      baseSepoliaRpc: 'https://sepolia.base.org',
+    })
+    const nonceTracker = new Map<string, number>()
+    const localState = proofGenerator.loadAgentState(TEST_AGENT_STATE_FILE)
+    const localCommitment = await computeCapabilityCommitment(
+      localState.capabilities[0].capabilityId,
+      localState.agentSecret,
+    )
+
+    vi.spyOn(proofGenerator, 'fetchOnchainProofState').mockResolvedValue({
+      status: 'ok',
+      poseidonRoot: localState.capabilityMerkleRoot,
+      capabilityCommitment: localCommitment + 1n,
+    })
+
+    registerJoinTool(mockServer, mockEngine, config, nonceTracker)
+    const handler = getHandler()
+
+    const result = (await handler({
+      auctionId: TEST_AUCTION_ID,
+      bondAmount: '50000000',
+    })) as { content: Array<{ text: string }> }
+
+    const body = JSON.parse(result.content[0].text)
+    expect(body.success).toBe(false)
+    expect(body.error.code).toBe('PROOF_STATE_MISMATCH')
+    expect(body.error.detail).toContain('capability commitment')
+    expect(capturedPayloads).toHaveLength(0)
+  })
+
+  it('fails before engine POST when per-agent on-chain proof state is unreadable', async () => {
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+    const { mockEngine, capturedPayloads } = makeCapturingEngine()
+    const config = makeConfig({
+      agentStateFile: TEST_AGENT_STATE_FILE,
+      baseSepoliaRpc: 'https://sepolia.base.org',
+    })
+    const nonceTracker = new Map<string, number>()
+
+    vi.spyOn(proofGenerator, 'fetchOnchainProofState').mockResolvedValue({
+      status: 'unreadable',
+      detail:
+        'Configured AgentPrivacyRegistry appears to be a legacy global-root contract. getRoot() succeeds but per-agent getters are unavailable.',
+    })
+
+    registerJoinTool(mockServer, mockEngine, config, nonceTracker)
+    const handler = getHandler()
+
+    const result = (await handler({
+      auctionId: TEST_AUCTION_ID,
+      bondAmount: '50000000',
+    })) as { content: Array<{ text: string }> }
+
+    const body = JSON.parse(result.content[0].text)
+    expect(body.success).toBe(false)
+    expect(body.error.code).toBe('PRIVACY_STATE_UNREADABLE')
+    expect(body.error.detail).toContain('legacy global-root contract')
+    expect(capturedPayloads).toHaveLength(0)
+  })
+
+  it('refines a preflight PRIVACY_NOT_REGISTERED result into unreadable on-chain proof-state guidance', async () => {
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+    const capturedPayloads: unknown[] = []
+    const mockEngine = {
+      post: async (path: string, body: unknown) => {
+        if (path === '/verify-identity') {
+          return {
+            verified: true,
+            resolvedWallet: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+            privacyRegistered: false,
+            poseidonRoot: null,
+          }
+        }
+        capturedPayloads.push(body)
+        return { seq: 1, eventHash: '0xabc', prevHash: '0x000' }
+      },
+      get: async (_path: string) => {
+        return { reservePrice: '50', maxBid: '500' }
+      },
+    } as unknown as EngineClient
+    const config = makeConfig({
+      agentStateFile: TEST_AGENT_STATE_FILE,
+      baseSepoliaRpc: 'https://sepolia.base.org',
+    })
+    const nonceTracker = new Map<string, number>()
+
+    vi.spyOn(proofGenerator, 'fetchOnchainProofState').mockResolvedValue({
+      status: 'unreadable',
+      detail:
+        'Configured AgentPrivacyRegistry appears to be a legacy global-root contract. getRoot() succeeds but per-agent getters are unavailable.',
+    })
+
+    registerJoinTool(mockServer, mockEngine, config, nonceTracker)
+    const handler = getHandler()
+
+    const result = (await handler({
+      auctionId: TEST_AUCTION_ID,
+      bondAmount: '50000000',
+    })) as { content: Array<{ text: string }> }
+
+    const body = JSON.parse(result.content[0].text)
+    expect(body.success).toBe(false)
+    expect(body.error.code).toBe('PRIVACY_STATE_UNREADABLE')
+    expect(body.error.detail).toContain('legacy global-root contract')
+    expect(capturedPayloads).toHaveLength(0)
   })
 })

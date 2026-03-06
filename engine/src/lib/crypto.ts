@@ -7,7 +7,7 @@
  * are preferred when available).
  *
  * EIP-712 signature verification uses viem.verifyTypedData (pure JS, CF Workers compatible).
- * ZK membership proof verification uses snarkjs.groth16.verify with inlined vkeys.
+ * ZK proof verification uses a Worker-safe Groth16 verifier with inlined vkeys.
  */
 import {
   keccak256,
@@ -26,17 +26,13 @@ import {
 // (which has a top-level `import * as snarkjs` that triggers URL.createObjectURL()).
 import { MEMBERSHIP_SIGNALS, BID_RANGE_SIGNALS } from '@agent-auction/crypto/signal-indices'
 
-// snarkjs is lazy-imported to avoid ffjavascript's URL.createObjectURL() at
-// module init time — that API doesn't exist in Cloudflare Workers.
-// The specifier is built at runtime so esbuild cannot statically resolve it
-// and bundle the module (which would trigger URL.createObjectURL at load time).
-const _snarkjsId = ['snark', 'js'].join('') as 'snarkjs'
-let _snarkjs: typeof import('snarkjs') | null = null
-async function getSnarkjs() {
-  if (!_snarkjs) {
-    _snarkjs = await import(_snarkjsId)
+let _verifyGroth16: typeof import('snarkjs').groth16.verify | null = null
+
+async function getVerifyGroth16(): Promise<typeof import('snarkjs').groth16.verify> {
+  if (!_verifyGroth16) {
+    _verifyGroth16 = (await import('./snarkjs-runtime')).verifyGroth16
   }
-  return _snarkjs!
+  return _verifyGroth16
 }
 
 // ---- Hash Chain (Poseidon-based via poseidon-lite, CF Workers compatible) ----
@@ -329,6 +325,48 @@ export interface VerifyMembershipOptions {
   expectedCapabilityCommitment?: string
 }
 
+export type MembershipProofReason =
+  | 'valid'
+  | 'missing_proof'
+  | 'malformed_proof'
+  | 'groth16_invalid'
+  | 'registry_root_mismatch'
+  | 'capability_commitment_mismatch'
+  | 'proof_runtime_unavailable'
+  | 'verification_error'
+
+export interface VerifyMembershipResult {
+  valid: boolean
+  reason: MembershipProofReason
+  registryRoot: string
+  capabilityCommitment: string
+  nullifier: string
+  expectedRegistryRoot?: string
+  expectedCapabilityCommitment?: string
+  detail?: string
+}
+
+function emptyMembershipResult(reason: MembershipProofReason): VerifyMembershipResult {
+  return {
+    valid: reason === 'valid',
+    reason,
+    registryRoot: '0x00',
+    capabilityCommitment: '0x00',
+    nullifier: '0x00',
+  }
+}
+
+function isProofRuntimeUnavailableDetail(detail: string | undefined): boolean {
+  if (!detail) {
+    return false
+  }
+
+  return (
+    detail.includes('URL.createObjectURL() is not implemented')
+    || detail.includes('Wasm code generation disallowed by embedder')
+  )
+}
+
 /**
  * Verify a RegistryMembership Groth16 proof.
  *
@@ -342,7 +380,7 @@ export interface VerifyMembershipOptions {
 export async function verifyMembershipProof(
   proofPayload: unknown,
   options?: VerifyMembershipOptions,
-): Promise<{ valid: boolean; registryRoot: string; nullifier: string }> {
+): Promise<VerifyMembershipResult> {
   const requireProof = options?.requireProof ?? false
   // Cross-checks proof's publicSignals[0] against the on-chain per-agent Poseidon root
   // and publicSignals[1] against the on-chain per-agent capability commitment.
@@ -351,38 +389,51 @@ export async function verifyMembershipProof(
   // No proof provided
   if (proofPayload == null) {
     if (requireProof) {
-      return { valid: false, registryRoot: '0x00', nullifier: '0x00' }
+      return emptyMembershipResult('missing_proof')
     }
-    return { valid: true, registryRoot: '0x00', nullifier: '0x00' }
+    return emptyMembershipResult('valid')
   }
 
   if (!isMembershipProofPayload(proofPayload)) {
-    return { valid: false, registryRoot: '0x00', nullifier: '0x00' }
+    return emptyMembershipResult('malformed_proof')
   }
 
+  const registryRoot = proofPayload.publicSignals[MEMBERSHIP_SIGNALS.REGISTRY_ROOT]
+  const capabilityCommitment =
+    proofPayload.publicSignals[MEMBERSHIP_SIGNALS.CAPABILITY_COMMITMENT]
+  const nullifier = proofPayload.publicSignals[MEMBERSHIP_SIGNALS.NULLIFIER]
+
   try {
-    const snarkjs = await getSnarkjs()
-    const valid = await snarkjs.groth16.verify(
-      MEMBERSHIP_VKEY as Parameters<typeof snarkjs.groth16.verify>[0],
+    const verifyGroth16 = await getVerifyGroth16()
+    const valid = await verifyGroth16(
+      MEMBERSHIP_VKEY as Parameters<typeof verifyGroth16>[0],
       proofPayload.publicSignals,
-      proofPayload.proof as Parameters<typeof snarkjs.groth16.verify>[2],
+      proofPayload.proof as Parameters<typeof verifyGroth16>[2],
     )
 
     if (!valid) {
-      return { valid: false, registryRoot: proofPayload.publicSignals[MEMBERSHIP_SIGNALS.REGISTRY_ROOT], nullifier: proofPayload.publicSignals[MEMBERSHIP_SIGNALS.NULLIFIER] }
+      return {
+        valid: false,
+        reason: 'groth16_invalid',
+        registryRoot,
+        capabilityCommitment,
+        nullifier,
+      }
     }
 
     // Cross-check the proof's Poseidon registryRoot against the per-agent root stored on-chain.
     // The on-chain value is bytes32 (hex); the proof signal is a decimal string.
     // Convert hex → bigint → decimal string for comparison.
     if (options?.expectedRegistryRoot) {
-      const proofRoot = proofPayload.publicSignals[MEMBERSHIP_SIGNALS.REGISTRY_ROOT]
       const expectedDecimal = BigInt(options.expectedRegistryRoot).toString()
-      if (proofRoot !== expectedDecimal) {
+      if (registryRoot !== expectedDecimal) {
         return {
           valid: false,
-          registryRoot: proofRoot,
-          nullifier: proofPayload.publicSignals[MEMBERSHIP_SIGNALS.NULLIFIER],
+          reason: 'registry_root_mismatch',
+          registryRoot,
+          capabilityCommitment,
+          nullifier,
+          expectedRegistryRoot: expectedDecimal,
         }
       }
     }
@@ -391,24 +442,38 @@ export async function verifyMembershipProof(
     // stored Poseidon(capabilityId, agentSecret). Prevents a prover from using a different
     // capability than what was registered, even if it exists in their Merkle tree.
     if (options?.expectedCapabilityCommitment) {
-      const proofCommitment = proofPayload.publicSignals[MEMBERSHIP_SIGNALS.CAPABILITY_COMMITMENT]
       const expectedDecimal = BigInt(options.expectedCapabilityCommitment).toString()
-      if (proofCommitment !== expectedDecimal) {
+      if (capabilityCommitment !== expectedDecimal) {
         return {
           valid: false,
-          registryRoot: proofPayload.publicSignals[MEMBERSHIP_SIGNALS.REGISTRY_ROOT],
-          nullifier: proofPayload.publicSignals[MEMBERSHIP_SIGNALS.NULLIFIER],
+          reason: 'capability_commitment_mismatch',
+          registryRoot,
+          capabilityCommitment,
+          nullifier,
+          expectedCapabilityCommitment: expectedDecimal,
         }
       }
     }
 
     return {
       valid: true,
-      registryRoot: proofPayload.publicSignals[MEMBERSHIP_SIGNALS.REGISTRY_ROOT],
-      nullifier: proofPayload.publicSignals[MEMBERSHIP_SIGNALS.NULLIFIER],
+      reason: 'valid',
+      registryRoot,
+      capabilityCommitment,
+      nullifier,
     }
-  } catch {
-    return { valid: false, registryRoot: '0x00', nullifier: '0x00' }
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    return {
+      valid: false,
+      reason: isProofRuntimeUnavailableDetail(detail)
+        ? 'proof_runtime_unavailable'
+        : 'verification_error',
+      registryRoot,
+      capabilityCommitment,
+      nullifier,
+      detail,
+    }
   }
 }
 
@@ -555,6 +620,24 @@ export interface VerifyBidRangeOptions {
   requireProof?: boolean
 }
 
+export type BidRangeProofReason =
+  | 'valid'
+  | 'missing_proof'
+  | 'malformed_proof'
+  | 'groth16_invalid'
+  | 'range_output_invalid'
+  | 'proof_runtime_unavailable'
+  | 'verification_error'
+
+export interface VerifyBidRangeResult {
+  valid: boolean
+  reason: BidRangeProofReason
+  bidCommitment: string
+  reservePrice: string
+  maxBudget: string
+  detail?: string
+}
+
 /**
  * Verify a BidRange Groth16 proof.
  *
@@ -567,32 +650,51 @@ export interface VerifyBidRangeOptions {
 export async function verifyBidRangeProof(
   proofPayload: unknown,
   options?: VerifyBidRangeOptions,
-): Promise<{ valid: boolean; bidCommitment: string; reservePrice: string; maxBudget: string }> {
+): Promise<VerifyBidRangeResult> {
   const requireProof = options?.requireProof ?? false
 
   // No proof provided
   if (proofPayload == null) {
     if (requireProof) {
-      return { valid: false, bidCommitment: '0', reservePrice: '0', maxBudget: '0' }
+      return {
+        valid: false,
+        reason: 'missing_proof',
+        bidCommitment: '0',
+        reservePrice: '0',
+        maxBudget: '0',
+      }
     }
-    return { valid: true, bidCommitment: '0', reservePrice: '0', maxBudget: '0' }
+    return {
+      valid: true,
+      reason: 'valid',
+      bidCommitment: '0',
+      reservePrice: '0',
+      maxBudget: '0',
+    }
   }
 
   if (!isBidRangeProofPayload(proofPayload)) {
-    return { valid: false, bidCommitment: '0', reservePrice: '0', maxBudget: '0' }
+    return {
+      valid: false,
+      reason: 'malformed_proof',
+      bidCommitment: '0',
+      reservePrice: '0',
+      maxBudget: '0',
+    }
   }
 
   try {
-    const snarkjs = await getSnarkjs()
-    const valid = await snarkjs.groth16.verify(
-      BID_RANGE_VKEY as Parameters<typeof snarkjs.groth16.verify>[0],
+    const verifyGroth16 = await getVerifyGroth16()
+    const valid = await verifyGroth16(
+      BID_RANGE_VKEY as Parameters<typeof verifyGroth16>[0],
       proofPayload.publicSignals,
-      proofPayload.proof as Parameters<typeof snarkjs.groth16.verify>[2],
+      proofPayload.proof as Parameters<typeof verifyGroth16>[2],
     )
 
     if (!valid) {
       return {
         valid: false,
+        reason: 'groth16_invalid',
         bidCommitment: proofPayload.publicSignals[BID_RANGE_SIGNALS.BID_COMMITMENT],
         reservePrice: proofPayload.publicSignals[BID_RANGE_SIGNALS.RESERVE_PRICE],
         maxBudget: proofPayload.publicSignals[BID_RANGE_SIGNALS.MAX_BUDGET],
@@ -603,6 +705,7 @@ export async function verifyBidRangeProof(
     if (proofPayload.publicSignals[BID_RANGE_SIGNALS.RANGE_OK] !== '1') {
       return {
         valid: false,
+        reason: 'range_output_invalid',
         bidCommitment: proofPayload.publicSignals[BID_RANGE_SIGNALS.BID_COMMITMENT],
         reservePrice: proofPayload.publicSignals[BID_RANGE_SIGNALS.RESERVE_PRICE],
         maxBudget: proofPayload.publicSignals[BID_RANGE_SIGNALS.MAX_BUDGET],
@@ -611,12 +714,23 @@ export async function verifyBidRangeProof(
 
     return {
       valid: true,
+      reason: 'valid',
       bidCommitment: proofPayload.publicSignals[BID_RANGE_SIGNALS.BID_COMMITMENT],
       reservePrice: proofPayload.publicSignals[BID_RANGE_SIGNALS.RESERVE_PRICE],
       maxBudget: proofPayload.publicSignals[BID_RANGE_SIGNALS.MAX_BUDGET],
     }
-  } catch {
-    return { valid: false, bidCommitment: '0', reservePrice: '0', maxBudget: '0' }
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    return {
+      valid: false,
+      reason: isProofRuntimeUnavailableDetail(detail)
+        ? 'proof_runtime_unavailable'
+        : 'verification_error',
+      bidCommitment: '0',
+      reservePrice: '0',
+      maxBudget: '0',
+      detail,
+    }
   }
 }
 

@@ -6,8 +6,10 @@
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { Hex, TransactionReceipt } from 'viem'
 import type { EngineClient } from '../src/lib/engine.js'
 import type { ServerConfig } from '../src/lib/config.js'
+import type { BaseSepoliaClients } from '../src/lib/onchain.js'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -17,6 +19,7 @@ export const TEST_PRIVATE_KEY =
 
 export const TEST_AUCTION_ID = ('0x' + '00'.repeat(31) + '01') as `0x${string}`
 export const TEST_AGENT_ID = '1'
+export const TEST_WALLET = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
 
 // ── makeCapturingMcpServer ────────────────────────────────────────────────────
 
@@ -130,8 +133,107 @@ export function makeConfig(overrides?: Partial<ServerConfig>): ServerConfig {
     agentId: TEST_AGENT_ID,
     port: 3100,
     engineAdminKey: null,
+    bondFundingPrivateKey: null,
     agentStateFile: null,
+    agentStateDir: null,
     baseSepoliaRpc: null,
+    ...overrides,
+  }
+}
+
+// ── On-chain helpers ──────────────────────────────────────────────────────────
+
+export function makeFakeTxHash(fill: string = 'ab'): Hex {
+  return (`0x${fill.repeat(32).slice(0, 64)}`) as Hex
+}
+
+export function makeFakeReceipt(
+  overrides?: Partial<TransactionReceipt>,
+): TransactionReceipt {
+  return {
+    blockHash: makeFakeTxHash('01'),
+    blockNumber: 1n,
+    contractAddress: null,
+    cumulativeGasUsed: 21_000n,
+    effectiveGasPrice: 1n,
+    from: TEST_WALLET,
+    gasUsed: 21_000n,
+    logs: [],
+    logsBloom: (`0x${'00'.repeat(256)}`) as Hex,
+    root: undefined,
+    status: 'success',
+    to: TEST_WALLET,
+    transactionHash: makeFakeTxHash('02'),
+    transactionIndex: 0,
+    type: 'eip1559',
+    ...overrides,
+  } as TransactionReceipt
+}
+
+export function makeOnchainClients(overrides?: {
+  readContractImpl?: (args: unknown) => Promise<unknown>
+  waitForReceiptImpl?: (hash: Hex) => Promise<TransactionReceipt>
+  writeContractImpl?: (args: unknown) => Promise<Hex>
+}) {
+  const readCalls: unknown[] = []
+  const waitCalls: Hex[] = []
+  const writeCalls: unknown[] = []
+
+  const publicClient = {
+    readContract: async (args: unknown) => {
+      readCalls.push(args)
+      if (overrides?.readContractImpl) {
+        return overrides.readContractImpl(args)
+      }
+      throw new Error('No mock readContract implementation provided')
+    },
+    waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => {
+      waitCalls.push(hash)
+      if (overrides?.waitForReceiptImpl) {
+        return overrides.waitForReceiptImpl(hash)
+      }
+      return makeFakeReceipt({ transactionHash: hash })
+    },
+  }
+
+  const walletClient = {
+    writeContract: async (args: unknown) => {
+      writeCalls.push(args)
+      if (overrides?.writeContractImpl) {
+        return overrides.writeContractImpl(args)
+      }
+      return makeFakeTxHash(String(writeCalls.length).padStart(2, '0'))
+    },
+  }
+
+  return {
+    clients: {
+      account: { address: TEST_WALLET },
+      publicClient,
+      walletClient,
+    } as unknown as BaseSepoliaClients,
+    readCalls,
+    waitCalls,
+    writeCalls,
+  }
+}
+
+export function makeReadinessResponse(overrides?: Partial<{
+  verified: boolean
+  resolvedWallet: string
+  privacyRegistered: boolean
+  poseidonRoot: string | null
+}>): {
+  verified: boolean
+  resolvedWallet: string
+  privacyRegistered: boolean
+  poseidonRoot: string | null
+} {
+  return {
+    verified: true,
+    resolvedWallet: TEST_WALLET,
+    privacyRegistered: true,
+    poseidonRoot: '0x1234',
     ...overrides,
   }
 }

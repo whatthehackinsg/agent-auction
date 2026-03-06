@@ -29,7 +29,9 @@ import { registerEventsTool } from './tools/events.js'
 import { registerMonitorTool } from './tools/monitor.js'
 import { registerRevealTool } from './tools/reveal.js'
 import { registerSettlementTool } from './tools/settlement.js'
-import { registerIdentityTool } from './tools/identity.js'
+import { registerIdentityTool as registerCheckIdentityTool } from './tools/identity.js'
+import { registerRegisterIdentityTool } from './tools/register-identity.js'
+import { registerExitTools } from './tools/exits.js'
 import { registerPrompts } from './prompts.js'
 
 // ── Configuration ────────────────────────────────────────────────────
@@ -61,7 +63,9 @@ function createServer(): McpServer {
   registerEventsTool(server, engine)
   registerMonitorTool(server, engine, config)
   registerSettlementTool(server, engine)
-  registerIdentityTool(server, engine, config)
+  registerRegisterIdentityTool(server, engine, config)
+  registerCheckIdentityTool(server, engine, config)
+  registerExitTools(server, engine, config)
 
   // Register prompts
   registerPrompts(server)

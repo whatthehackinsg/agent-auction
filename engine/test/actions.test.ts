@@ -216,9 +216,11 @@ describe('handleJoin', () => {
 
   it('accepts join when requireProofs=true and valid membership proof provided', async () => {
     const proofPayload = await generateTestMembershipProof(BigInt(TEST_AGENT), 0)
-    vi.spyOn(identityLib, 'getAgentPoseidonRoot').mockResolvedValue(
-      toHex(BigInt(proofPayload.publicSignals[0]), { size: 32 }),
-    )
+    vi.spyOn(identityLib, 'readAgentPrivacyState').mockResolvedValue({
+      status: 'ok',
+      poseidonRoot: toHex(BigInt(proofPayload.publicSignals[0]), { size: 32 }),
+      capabilityCommitment: toHex(BigInt(proofPayload.publicSignals[1]), { size: 32 }),
+    })
     const action = makeAction({
       type: ActionType.JOIN,
       nonce: 0,
@@ -308,7 +310,9 @@ describe('handleJoin wallet verification', () => {
   it('does not read or write walletVerified:/poseidonRoot: cache keys', async () => {
     vi.spyOn(cryptoLib, 'verifyMembershipProof').mockResolvedValue({
       valid: true,
+      reason: 'valid',
       registryRoot: '0x' + '11'.repeat(32),
+      capabilityCommitment: '0x' + '33'.repeat(32),
       nullifier: '0x' + '22'.repeat(32),
     })
     vi.spyOn(identityLib, 'verifyAgentWallet').mockResolvedValue({
@@ -316,7 +320,11 @@ describe('handleJoin wallet verification', () => {
       resolvedWallet: TEST_WALLET,
       reason: 'verified',
     })
-    vi.spyOn(identityLib, 'getAgentPoseidonRoot').mockResolvedValue(null)
+    vi.spyOn(identityLib, 'readAgentPrivacyState').mockResolvedValue({
+      status: 'ok',
+      poseidonRoot: '0x' + '11'.repeat(32),
+      capabilityCommitment: '0x' + '33'.repeat(32),
+    })
 
     const getSpy = vi.spyOn(storage, 'get')
     const putSpy = vi.spyOn(storage, 'put')
@@ -332,6 +340,58 @@ describe('handleJoin wallet verification', () => {
     ]
     expect(watchedCalls.some((key) => key.startsWith('walletVerified:'))).toBe(false)
     expect(watchedCalls.some((key) => key.startsWith('poseidonRoot:'))).toBe(false)
+  })
+
+  it('rejects join when privacy proof state is missing on-chain', async () => {
+    const proofPayload = await generateTestMembershipProof(BigInt(TEST_AGENT), 0)
+    vi.spyOn(identityLib, 'readAgentPrivacyState').mockResolvedValue({
+      status: 'missing',
+      poseidonRoot: null,
+      capabilityCommitment: null,
+      missing: ['poseidon_root', 'capability_commitment'],
+    })
+
+    const action = makeAction({
+      type: ActionType.JOIN,
+      nonce: 0,
+      proof: proofPayload,
+    })
+
+    await expect(
+      handleJoin(action, storage, TEST_AUCTION_ID, { requireProofs: true }),
+    ).rejects.toMatchObject({
+      name: 'StructuredActionError',
+      payload: expect.objectContaining({
+        error: 'PRIVACY_STATE_MISSING',
+      }),
+    })
+  })
+
+  it('rejects join when privacy proof state is unreadable on-chain', async () => {
+    const proofPayload = await generateTestMembershipProof(BigInt(TEST_AGENT), 0)
+    const verifySpy = vi.spyOn(cryptoLib, 'verifyMembershipProof')
+    vi.spyOn(identityLib, 'readAgentPrivacyState').mockResolvedValue({
+      status: 'unreadable',
+      detail:
+        'Configured AgentPrivacyRegistry appears to be a legacy global-root contract. getRoot() succeeds but per-agent getters are unavailable.',
+    })
+
+    const action = makeAction({
+      type: ActionType.JOIN,
+      nonce: 0,
+      proof: proofPayload,
+    })
+
+    await expect(
+      handleJoin(action, storage, TEST_AUCTION_ID, { requireProofs: true }),
+    ).rejects.toMatchObject({
+      name: 'StructuredActionError',
+      payload: expect.objectContaining({
+        error: 'PRIVACY_STATE_UNREADABLE',
+        detail: expect.stringContaining('legacy global-root contract'),
+      }),
+    })
+    expect(verifySpy).not.toHaveBeenCalled()
   })
 })
 
@@ -468,7 +528,67 @@ describe('handleBid', () => {
     })
     await expect(
       handleBid(action, storage, TEST_AUCTION_ID, '1000000', '0'),
-    ).rejects.toThrow('Invalid bid range proof')
+    ).rejects.toMatchObject({
+      name: 'StructuredActionError',
+      payload: expect.objectContaining({
+        error: 'PROOF_INVALID',
+        reason: 'malformed_proof',
+      }),
+    })
+  })
+
+  it('returns PROOF_RUNTIME_UNAVAILABLE when membership verification runtime is down for JOIN', async () => {
+    vi.spyOn(identityLib, 'readAgentPrivacyState').mockResolvedValue({
+      status: 'ok',
+      poseidonRoot: '0x' + '11'.repeat(32),
+      capabilityCommitment: '0x' + '22'.repeat(32),
+    })
+    vi.spyOn(cryptoLib, 'verifyMembershipProof').mockResolvedValue({
+      valid: false,
+      reason: 'proof_runtime_unavailable',
+      registryRoot: '0x00',
+      capabilityCommitment: '0x00',
+      nullifier: '0x00',
+      detail: 'Wasm code generation disallowed by embedder',
+    })
+    const action = makeAction({ type: ActionType.JOIN, nonce: 0, proof: { proof: {}, publicSignals: [] } })
+
+    await expect(
+      handleJoin(action, storage, TEST_AUCTION_ID, { requireProofs: true }),
+    ).rejects.toMatchObject({
+      name: 'StructuredActionError',
+      payload: expect.objectContaining({
+        error: 'PROOF_RUNTIME_UNAVAILABLE',
+        reason: 'proof_runtime_unavailable',
+      }),
+    })
+  })
+
+  it('returns PROOF_RUNTIME_UNAVAILABLE when bid verification runtime is down', async () => {
+    vi.spyOn(cryptoLib, 'verifyBidRangeProof').mockResolvedValue({
+      valid: false,
+      reason: 'proof_runtime_unavailable',
+      bidCommitment: '0',
+      reservePrice: '0',
+      maxBudget: '0',
+      detail: 'Wasm code generation disallowed by embedder',
+    })
+    const action = makeAction({
+      type: ActionType.BID,
+      nonce: 0,
+      amount: '2000000',
+      proof: { proof: {}, publicSignals: [] },
+    })
+
+    await expect(
+      handleBid(action, storage, TEST_AUCTION_ID, '1000000', '0', { requireProofs: true }),
+    ).rejects.toMatchObject({
+      name: 'StructuredActionError',
+      payload: expect.objectContaining({
+        error: 'PROOF_RUNTIME_UNAVAILABLE',
+        reason: 'proof_runtime_unavailable',
+      }),
+    })
   })
 })
 

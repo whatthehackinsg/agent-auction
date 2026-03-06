@@ -14,19 +14,27 @@ Express App (MCP SDK + StreamableHTTPServerTransport)
 Auction Engine (Cloudflare Workers)
 ```
 
-The server translates MCP tool calls into engine API requests. Write tools (join, bid) sign EIP-712 typed data with the configured agent private key before submitting to the engine. Read tools (discover, details, events, bond status) work without signing configuration.
+The server translates MCP tool calls into engine API requests. Write tools sign with the configured agent private key, can target an explicit `agentId` per call, and cover the full autonomous lifecycle: registration, bonding, participation, refunds, and withdrawals. Read tools remain usable without signing configuration and keep participant identities masked in read-side outputs.
 
 ## Tools
 
 | Tool | Type | Description |
 |------|------|-------------|
+| `register_identity` | Write | Mint an ERC-8004 identity, register privacy membership, save `agent-N.json`, and confirm readiness |
+| `check_identity` | Read | Verify ERC-8004 + privacy registration status and return `readyToParticipate` |
 | `discover_auctions` | Read | List all auctions with optional status filter (OPEN/CLOSED/SETTLED/CANCELLED) |
 | `get_auction_details` | Read | Full auction details including room snapshot, aggregate stats, and NFT metadata |
 | `get_auction_events` | Read | Append-only event log with hash chain data (participant-gated via `participantToken`) |
+| `monitor_auction` | Read | Poll current snapshot plus privacy-masked recent events, with self-recognition when `AGENT_STATE_FILE` is available |
 | `get_bond_status` | Read | Check bond observation status for an agent (NONE/PENDING/CONFIRMED/TIMEOUT) |
+| `deposit_bond` | Write | Primary autonomous bond flow: transfer USDC to escrow and record the receipt with the engine |
+| `post_bond` | Write | Advanced/manual fallback for an already-submitted bond transfer |
 | `join_auction` | Write | Sign EIP-712 Join message and submit to engine (requires bond first) |
 | `place_bid` | Write | Sign EIP-712 Bid message and submit to engine (must exceed current highest bid) |
-| `post_bond` | Write | Submit USDC bond transfer proof (on-chain transfer must happen first) |
+| `reveal_bid` | Write | Reveal a sealed bid during the reveal window |
+| `check_settlement_status` | Read | Summarize whether an auction is settled and what the agent should do next |
+| `claim_refund` | Write | Claim a losing/cancelled bond refund and hand off to `withdraw_funds` |
+| `withdraw_funds` | Write | Withdraw the current escrow balance to the designated wallet |
 
 ### Aggregate Snapshot Fields
 
@@ -44,13 +52,16 @@ Bidder identity is masked by the engine (e.g., "Agent ####42").
 
 ## Prompts
 
-Three reusable prompt templates for agent participation:
+Reusable prompt templates for agent participation:
 
 | Prompt | Description |
 |--------|-------------|
 | `auction_rules` | Platform rules: bonding, bidding, settlement, anti-snipe extensions |
 | `bidding_strategy` | Framework for deciding when and how much to bid (accepts `maxBudget` parameter) |
 | `participation_loop` | Step-by-step autonomous workflow from discovery through settlement |
+| `sealed_bid_guide` | Commit-reveal workflow and reveal salt handling |
+| `bonding_walkthrough` | Autonomous bond flow with `deposit_bond` and `post_bond` fallback guidance |
+| `troubleshooting` | Common MCP errors including ZK, funding-wallet, refund, and withdrawal cases |
 
 ## Setup
 
@@ -64,12 +75,16 @@ npm install
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `ENGINE_URL` | No | `http://localhost:8787` | Auction engine base URL |
-| `AGENT_PRIVATE_KEY` | For write tools | — | 0x-prefixed 64-char hex private key for EIP-712 signing |
-| `AGENT_ID` | For write tools | — | Agent's numeric ERC-8004 identity registry ID |
+| `AGENT_PRIVATE_KEY` | For write tools | — | 0x-prefixed 64-char hex private key for EIP-712 signing and on-chain writes |
+| `AGENT_ID` | For most write tools | — | Default numeric ERC-8004 identity registry ID for join/bid/bond/exit flows |
+| `AGENT_STATE_FILE` | For ZK participation unless passed per call | — | Path to `agent-N.json` used for JOIN/BID proof generation |
+| `AGENT_STATE_DIR` | No | derived from `AGENT_STATE_FILE` | Default directory for per-agent state files created by `register_identity` |
+| `BASE_SEPOLIA_RPC` | For on-chain tools | — | Base Sepolia RPC used by `register_identity`, `deposit_bond`, exit tools, and registry-root reads |
+| `BOND_FUNDING_PRIVATE_KEY` | No | — | Optional alternate funding signer for `deposit_bond`; must still own the target agentId |
 | `MCP_PORT` | No | `3100` | Server listen port |
 | `ENGINE_ADMIN_KEY` | No | — | Engine admin key sent as `X-ENGINE-ADMIN-KEY` header to bypass x402 payment gates |
 
-Read-only mode (discover, details, events, bond status) works with just `ENGINE_URL`. Write tools require `AGENT_PRIVATE_KEY` and `AGENT_ID`.
+Read-only mode (discover, details, events, monitor, settlement status) works with just `ENGINE_URL`. The fully autonomous on-chain lifecycle additionally needs `BASE_SEPOLIA_RPC`, and ZK participation tools need either `AGENT_STATE_FILE` or an explicit per-call proof/state override.
 
 ## Usage
 
@@ -122,34 +137,44 @@ Example MCP client configuration:
 ```
 src/
   index.ts              Express app, session management, /mcp + /health endpoints
-  prompts.ts            MCP prompt templates (auction_rules, bidding_strategy, participation_loop)
+  prompts.ts            MCP prompt templates and autonomous workflow guidance
   lib/
     config.ts           Environment variable loading + signer config validation
+    agent-target.ts     Explicit per-call agent targeting and state-file resolution
     engine.ts           EngineClient HTTP wrapper (admin key injection, error handling)
     signer.ts           EIP-712 ActionSigner (Join/Bid signing, nullifier derivation)
+    onchain.ts          Base Sepolia viem helpers for identity, escrow, and USDC writes
   tools/
     discover.ts         discover_auctions — list auctions with status filter
     details.ts          get_auction_details — full snapshot + aggregate stats
     events.ts           get_auction_events — participant-gated event log
+    monitor.ts          monitor_auction — poll snapshot + privacy-masked recent events
+    register-identity.ts register_identity — full onboarding bootstrap
+    identity.ts         check_identity — readiness verification
     join.ts             join_auction — EIP-712 signed JOIN action
     bid.ts              place_bid — EIP-712 signed BID action
-    bond.ts             post_bond + get_bond_status — bond management
+    bond.ts             deposit_bond + post_bond + get_bond_status — bond management
+    reveal.ts           reveal_bid — sealed-bid reveal
+    settlement.ts       check_settlement_status — post-auction status summary
+    exits.ts            claim_refund + withdraw_funds — exit lifecycle tools
 ```
 
 ## Agent Participation Flow
 
 ```
-1. discover_auctions(statusFilter="OPEN")     → find auctions
-2. get_auction_details(auctionId)              → evaluate reserve, deposit, competition
-3. (on-chain USDC transfer to AuctionEscrow)   → deposit bond
-4. post_bond(auctionId, amount, txHash)         → submit proof to engine
-5. get_bond_status(auctionId)                   → confirm CONFIRMED
-6. join_auction(auctionId, bondAmount)          → EIP-712 signed JOIN
-7. place_bid(auctionId, amount)                 → EIP-712 signed BID
-8. get_auction_events(auctionId, agentId)       → monitor event log
+1. register_identity()                          → mint identity + privacy membership + state file
+2. check_identity(agentId?)                     → confirm readyToParticipate
+3. discover_auctions(statusFilter="OPEN")       → find auctions
+4. get_auction_details(auctionId)               → evaluate reserve, deposit, competition
+5. deposit_bond(auctionId, agentId?)            → primary autonomous bond path
+6. join_auction(auctionId, bondAmount, agentId?) → EIP-712 signed JOIN
+7. place_bid(auctionId, amount, agentId?)       → EIP-712 signed BID
+8. monitor_auction(auctionId)                   → monitor masked auction state
+9. check_settlement_status(auctionId)           → decide winner/loser exit
+10. claim_refund(...) / withdraw_funds(...)     → complete the post-auction exit flow
 ```
 
-Settlement is automatic via Chainlink CRE after auction close.
+Settlement is automatic via Chainlink CRE after auction close. `post_bond` remains available as the advanced/manual fallback when a transfer happened outside the autonomous MCP flow.
 
 ## Dependencies
 

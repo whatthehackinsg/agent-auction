@@ -14,6 +14,7 @@ import {
   generateMembershipProof,
   generateBidRangeProof,
   buildPoseidonMerkleTree,
+  computeCapabilityCommitment,
   getMerkleProof,
   generateSecret,
   type AgentPrivateState,
@@ -23,14 +24,31 @@ import {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /** Deployed AgentPrivacyRegistry address on Base Sepolia */
-const AGENT_PRIVACY_REGISTRY = '0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff'
+const AGENT_PRIVACY_REGISTRY = '0x5b4f09A5D5188dCe1b1ba0caeDBcEb52CaCD1902'
 
-/** Registry root TTL: 5 minutes */
+/** Proof-state TTL: 5 minutes */
 const ROOT_CACHE_TTL_MS = 5 * 60 * 1000
 
 // ── Module-level cache ────────────────────────────────────────────────────────
 
-let registryRootCache: { root: bigint; fetchedAt: number; key: string } | null = null
+export type OnchainProofState =
+  | {
+      status: 'ok'
+      poseidonRoot: bigint
+      capabilityCommitment: bigint
+    }
+  | {
+      status: 'missing'
+      poseidonRoot: bigint | null
+      capabilityCommitment: bigint | null
+      missing: Array<'poseidon_root' | 'capability_commitment'>
+    }
+  | {
+      status: 'unreadable'
+      detail: string
+    }
+
+let proofStateCache: { state: OnchainProofState; fetchedAt: number; key: string } | null = null
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -65,6 +83,24 @@ export function loadAgentState(filePath: string): AgentPrivateState {
     })),
     leafHashes: (parsed.leafHashes as string[]).map(deserializeBigInt),
     capabilityMerkleRoot: deserializeBigInt(parsed.capabilityMerkleRoot),
+  }
+}
+
+export async function computeLocalProofState(agentState: AgentPrivateState): Promise<{
+  poseidonRoot: bigint
+  capabilityCommitment: bigint
+}> {
+  const primaryCapability = agentState.capabilities[0]
+  if (!primaryCapability) {
+    throw new Error('Agent state does not contain any capabilities for proof generation')
+  }
+
+  return {
+    poseidonRoot: agentState.capabilityMerkleRoot,
+    capabilityCommitment: await computeCapabilityCommitment(
+      primaryCapability.capabilityId,
+      agentState.agentSecret,
+    ),
   }
 }
 
@@ -133,20 +169,91 @@ export async function generateBidRangeProofForAgent(
  * to avoid repeated RPC calls during a session.
  */
 export async function fetchRegistryRoot(rpcUrl: string, agentId?: bigint): Promise<bigint> {
-  // Cache key includes agentId for per-agent caching
-  const cacheKey = agentId ? `agent:${agentId}` : 'global'
+  const state = await fetchOnchainProofState(rpcUrl, agentId ?? 0n)
+  if (state.status === 'ok') {
+    return state.poseidonRoot
+  }
+  if (state.status === 'missing') {
+    return 0n
+  }
+  throw new Error(state.detail)
+}
+
+export async function fetchOnchainProofState(
+  rpcUrl: string,
+  agentId: bigint,
+): Promise<OnchainProofState> {
+  const cacheKey = `agent:${agentId}`
   const now = Date.now()
-  if (registryRootCache && registryRootCache.key === cacheKey && now - registryRootCache.fetchedAt < ROOT_CACHE_TTL_MS) {
-    return registryRootCache.root
+  if (
+    proofStateCache
+    && proofStateCache.key === cacheKey
+    && now - proofStateCache.fetchedAt < ROOT_CACHE_TTL_MS
+  ) {
+    return proofStateCache.state
   }
 
   const provider = new ethers.JsonRpcProvider(rpcUrl)
-  const abi = ['function getAgentPoseidonRoot(uint256 agentId) external view returns (bytes32)']
+  const abi = [
+    'function getAgentPoseidonRoot(uint256 agentId) external view returns (bytes32)',
+    'function getAgentCapabilityCommitment(uint256 agentId) external view returns (bytes32)',
+  ]
   const registry = new ethers.Contract(AGENT_PRIVACY_REGISTRY, abi, provider)
 
-  const rootHex = await registry.getAgentPoseidonRoot(agentId ?? 0n)
-  const root = BigInt(rootHex)
+  try {
+    const [rootHex, commitmentHex] = await Promise.all([
+      registry.getAgentPoseidonRoot(agentId),
+      registry.getAgentCapabilityCommitment(agentId),
+    ])
 
-  registryRootCache = { root, fetchedAt: now, key: cacheKey }
-  return root
+    const poseidonRoot = BigInt(rootHex)
+    const capabilityCommitment = BigInt(commitmentHex)
+    const missing: Array<'poseidon_root' | 'capability_commitment'> = []
+
+    if (poseidonRoot === 0n) {
+      missing.push('poseidon_root')
+    }
+    if (capabilityCommitment === 0n) {
+      missing.push('capability_commitment')
+    }
+
+    const state: OnchainProofState =
+      missing.length > 0
+        ? {
+            status: 'missing',
+            poseidonRoot: poseidonRoot === 0n ? null : poseidonRoot,
+            capabilityCommitment: capabilityCommitment === 0n ? null : capabilityCommitment,
+            missing,
+          }
+        : {
+            status: 'ok',
+            poseidonRoot,
+            capabilityCommitment,
+          }
+
+    proofStateCache = { state, fetchedAt: now, key: cacheKey }
+    return state
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    const legacyRegistry = new ethers.Contract(
+      AGENT_PRIVACY_REGISTRY,
+      ['function getRoot() external view returns (bytes32)'],
+      provider,
+    )
+
+    try {
+      await legacyRegistry.getRoot()
+      return {
+        status: 'unreadable',
+        detail:
+          'Configured AgentPrivacyRegistry appears to be a legacy global-root contract. ' +
+          `getRoot() succeeds but per-agent getters are unavailable. ${detail}`,
+      }
+    } catch {
+      return {
+        status: 'unreadable',
+        detail: `Could not read per-agent proof state for agentId ${agentId}: ${detail}`,
+      }
+    }
+  }
 }

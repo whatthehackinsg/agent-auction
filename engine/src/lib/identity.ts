@@ -8,7 +8,7 @@
  * from AgentPrivacyRegistry for ZK membership verification.
  */
 
-import { identityRegistry, agentPrivacyRegistry } from './chain-client'
+import { identityRegistry, agentPrivacyRegistry, publicClient } from './chain-client'
 
 /**
  * Resolve the wallet address for a given agentId by reading the
@@ -69,45 +69,130 @@ export async function verifyAgentWallet(
   return { verified: true, resolvedWallet, reason: 'verified' }
 }
 
+const ZERO_BYTES32 = '0x' + '0'.repeat(64)
+const legacyGlobalRootAbi = [
+  {
+    name: 'getRoot',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'bytes32' }],
+  },
+] as const
+
+type PrivacyStateField = 'poseidon_root' | 'capability_commitment'
+
+export type AgentPrivacyState =
+  | {
+      status: 'ok'
+      poseidonRoot: string
+      capabilityCommitment: string
+    }
+  | {
+      status: 'missing'
+      poseidonRoot: string | null
+      capabilityCommitment: string | null
+      missing: PrivacyStateField[]
+    }
+  | {
+      status: 'unreadable'
+      detail: string
+    }
+
+function normalizeBytes32(value: string | null | undefined): string | null {
+  if (!value || value === ZERO_BYTES32) {
+    return null
+  }
+  return value
+}
+
+async function detectLegacyGlobalRootContract(): Promise<boolean> {
+  try {
+    await publicClient.readContract({
+      address: agentPrivacyRegistry.address,
+      abi: legacyGlobalRootAbi,
+      functionName: 'getRoot',
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Read the on-chain per-agent privacy proof state needed for JOIN verification.
+ *
+ * Distinguishes between:
+ * - `missing`: the contract is readable but the agent has zero/unset proof state
+ * - `unreadable`: RPC failure or legacy contract shape prevents reading per-agent proof state
+ */
+export async function readAgentPrivacyState(agentId: string): Promise<AgentPrivacyState> {
+  try {
+    const [root, commitment] = await Promise.all([
+      agentPrivacyRegistry.read.getAgentPoseidonRoot([BigInt(agentId)]),
+      agentPrivacyRegistry.read.getAgentCapabilityCommitment([BigInt(agentId)]),
+    ])
+
+    const poseidonRoot = normalizeBytes32(root as string)
+    const capabilityCommitment = normalizeBytes32(commitment as string)
+    const missing: PrivacyStateField[] = []
+
+    if (!poseidonRoot) {
+      missing.push('poseidon_root')
+    }
+    if (!capabilityCommitment) {
+      missing.push('capability_commitment')
+    }
+
+    if (missing.length > 0) {
+      return {
+        status: 'missing',
+        poseidonRoot,
+        capabilityCommitment,
+        missing,
+      }
+    }
+
+    return {
+      status: 'ok',
+      poseidonRoot: poseidonRoot!,
+      capabilityCommitment: capabilityCommitment!,
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    const legacyGlobalRoot = await detectLegacyGlobalRootContract()
+    return {
+      status: 'unreadable',
+      detail: legacyGlobalRoot
+        ? `Configured AgentPrivacyRegistry appears to be a legacy global-root contract. getRoot() succeeds but per-agent getters are unavailable. ${message}`
+        : `Could not read per-agent privacy state for agentId ${agentId}: ${message}`,
+    }
+  }
+}
+
 /**
  * Read the per-agent Poseidon Merkle root from AgentPrivacyRegistry.
  *
- * This is the Poseidon root stored on-chain during registration, matching the
- * circuit's registryRoot public signal. Used to cross-check ZK membership proofs.
- *
- * Returns the root as a 0x-prefixed hex string, or null if not registered / zero root.
+ * Returns the root as a 0x-prefixed hex string, or null if not registered / unreadable.
  */
-export async function getAgentPoseidonRoot(
-  agentId: string,
-): Promise<string | null> {
-  try {
-    const root = await agentPrivacyRegistry.read.getAgentPoseidonRoot([BigInt(agentId)])
-    // Zero bytes32 means not registered or root not stored
-    if (!root || root === ('0x' + '0'.repeat(64))) {
-      return null
-    }
-    return root as string
-  } catch {
-    return null
+export async function getAgentPoseidonRoot(agentId: string): Promise<string | null> {
+  const state = await readAgentPrivacyState(agentId)
+  if (state.status === 'ok' || state.status === 'missing') {
+    return state.poseidonRoot
   }
+  return null
 }
 
 /**
  * Read the per-agent capability commitment from AgentPrivacyRegistry.
  *
  * Returns Poseidon(capabilityId, agentSecret) stored during registration,
- * or null if not registered / zero.
+ * or null if not registered / unreadable.
  */
-export async function getAgentCapabilityCommitment(
-  agentId: string,
-): Promise<string | null> {
-  try {
-    const commitment = await agentPrivacyRegistry.read.getAgentCapabilityCommitment([BigInt(agentId)])
-    if (!commitment || commitment === ('0x' + '0'.repeat(64))) {
-      return null
-    }
-    return commitment as string
-  } catch {
-    return null
+export async function getAgentCapabilityCommitment(agentId: string): Promise<string | null> {
+  const state = await readAgentPrivacyState(agentId)
+  if (state.status === 'ok' || state.status === 'missing') {
+    return state.capabilityCommitment
   }
+  return null
 }

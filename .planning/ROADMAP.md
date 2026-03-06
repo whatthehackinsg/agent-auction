@@ -3,7 +3,7 @@
 ## Milestones
 
 - v1.0 ZK Privacy E2E - Phases 1-6 (shipped 2026-03-04)
-- v1.1 Autonomous Agent Onboarding - Phases 7-11 (in progress)
+- v1.1 Autonomous Agent Onboarding - Phases 7-13 (in progress)
 
 ## Phases
 
@@ -26,14 +26,16 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 **Milestone Goal:** Make agents fully autonomous for the per-auction lifecycle — human does one-time setup, agent handles everything via MCP tools with mandatory ZK proofs and verified identity.
 
 **Phase Numbering:**
-- Integer phases (7, 8, 9, 10, 11): Planned milestone work
-- Decimal phases (7.1, 8.1): Urgent insertions if needed (marked with INSERTED)
+- Integer phases (7, 8, 9, 10, 11, 12, 13): milestone work plus follow-up blocker phases
+- Decimal phases (7.1, 8.1): urgent insertions if needed (marked with INSERTED)
 
 - [x] **Phase 7: Identity Verification** - Make ENGINE_VERIFY_WALLET mandatory, audit identity chain, pre-flight gates, edge cases (completed 2026-03-05)
-- [ ] **Phase 8: Participant Privacy** - Strip identity from participant WebSocket; agents self-recognize by nullifier only
+- [x] **Phase 8: Participant Privacy** - Strip identity from participant WebSocket; agents self-recognize by nullifier only (completed 2026-03-05)
 - [x] **Phase 9: ZK Enforcement** - Make ZK proofs mandatory on join/bid; unify readiness check (completed 2026-03-06)
-- [ ] **Phase 10: Autonomous MCP Tools** - Add register_identity, deposit_bond, withdraw_funds, claim_refund tools
+- [x] **Phase 10: Autonomous MCP Tools** - Add register_identity, deposit_bond, withdraw_funds, claim_refund tools (completed 2026-03-06)
 - [ ] **Phase 11: Skill Rewrite** - Replace stale skill docs with correct ERC-8004 ABI and full autonomous flow
+- [x] **Phase 12: Debug live Phase 10 registration and proof failures** - Fix onboarding truthfulness and privacy-registry deployment issues; hand off the remaining Worker blocker (completed 2026-03-06)
+- [x] **Phase 13: Worker Proof Runtime Compatibility** - Re-scoped from the old registry placeholder; completed 2026-03-07 with local + deployed fresh-agent JOIN success
 
 ## Phase Details
 
@@ -49,7 +51,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 **Plans**: 2 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — Engine identity hardening: default verify=true, structured error codes, remove cache, edge cases
+- [x] 07-01-PLAN.md — Engine identity hardening: default verify=true, structured error codes, remove cache, edge cases
 - [x] 07-02-PLAN.md — MCP pre-flight identity checks in join_auction and place_bid tools
 
 ### Phase 8: Participant Privacy
@@ -63,8 +65,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 08-01-PLAN.md — Engine privacy masking: three-tier broadcast, participant-aware snapshot, /events masking, WS token validation
-- [ ] 08-02-PLAN.md — MCP monitor_auction tool with REST polling and self-recognition annotation
+- [x] 08-01-PLAN.md — Engine privacy masking: three-tier broadcast, participant-aware snapshot, /events masking, WS token validation
+- [x] 08-02-PLAN.md — MCP monitor_auction tool with REST polling and self-recognition annotation
 
 ### Phase 9: ZK Enforcement
 **Goal**: ZK proofs are mandatory for join and bid — no opt-out path exists when agent state is configured
@@ -74,11 +76,11 @@ Plans:
   1. Calling join_auction with AGENT_STATE_FILE configured always generates and submits a ZK proof (no parameter to skip it)
   2. Calling place_bid with AGENT_STATE_FILE configured always generates and submits a ZK proof (no parameter to skip it)
   3. check_identity returns a single readyToParticipate flag that is TRUE only when both ERC-8004 identity and ZK state (AGENT_STATE_FILE, privacy registry membership) are ready
-  4. .env.example lists AGENT_STATE_FILE and BASE_SEPOLIA_RPC as REQUIRED fields with clear documentation
+  4. `.env.example` lists AGENT_STATE_FILE and BASE_SEPOLIA_RPC as required fields with clear documentation
 **Plans**: 2 plans
 
 Plans:
-- [x] 09-01-PLAN.md — Engine default flip, MCP tool ZK enforcement, unified readiness check, .env.example
+- [x] 09-01-PLAN.md — Engine default flip, MCP tool ZK enforcement, unified readiness check, `.env.example`
 - [x] 09-02-PLAN.md — Engine test hardening with real Groth16 proofs
 
 ### Phase 10: Autonomous MCP Tools
@@ -86,32 +88,67 @@ Plans:
 **Depends on**: Phase 9 (tools must work with mandatory ZK + verified identity)
 **Requirements**: TOOL-01, TOOL-02, TOOL-03, TOOL-04
 **Success Criteria** (what must be TRUE):
-  1. An agent can call register_identity to register an ERC-8004 identity on-chain (calls register(string agentURI) using AGENT_PRIVATE_KEY and BASE_SEPOLIA_RPC), and check_identity confirms registration afterward
-  2. An agent can call deposit_bond to approve USDC and deposit a bond to AuctionEscrow for a specific auction, and the engine acknowledges the bond via POST /auctions/:id/bonds
-  3. An agent can call withdraw_funds after auction settlement to withdraw USDC from AuctionEscrow (requires ownerOf(agentId) == agent wallet)
-  4. An agent can call claim_refund for a non-winning bond to release it from escrow, then call withdraw_funds to retrieve the USDC
-**Plans**: TBD
+  1. An agent can call `register_identity` to register an ERC-8004 identity on-chain and `check_identity` confirms registration afterward
+  2. An agent can call `deposit_bond` to approve USDC and deposit a bond to `AuctionEscrow`, and the engine acknowledges the bond via `POST /auctions/:id/bonds`
+  3. An agent can call `withdraw_funds` after auction settlement to withdraw USDC from `AuctionEscrow`
+  4. An agent can call `claim_refund` for a non-winning bond, then call `withdraw_funds` to retrieve the USDC
+**Plans**: 4 plans
 
 Plans:
-- [ ] 10-01: TBD
+- [x] 10-01-PLAN.md — Shared Base Sepolia helper layer plus `register_identity`
+- [x] 10-02-PLAN.md — Multi-identity write targeting and `deposit_bond`
+- [x] 10-03-PLAN.md — `claim_refund` and `withdraw_funds`
+- [x] 10-04-PLAN.md — MCP prompts, README, and env docs for the autonomous lifecycle
 
 ### Phase 11: Skill Rewrite
 **Goal**: Skill documentation accurately describes the current tool set, mandatory ZK flow, and full autonomous per-auction loop
 **Depends on**: Phase 10 (skills document the final state of all tools)
 **Requirements**: SKIL-01, SKIL-02, SKIL-03
 **Success Criteria** (what must be TRUE):
-  1. The 3 stale skill files (SKILL.md, bond-management/SKILL.md, sealed-bid/SKILL.md) no longer exist
-  2. A new auction skill document describes the correct ERC-8004 register(string agentURI) ABI (not the old register(uint256, address) signature) and the mandatory ZK proof flow
-  3. The new skill document covers the full autonomous per-auction loop: discover -> bond -> join(ZK) -> bid(ZK) -> monitor -> withdraw/claim, with each step mapping to a specific MCP tool
-**Plans**: TBD
+  1. The 3 stale skill files (`SKILL.md`, `bond-management/SKILL.md`, `sealed-bid/SKILL.md`) no longer exist
+  2. A new auction skill document describes the correct ERC-8004 `register(string agentURI)` ABI and the mandatory ZK proof flow
+  3. The new skill document covers the full autonomous per-auction loop: discover -> bond -> join(ZK) -> bid(ZK) -> monitor -> withdraw/claim
+**Plans**: 0 plans
 
 Plans:
 - [ ] 11-01: TBD
 
+### Phase 12: Debug live Phase 10 registration and proof failures
+**Goal**: Make live onboarding truthful and restore the fail-closed Base Sepolia `deposit_bond -> join_auction` path for freshly registered agents
+**Depends on**: Phase 10 (live UAT exposed the registration and join-proof failures)
+**Requirements**: TOOL-01, TOOL-02, ZKRQ-01
+**Success Criteria** (what must be TRUE):
+  1. `register_identity` returns the reconciled truth after live side effects, including success-with-warning when `/verify-identity` confirms readiness and a local `agent-N.json` exists
+  2. `join_auction` remains fail-closed but returns actionable diagnostics when proof-state alignment is wrong
+  3. A real Base Sepolia `register_identity -> check_identity -> deposit_bond -> join_auction` flow succeeds for a newly onboarded agent
+**Plans**: 3 plans
+
+Plans:
+- [x] 12-01-PLAN.md — Reconcile `register_identity` post-mint truth and recovery output
+- [x] 12-02-PLAN.md — Fix live join-proof alignment and diagnostics without weakening ZK enforcement
+- [x] 12-03-PLAN.md — Redeploy or repoint the per-agent `AgentPrivacyRegistry`, then rerun live Base Sepolia onboarding and JOIN
+
+Current blocker:
+- Resolved in Phase 13. The per-agent registry plus Worker-safe verifier path now pass fresh-agent JOIN sign-off.
+
+### Phase 13: Worker Proof Runtime Compatibility
+**Goal**: Make JOIN/BID proof verification honest under Cloudflare Worker runtime constraints, or stop with a fully explained blocked state and next action
+**Depends on**: Phase 12 (registry/config truth is already fixed)
+**Requirements**: ZKRQ-01, ZKRQ-02, TOOL-02
+**Plans**: 3 plans
+
+Plans:
+- [x] 13-01-PLAN.md — Reproduce the deployed Worker proof-runtime failure locally and investigate the shared loader path
+- [x] 13-02-PLAN.md — Add shared `PROOF_RUNTIME_UNAVAILABLE` surfacing across engine and MCP
+- [x] 13-03-PLAN.md — Write dual-runtime sign-off runbook and close Phase 13 with fresh local + deployed evidence
+
+Current blocker:
+- None. Phase 13 is complete.
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 7 -> 7.x -> 8 -> 8.x -> 9 -> 9.x -> 10 -> 10.x -> 11
+Phases execute in numeric order: 7 -> 7.x -> 8 -> 8.x -> 9 -> 9.x -> 10 -> 10.x -> 11 -> 12 -> 13
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -121,8 +158,10 @@ Phases execute in numeric order: 7 -> 7.x -> 8 -> 8.x -> 9 -> 9.x -> 10 -> 10.x 
 | 4. Frontend + Demo | v1.0 | 2/2 | Complete | 2026-03-03 |
 | 5. Key Figures Dashboard | v1.0 | 2/2 | Complete | 2026-03-03 |
 | 6. Refine Stats Card UI | v1.0 | 1/1 | Complete | 2026-03-04 |
-| 7. Identity Verification | 2/2 | Complete   | 2026-03-05 | - |
-| 8. Participant Privacy | v1.1 | 0/2 | Planning complete | - |
+| 7. Identity Verification | v1.1 | 2/2 | Complete | 2026-03-05 |
+| 8. Participant Privacy | v1.1 | 2/2 | Complete | 2026-03-05 |
 | 9. ZK Enforcement | v1.1 | 2/2 | Complete | 2026-03-06 |
-| 10. Autonomous MCP Tools | v1.1 | 0/? | Not started | - |
-| 11. Skill Rewrite | v1.1 | 0/? | Not started | - |
+| 10. Autonomous MCP Tools | v1.1 | 4/4 | Complete | 2026-03-06 |
+| 11. Skill Rewrite | v1.1 | 0/0 | Not started | - |
+| 12. Debug live Phase 10 registration and proof failures | v1.1 | 3/3 | Complete with blocker handoff | 2026-03-06 |
+| 13. Worker Proof Runtime Compatibility | v1.1 | 3/3 | Complete | 2026-03-07 |

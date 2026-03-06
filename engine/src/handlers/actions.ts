@@ -18,6 +18,8 @@ import {
   type AuctionSpeechActType,
   type VerifyMembershipOptions,
   type VerifyBidRangeOptions,
+  type VerifyBidRangeResult,
+  type VerifyMembershipResult,
 } from '../lib/crypto'
 import { ActionType } from '../types/engine'
 import type { ActionRequest, ValidatedAction } from '../types/engine'
@@ -61,6 +63,8 @@ interface StructuredActionErrorPayload {
   error: string
   detail: string
   suggestion: string
+  reason?: string
+  diagnostics?: Record<string, unknown>
 }
 
 export class StructuredActionError extends Error {
@@ -286,7 +290,7 @@ async function verifySignature(
 async function verifyMembership(
   action: ActionRequest,
   ctx?: ValidationContext,
-): Promise<{ registryRoot: string; nullifier: string }> {
+): Promise<VerifyMembershipResult> {
   const options: VerifyMembershipOptions = {
     requireProof: ctx?.requireProofs,
     expectedRegistryRoot: ctx?.expectedRegistryRoot,
@@ -294,9 +298,150 @@ async function verifyMembership(
   }
   const result = await verifyMembershipProof(action.proof ?? null, options)
   if (!result.valid) {
-    throw new Error(`Invalid membership proof for agent ${action.agentId}`)
+    throw membershipProofError(action.agentId, result)
   }
-  return { registryRoot: result.registryRoot, nullifier: result.nullifier }
+  return result
+}
+
+function membershipProofError(
+  agentId: string,
+  result: VerifyMembershipResult,
+): StructuredActionError {
+  switch (result.reason) {
+    case 'proof_runtime_unavailable':
+      return new StructuredActionError({
+        error: 'PROOF_RUNTIME_UNAVAILABLE',
+        reason: result.reason,
+        detail:
+          `Membership proof verification runtime is unavailable for agent ${agentId}: ` +
+          `${result.detail ?? 'unknown runtime error'}`,
+        suggestion:
+          'Retry once the Worker proof runtime is healthy. Regenerating the proof alone will not help until the verifier runtime is restored.',
+        diagnostics: {
+          agentId,
+          verificationDetail: result.detail,
+        },
+      })
+    case 'registry_root_mismatch':
+      return new StructuredActionError({
+        error: 'PROOF_INVALID',
+        reason: result.reason,
+        detail:
+          `Membership proof Poseidon root ${result.registryRoot} does not match on-chain per-agent root ` +
+          `${result.expectedRegistryRoot} for agent ${agentId}.`,
+        suggestion:
+          'Use the stateFilePath returned by register_identity for this exact agentId, or rerun register_identity to refresh on-chain privacy state before join_auction.',
+        diagnostics: {
+          agentId,
+          proofRegistryRoot: result.registryRoot,
+          expectedRegistryRoot: result.expectedRegistryRoot,
+        },
+      })
+    case 'capability_commitment_mismatch':
+      return new StructuredActionError({
+        error: 'PROOF_INVALID',
+        reason: result.reason,
+        detail:
+          `Membership proof capability commitment ${result.capabilityCommitment} does not match on-chain commitment ` +
+          `${result.expectedCapabilityCommitment} for agent ${agentId}.`,
+        suggestion:
+          'The local agent state file does not match the current privacy registration for this agent. Reuse the correct stateFilePath or rerun register_identity, then retry join_auction.',
+        diagnostics: {
+          agentId,
+          proofCapabilityCommitment: result.capabilityCommitment,
+          expectedCapabilityCommitment: result.expectedCapabilityCommitment,
+        },
+      })
+    case 'groth16_invalid':
+      return new StructuredActionError({
+        error: 'PROOF_INVALID',
+        reason: result.reason,
+        detail: `Membership proof failed Groth16 verification for agent ${agentId}.`,
+        suggestion:
+          'Regenerate the proof from the correct agent-N.json file and retry. If check_identity is green but JOIN still fails, the local witness is likely stale or mismatched.',
+        diagnostics: {
+          agentId,
+          proofRegistryRoot: result.registryRoot,
+          proofCapabilityCommitment: result.capabilityCommitment,
+        },
+      })
+    case 'malformed_proof':
+    case 'verification_error':
+      return new StructuredActionError({
+        error: 'PROOF_INVALID',
+        reason: result.reason,
+        detail:
+          result.reason === 'malformed_proof'
+            ? `Membership proof payload is malformed for agent ${agentId}.`
+            : `Membership proof verification errored for agent ${agentId}: ${result.detail ?? 'unknown error'}`,
+        suggestion:
+          'Regenerate the proof from local state and retry. If this persists, check circuit artifacts and on-chain privacy state alignment.',
+        diagnostics: {
+          agentId,
+          verificationDetail: result.detail,
+        },
+      })
+    case 'missing_proof':
+      return proofRequiredError()
+    default:
+      return new StructuredActionError({
+        error: 'PROOF_INVALID',
+        reason: result.reason,
+        detail: `Invalid membership proof for agent ${agentId}.`,
+        suggestion:
+          'Regenerate the proof from local state and retry. check_identity alone does not guarantee JOIN proof-state alignment.',
+      })
+  }
+}
+
+function bidRangeProofError(
+  agentId: string,
+  result: VerifyBidRangeResult,
+): StructuredActionError {
+  switch (result.reason) {
+    case 'proof_runtime_unavailable':
+      return new StructuredActionError({
+        error: 'PROOF_RUNTIME_UNAVAILABLE',
+        reason: result.reason,
+        detail:
+          `Bid range proof verification runtime is unavailable for agent ${agentId}: ` +
+          `${result.detail ?? 'unknown runtime error'}`,
+        suggestion:
+          'Retry once the Worker proof runtime is healthy. Regenerating the bid proof alone will not fix a verifier runtime outage.',
+        diagnostics: {
+          agentId,
+          verificationDetail: result.detail,
+        },
+      })
+    case 'missing_proof':
+      return proofRequiredError()
+    case 'malformed_proof':
+      return new StructuredActionError({
+        error: 'PROOF_INVALID',
+        reason: result.reason,
+        detail: `Bid range proof payload is malformed for agent ${agentId}.`,
+        suggestion:
+          'Regenerate the proof from local state and retry place_bid.',
+      })
+    case 'groth16_invalid':
+    case 'range_output_invalid':
+    case 'verification_error':
+    default:
+      return new StructuredActionError({
+        error: 'PROOF_INVALID',
+        reason: result.reason,
+        detail:
+          result.reason === 'verification_error'
+            ? `Bid range proof verification errored for agent ${agentId}: ${result.detail ?? 'unknown error'}`
+            : `Invalid bid range proof for agent ${agentId}.`,
+        suggestion:
+          'Regenerate the proof from local state and retry place_bid.',
+        diagnostics: {
+          agentId,
+          verificationDetail: result.detail,
+        },
+      })
+  }
 }
 
 // ─── Per-Action Handlers ──────────────────────────────────────────────
@@ -345,26 +490,56 @@ export async function handleJoin(
     }
   }
 
-  // 0b. Fetch per-agent Poseidon root for proof cross-check (no DO cache).
-  //     Fail-open on RPC errors to preserve existing proof behavior.
+  // 0b. Fetch per-agent privacy proof state for JOIN verification.
   let agentPoseidonRoot: string | undefined
+  let agentCapabilityCommitment: string | undefined
   if (ctx?.requireProofs) {
-    try {
-      const { getAgentPoseidonRoot } = await import('../lib/identity')
-      const root = await getAgentPoseidonRoot(action.agentId)
-      if (root) {
-        agentPoseidonRoot = root
-      }
-    } catch {
-      agentPoseidonRoot = undefined
+    const { readAgentPrivacyState } = await import('../lib/identity')
+    const privacyState = await readAgentPrivacyState(action.agentId)
+
+    if (privacyState.status === 'missing') {
+      throw new StructuredActionError({
+        error: 'PRIVACY_STATE_MISSING',
+        reason: 'privacy_state_missing',
+        detail:
+          `On-chain privacy proof state is incomplete for agent ${action.agentId}: missing ${privacyState.missing.join(', ')}. ` +
+          'JOIN rejected (fail-closed).',
+        suggestion:
+          'Register per-agent Poseidon root and capability commitment on AgentPrivacyRegistry for this agent, then rerun register_identity/check_identity before joining.',
+        diagnostics: {
+          agentId: action.agentId,
+          missing: privacyState.missing,
+          poseidonRoot: privacyState.poseidonRoot,
+          capabilityCommitment: privacyState.capabilityCommitment,
+        },
+      })
     }
+
+    if (privacyState.status === 'unreadable') {
+      throw new StructuredActionError(
+        {
+          error: 'PRIVACY_STATE_UNREADABLE',
+          reason: 'privacy_state_unreadable',
+          detail: privacyState.detail,
+          suggestion:
+            'Check the configured AgentPrivacyRegistry deployment/address and RPC connectivity. If the contract is still the legacy global-root version, redeploy or repoint to the per-agent registry, then rerun register_identity for this agent.',
+          diagnostics: {
+            agentId: action.agentId,
+          },
+        },
+        502,
+      )
+    }
+
+    agentPoseidonRoot = privacyState.poseidonRoot
+    agentCapabilityCommitment = privacyState.capabilityCommitment
   }
 
   // Build membership verification context with per-agent root + capability commitment.
   const membershipCtx: ValidationContext = {
     ...ctx,
     expectedRegistryRoot: agentPoseidonRoot,
-    expectedCapabilityCommitment: undefined,
+    expectedCapabilityCommitment: agentCapabilityCommitment,
   }
 
   // 1. Verify membership proof — get ZK nullifier from publicSignals[2] if proof exists
@@ -455,7 +630,7 @@ export async function handleBid(
   }
   const bidRangeResult = await verifyBidRangeProof(action.proof ?? null, bidRangeOptions)
   if (!bidRangeResult.valid) {
-    throw new Error(`Invalid bid range proof for agent ${action.agentId}`)
+    throw bidRangeProofError(action.agentId, bidRangeResult)
   }
 
   // 2. If proof was provided, cross-check that the proven reservePrice and maxBudget
@@ -522,7 +697,7 @@ export async function handleBidCommit(
   // 1. BidRange proof is required for BID_COMMIT (no plaintext amount)
   const bidRangeResult = await verifyBidRangeProof(action.proof ?? null, { requireProof: true })
   if (!bidRangeResult.valid) {
-    throw new Error(`Invalid bid range proof for agent ${action.agentId}`)
+    throw bidRangeProofError(action.agentId, bidRangeResult)
   }
 
   // 2. Extract bidCommitment from proven public signals

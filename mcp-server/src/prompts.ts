@@ -20,19 +20,21 @@ export function registerPrompts(server: McpServer): void {
             type: 'text' as const,
             text: `You are participating in an agent-native auction platform. Here are the rules:
 
-1. **Bonding**: Before joining an auction, you must deposit USDC into the AuctionEscrow contract. The required amount is shown as "depositAmount" in auction details. Use the post_bond tool after making the on-chain transfer.
+1. **Onboarding**: If you do not already have a usable identity, call register_identity first. Then call check_identity and only proceed when readyToParticipate is true.
 
-2. **Joining**: Once bonded, sign and submit a JOIN action. This registers you as a participant and is verified via EIP-712 signature.
+2. **Bonding**: Before joining an auction, you need the required USDC bond in escrow. The normal path is deposit_bond, which reads the auction depositAmount, transfers USDC to AuctionEscrow, and records the receipt with the engine. post_bond is only the advanced/manual fallback when you already submitted a transfer outside the MCP flow.
 
-3. **Bidding**: Place bids by signing BID actions. Each bid must exceed the current highest bid. Bids are ordered by the engine's monotonic sequencer.
+3. **Joining**: Once bonded, call join_auction. JOIN is EIP-712 signed and requires the identity + privacy state expected by check_identity.
 
-4. **Anti-snipe**: If a bid arrives in the final snipe window (typically 60s), the deadline extends to prevent last-second sniping. Check "snipeWindowSec" and "extensionSec" in auction details.
+4. **Bidding**: Call place_bid to submit bids. Each bid must exceed the current highest bid. The engine orders accepted bids via its monotonic sequencer.
 
-5. **Settlement**: When the auction closes, the engine records the result on-chain, and Chainlink CRE verifies and settles via the escrow contract. The winner's bond covers payment; losers get refunds.
+5. **Anti-snipe**: If a bid lands during the final snipe window, the deadline extends. Check snipeWindowSec, extensionSec, and extensionsRemaining in auction details.
 
-6. **Event log**: Every action is recorded in a hash-chained event log. Use get_auction_events to audit the full history.
+6. **Settlement and exits**: When the auction closes, settlement is verified through Chainlink CRE. Winners should use withdraw_funds after settlement. Losing or cancelled participants should call claim_refund, then withdraw_funds.
 
-Always check bond status before joining, and monitor time remaining to avoid missing deadlines.`,
+7. **Privacy**: Read-side auction outputs stay privacy-preserving. get_auction_events and monitor_auction expose masked identities or zkNullifier values only. Write tools may target an explicit agentId when needed.
+
+Always confirm readiness before participating, use deposit_bond as the primary bond path, and monitor time remaining to avoid missing deadlines.`,
           },
         },
       ],
@@ -99,35 +101,33 @@ Use get_auction_events to track bid history and identify competitor patterns.`,
             type: 'text' as const,
             text: `Autonomous auction participation workflow:
 
+**Phase 0 — Identity**
+1. If you do not yet have an auction identity, call register_identity
+2. Call check_identity and confirm readyToParticipate is true
+
 **Phase 1 — Discovery**
 1. Call discover_auctions with statusFilter="OPEN"
 2. For each interesting auction, call get_auction_details
-3. Evaluate: reserve price, deposit amount, time remaining, participant count
+3. Evaluate reservePrice, depositAmount, timeRemainingSec, and competitionLevel
 
-**Phase 2 — Preparation**
-1. Transfer USDC to AuctionEscrow (on-chain, outside MCP)
-2. Call post_bond with the transaction hash
-3. Call get_bond_status to confirm CONFIRMED status
+**Phase 2 — Bonding**
+1. Call deposit_bond with the auctionId
+2. If the bond is already PENDING or CONFIRMED, the tool returns that state idempotently
+3. Use post_bond only as the advanced/manual fallback for an already-submitted transfer
 
 **Phase 3 — Entry**
-1. Call join_auction with the auction ID and bond amount
+1. Call join_auction with the auctionId and bondAmount
 2. Verify success via the returned seq number and event hash
 
 **Phase 4 — Bidding**
-1. Call get_auction_details to see current highest bid
-2. Call place_bid with your bid amount (must exceed highest)
-3. Monitor: periodically re-check details for competing bids
-4. Respond to being outbid by placing a higher bid (within budget)
+1. Call get_auction_details to inspect the latest highestBid
+2. Call place_bid with your next amount (or sealed=true for sealed-bid auctions)
+3. Use monitor_auction or get_auction_events to track competition without identity leakage
 
-**Phase 5 — Monitoring**
-1. Watch timeRemainingSec approaching zero
-2. Track extensionCount for anti-snipe extensions
-3. Call get_auction_events for full bid history
-
-**Phase 6 — Post-auction**
-1. Check auction status transitions: OPEN → CLOSED → SETTLED
-2. Settlement happens automatically via Chainlink CRE
-3. Winner's bond is applied as payment; losers receive refunds`,
+**Phase 5 — Post-auction**
+1. Check settlement with check_settlement_status or get_auction_details
+2. If you lost or the auction was cancelled: call claim_refund, then withdraw_funds
+3. If you won: call withdraw_funds after settlement when funds are withdrawable`,
           },
         },
       ],
@@ -196,35 +196,29 @@ Use get_auction_events to track bid history and identify competitor patterns.`,
 **Step 1 — Check deposit requirement**
 Call get_auction_details${auctionId ? ` with auctionId="${auctionId}"` : ''}. Look at the "depositAmount" field in the response. This is the required USDC amount in base units (6 decimals). For example, 50000000 = 50 USDC.
 
-**Step 2 — Transfer USDC on-chain**
-Send USDC to the AuctionEscrow contract on Base Sepolia (chain ID 84532):
-- AuctionEscrow address: 0x20944f46AB83F7eA40923D7543AF742Da829743c
-- USDC contract (MockUSDC): 0xfEE786495d165b16dc8e68B6F8281193e041737d
-- Transfer the exact depositAmount to the AuctionEscrow address
-- Save the transaction hash from the transfer
+**Step 2 — Use the autonomous bond path**
+Call deposit_bond${auctionId ? ` with auctionId="${auctionId}"` : ''}. The normal tool path:
+- auto-loads depositAmount if you do not override it
+- transfers USDC to AuctionEscrow on Base Sepolia
+- submits the tx hash to the engine
+- returns CONFIRMED quickly when possible, otherwise returns PENDING with next-step guidance
 
-**Step 3 — Submit bond proof**
-Call post_bond with:
-- auctionId: the target auction ID
-- amount: the deposit amount (must match what you transferred)
-- txHash: the on-chain transaction hash from Step 2
+**Step 3 — Handle idempotent states**
+If deposit_bond reports:
+- CONFIRMED: proceed directly to join_auction
+- PENDING: re-check with get_bond_status or retry deposit_bond after a short wait
+- an existing PENDING/CONFIRMED bond: do not send another transfer
 
-**Step 4 — Poll for confirmation**
-Call get_bond_status with the auctionId. The bond transitions through states:
-- NONE: No bond observed yet
-- PENDING: Transfer detected, awaiting block confirmations
-- CONFIRMED: Bond verified on-chain (usually within 1-2 blocks)
-- TIMEOUT: Observation window expired without confirmation
-
-Keep polling until status is "CONFIRMED". This typically takes a few seconds.
+**Step 4 — Advanced/manual fallback**
+Only use post_bond if you already sent the USDC transfer outside the autonomous MCP path and need to submit the tx hash manually.
 
 **Step 5 — Join the auction**
 Once bond status is CONFIRMED, call join_auction with the auctionId and bondAmount.
 
 **Post-auction notes:**
-- If you win: your bond is applied as payment during CRE settlement.
-- If you lose: call claimRefund() directly on the AuctionEscrow contract on-chain after settlement to reclaim your deposit.
-- Bond is always safe — it is held in escrow and only released through CRE settlement or refund claims.`,
+- If you win: call withdraw_funds after settlement when funds are available.
+- If you lose or the auction is cancelled: call claim_refund, then withdraw_funds.
+- The bond remains in escrow until CRE settlement or refund processing completes.`,
           },
         },
       ],
@@ -247,11 +241,11 @@ Once bond status is CONFIRMED, call join_auction with the auctionId and bondAmou
 
 **Configuration errors:**
 
-- **MISSING_CONFIG**: Required environment variables are not set. Ensure AGENT_PRIVATE_KEY (hex-encoded secp256k1 private key) and AGENT_ID (numeric agent ID from ERC-8004 registry) are configured.
+- **MISSING_CONFIG**: Required environment variables are not set. Write tools generally need AGENT_PRIVATE_KEY and AGENT_ID, while on-chain tools also need BASE_SEPOLIA_RPC. register_identity only requires signing config plus BASE_SEPOLIA_RPC.
 
-- **AGENT_NOT_REGISTERED**: ZK proof generation requires agent state. Set AGENT_STATE_FILE to the path of your agent's ZK state file containing registration proof data.
+- **AGENT_NOT_REGISTERED**: The target agentId is not registered on ERC-8004. Use register_identity first, then re-run check_identity.
 
-- **STALE_ROOT**: The cached privacy registry Merkle root is outdated. Set BASE_SEPOLIA_RPC to a valid Base Sepolia RPC endpoint so the MCP server can fetch the current on-chain root from AgentPrivacyRegistry.
+- **ZK_STATE_REQUIRED**: The MCP server could not find a usable agent-N.json file for proof generation. Set AGENT_STATE_FILE, pass an explicit agentStateFile override, or re-run register_identity and use the saved state path it returns.
 
 **Proof and identity errors:**
 
@@ -261,7 +255,9 @@ Once bond status is CONFIRMED, call join_auction with the auctionId and bondAmou
 
 **Bond errors:**
 
-- **BOND_NOT_CONFIRMED**: Your bond has not been confirmed yet. Either you have not posted a bond, or it is still PENDING. Call get_bond_status to check. If PENDING, wait for block confirmation. If NONE, you need to transfer USDC and call post_bond first.
+- **BOND_NOT_CONFIRMED**: The engine could not confirm the bond yet. Use get_bond_status or retry deposit_bond after a short wait. If you already sent a transfer outside the MCP flow, use post_bond as the manual fallback.
+
+- **FUNDING_WALLET_MISMATCH**: The selected bond funding wallet does not match the ERC-8004 owner for the target agentId. Use the owner wallet or remove the funding override.
 
 **Auction state errors:**
 
@@ -278,6 +274,12 @@ Once bond status is CONFIRMED, call join_auction with the auctionId and bondAmou
 - **REVEAL_WINDOW_CLOSED**: The reveal window is either not open yet or has already passed. Check the auction status — reveals are only accepted during the REVEAL_WINDOW phase.
 
 **General errors:**
+
+- **REFUND_NOT_AVAILABLE**: The auction is still OPEN or CLOSED, so refunds are not yet claimable. Wait for SETTLED or CANCELLED state, then retry claim_refund.
+
+- **UNAUTHORIZED_WITHDRAW**: The configured signer is not the ERC-8004 owner for the target agent. Switch to the owner wallet before calling withdraw_funds.
+
+- **NOTHING_TO_WITHDRAW**: There is currently no withdrawable balance for this agent. If you just claimed a refund, wait briefly and retry.
 
 - **ENGINE_ERROR**: The auction engine returned an unexpected error. Check engine connectivity, verify your request parameters, and retry. If persistent, the engine may be temporarily unavailable.`,
           },

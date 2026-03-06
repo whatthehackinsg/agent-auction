@@ -124,7 +124,9 @@ export async function generateTestMembershipProof(
       })
 
       if (!verified.valid) {
-        throw new Error('Generated membership proof did not pass engine verification')
+        throw new Error(
+          `Generated membership proof did not pass engine verification: ${JSON.stringify(verified)}`,
+        )
       }
 
       return proofPayload
@@ -156,7 +158,9 @@ export async function generateTestBidRangeProof(
 
       const verified = await verifyBidRangeProof(proofPayload, { requireProof: true })
       if (!verified.valid) {
-        throw new Error('Generated bid range proof did not pass engine verification')
+        throw new Error(
+          `Generated bid range proof did not pass engine verification: ${JSON.stringify(verified)}`,
+        )
       }
 
       return proofPayload

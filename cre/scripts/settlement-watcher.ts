@@ -21,6 +21,11 @@ import { baseSepolia } from 'viem/chains'
 import { spawn } from 'child_process'
 import path from 'path'
 
+import {
+  buildBlockRanges,
+  DEFAULT_BACKFILL_LOG_WINDOW,
+} from './settlement-watcher-lib'
+
 const AUCTION_REGISTRY = '0xFEc7a05707AF85C6b248314E20FF8EfF590c3639'
 const WORKFLOW_DIR = path.resolve(import.meta.dir, '../workflows/settlement')
 const CRE_PROJECT_ROOT = path.resolve(import.meta.dir, '..')
@@ -110,27 +115,40 @@ async function backfill(blocks = 500) {
   try {
     const latest = await client.getBlockNumber()
     const fromBlock = latest > BigInt(blocks) ? latest - BigInt(blocks) : 0n
-    console.log(`[watcher] backfill: scanning blocks ${fromBlock}–${latest}...`)
-
-    const logs = await client.getLogs({
-      address: AUCTION_REGISTRY as `0x${string}`,
-      event: auctionEndedEvent,
+    const ranges = buildBlockRanges(
       fromBlock,
-      toBlock: latest,
-    })
+      latest,
+      DEFAULT_BACKFILL_LOG_WINDOW,
+    )
 
-    if (logs.length === 0) {
+    console.log(
+      `[watcher] backfill: scanning blocks ${fromBlock}–${latest} in ${ranges.length} chunk(s) of up to ${DEFAULT_BACKFILL_LOG_WINDOW} blocks...`,
+    )
+
+    let replayedLogs = 0
+
+    for (const range of ranges) {
+      const logs = await client.getLogs({
+        address: AUCTION_REGISTRY as `0x${string}`,
+        event: auctionEndedEvent,
+        fromBlock: range.fromBlock,
+        toBlock: range.toBlock,
+      })
+
+      for (const log of logs) {
+        replayedLogs += 1
+        await handleLog(log).catch((err) =>
+          console.error('[watcher] backfill error handling log:', err),
+        )
+      }
+    }
+
+    if (replayedLogs === 0) {
       console.log('[watcher] backfill: no missed events found\n')
       return
     }
 
-    console.log(`[watcher] backfill: found ${logs.length} missed event(s), replaying...`)
-    for (const log of logs) {
-      await handleLog(log).catch((err) =>
-        console.error('[watcher] backfill error handling log:', err),
-      )
-    }
-    console.log('[watcher] backfill: complete\n')
+    console.log(`[watcher] backfill: replayed ${replayedLogs} missed event(s)\n`)
   } catch (err) {
     console.error('[watcher] backfill failed (non-fatal):', err)
   }
