@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Autonomous Agent Onboarding
 current_phase: 11
-current_phase_name: skill rewrite
+current_phase_name: internal skill and prompt cleanup
 current_plan: 0
-status: ready_for_planning
-stopped_at: Completed Phase 13 local + deployed sign-off
-last_updated: "2026-03-06T17:29:10Z"
+status: verifying
+stopped_at: Phase 11 context gathered
+last_updated: "2026-03-06T19:36:03.156Z"
 last_activity: 2026-03-07
 progress:
-  total_phases: 7
+  total_phases: 10
   completed_phases: 6
   total_plans: 16
   completed_plans: 16
-  percent: 86
+  percent: 60
 ---
 
 # Project State
@@ -24,19 +24,19 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-03-05)
 
 **Core value:** Working ZK proofs that actually verify — agents prove registry membership and bid range without revealing identity, demonstrated end-to-end.
-**Current focus:** Phase 11 - Skill rewrite
+**Current focus:** Phase 11 - Internal skill and prompt cleanup, with follow-on phases for the external participation standard, AgentKit adapter path, and agent playbook
 
 ## Current Position
 
 **Current Phase:** 11
-**Current Phase Name:** skill rewrite
-**Total Phases:** 13
+**Current Phase Name:** internal skill and prompt cleanup
+**Total Phases:** 16
 **Current Plan:** 0
 **Total Plans in Phase:** 0
-**Status:** Phase 13 is complete — the Worker-safe verifier is deployed, the remote D1 schema is reconciled, and both local and deployed fresh-agent JOIN tracks passed. The remaining milestone work is Phase 11.
+**Status:** Phase 13 is complete — the Worker-safe verifier is deployed, the remote D1 schema is reconciled, and both local and deployed fresh-agent JOIN tracks passed. Remaining milestone work is the narrowed internal cleanup in Phase 11 plus new phases 14-16 for the external participation standard, AgentKit wallet integration, and autonomous agent playbook.
 **Last Activity:** 2026-03-07
 
-**Progress:** [████████░░] 86%
+**Progress:** [██████░░░░] 60%
 
 ## Performance Metrics
 
@@ -62,7 +62,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 
 - [v1.1 roadmap]: Identity verification comes FIRST (Phase 7) — foundational for all downstream phases
 - [v1.1 roadmap]: Participant privacy uses zkNullifier as pseudonym (not string masking) — cryptographically sound
-- [v1.1 roadmap]: SKIL rewrite is last (Phase 11) — documents final state of all tools and flows
+- [v1.1 roadmap]: Phase 11 is now a narrow internal cleanup for stale skill/prompt artifacts; external agent guidance belongs to Phases 14-16
 - [v1.1 investigation]: ENGINE_VERIFY_WALLET is OFF by default — any agent can claim any agentId without on-chain proof
 - [v1.1 investigation]: Participant WebSocket broadcasts full agentId + wallet to all participants — privacy leak
 - [v1.0]: All-Poseidon registration — single hash function throughout
@@ -94,6 +94,10 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 - Phase 13 added: Redeploy AgentPrivacyRegistry and repoint Base Sepolia config
 - Phase 12-03 executed: deployed per-agent AgentPrivacyRegistry `0x5b4f09A5D5188dCe1b1ba0caeDBcEb52CaCD1902` and repointed engine/MCP
 - Phase 13 re-scoped in execution: from registry redeploy placeholder to Worker proof-runtime compatibility and blocked-state sign-off
+- Phase 14 added: Define the minimum supported participant stack and platform guidance for external agents/humans
+- Phase 15 added: Integrate an AgentKit-compatible wallet adapter while preserving ZK proof and ERC-8004 ownership invariants
+- Phase 16 added: Publish the external-facing agent auction skill and autonomous participation playbook
+- Phase 11 re-scoped: internal stale skill/prompt cleanup only; public AgentKit participation guidance moved to Phases 14-16
 
 ### Pending Todos
 
@@ -114,6 +118,6 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 ## Session Continuity
 
 Last activity: 2026-03-07 — Completed Phase 13 with local + deployed fresh-agent JOIN success and remote D1 reconciliation
-**Last session:** 2026-03-06T16:29:58Z
-**Stopped At:** Completed Phase 13 local + deployed sign-off
-**Resume File:** None
+**Last session:** 2026-03-06T19:36:03.154Z
+**Stopped At:** Phase 11 context gathered
+**Resume File:** .planning/phases/11-internal-skill-and-prompt-cleanup/11-CONTEXT.md
