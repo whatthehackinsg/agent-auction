@@ -5,16 +5,16 @@ milestone_name: Autonomous Agent Onboarding
 current_phase: 9
 current_phase_name: zk enforcement
 current_plan: 2
-status: executing
-stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-03-06T07:17:54Z"
+status: verifying
+stopped_at: Completed 09-02-PLAN.md
+last_updated: "2026-03-06T07:47:02.469Z"
 last_activity: 2026-03-06
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 5
-  percent: 92
+  completed_plans: 6
+  percent: 100
 ---
 
 # Project State
@@ -33,10 +33,10 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 **Total Phases:** 11
 **Current Plan:** 2
 **Total Plans in Phase:** 2
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 **Last Activity:** 2026-03-06
 
-**Progress:** [█████████░] 92%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 | Phase 08 P01 | 12m | 2 tasks | 7 files |
 | Phase 08 P02 | 4m | 2 tasks | 5 files |
 | Phase 09-zk-enforcement P01 | 15m | 2 tasks | 7 files |
+| Phase 09-zk-enforcement P02 | 23min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,8 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 - [Phase 09-zk-enforcement]: ENGINE_REQUIRE_PROOFS now defaults to enabled unless explicitly set to false, making JOIN/BID proof enforcement fail-closed by default.
 - [Phase 09-zk-enforcement]: MCP join_auction and place_bid now auto-generate proofs from AGENT_STATE_FILE unless a proofPayload override is supplied.
 - [Phase 09-zk-enforcement]: check_identity now exposes a single readyToParticipate flag while keeping detailed diagnostic fields for ERC-8004 and privacy registry status.
+- [Phase 09-zk-enforcement]: Proof-path tests now use real Groth16 payloads, while ENGINE_ALLOW_INSECURE_STUBS remains limited to EIP-712 signature bypass in tests.
+- [Phase 09-zk-enforcement]: Default proof enforcement is verified at the AuctionRoom /action layer because ENGINE_REQUIRE_PROOFS defaults are wired there, not inside bare handleJoin/handleBid calls.
 
 ### Pending Todos
 
@@ -105,6 +108,6 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Session Continuity
 
 Last activity: 2026-03-06 — Completed Phase 09 Plan 01 and prepared Phase 09 Plan 02 handoff
-**Last session:** 2026-03-06T07:17:54Z
-**Stopped At:** Completed 09-01-PLAN.md
-**Resume File:** .planning/phases/09-zk-enforcement/09-02-PLAN.md
+**Last session:** 2026-03-06T07:47:02.467Z
+**Stopped At:** Completed 09-02-PLAN.md
+**Resume File:** None

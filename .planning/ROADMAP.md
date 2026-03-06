@@ -31,7 +31,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 
 - [x] **Phase 7: Identity Verification** - Make ENGINE_VERIFY_WALLET mandatory, audit identity chain, pre-flight gates, edge cases (completed 2026-03-05)
 - [ ] **Phase 8: Participant Privacy** - Strip identity from participant WebSocket; agents self-recognize by nullifier only
-- [ ] **Phase 9: ZK Enforcement** - Make ZK proofs mandatory on join/bid; unify readiness check
+- [x] **Phase 9: ZK Enforcement** - Make ZK proofs mandatory on join/bid; unify readiness check (completed 2026-03-06)
 - [ ] **Phase 10: Autonomous MCP Tools** - Add register_identity, deposit_bond, withdraw_funds, claim_refund tools
 - [ ] **Phase 11: Skill Rewrite** - Replace stale skill docs with correct ERC-8004 ABI and full autonomous flow
 
@@ -79,7 +79,7 @@ Plans:
 
 Plans:
 - [x] 09-01-PLAN.md — Engine default flip, MCP tool ZK enforcement, unified readiness check, .env.example
-- [ ] 09-02-PLAN.md — Engine test hardening with real Groth16 proofs
+- [x] 09-02-PLAN.md — Engine test hardening with real Groth16 proofs
 
 ### Phase 10: Autonomous MCP Tools
 **Goal**: Agents can complete the full per-auction lifecycle autonomously via MCP tools — register identity, bond, participate, withdraw/refund
@@ -123,6 +123,6 @@ Phases execute in numeric order: 7 -> 7.x -> 8 -> 8.x -> 9 -> 9.x -> 10 -> 10.x 
 | 6. Refine Stats Card UI | v1.0 | 1/1 | Complete | 2026-03-04 |
 | 7. Identity Verification | 2/2 | Complete   | 2026-03-05 | - |
 | 8. Participant Privacy | v1.1 | 0/2 | Planning complete | - |
-| 9. ZK Enforcement | v1.1 | 1/2 | In Progress | - |
+| 9. ZK Enforcement | v1.1 | 2/2 | Complete | 2026-03-06 |
 | 10. Autonomous MCP Tools | v1.1 | 0/? | Not started | - |
 | 11. Skill Rewrite | v1.1 | 0/? | Not started | - |
