@@ -29,8 +29,8 @@ export function registerIdentityTool(server: McpServer, engine: EngineClient, co
       title: 'Check Identity',
       description:
         'Verify agent ERC-8004 registration and privacy registry status. ' +
-        'Returns a readiness assessment showing which onboarding steps are complete ' +
-        'and what is still needed to participate in auctions.',
+        'Returns a readiness assessment where readyToParticipate is true only when both ERC-8004 identity ' +
+        'verification and AgentPrivacyRegistry membership are confirmed. Individual diagnostic fields remain included.',
       inputSchema: z.object({
         agentId: z
           .string()
@@ -102,8 +102,7 @@ export function registerIdentityTool(server: McpServer, engine: EngineClient, co
           walletConfigured: true,
           erc8004Registered: data.verified,
           privacyRegistryRegistered: data.privacyRegistered,
-          readyToParticipate: data.verified,
-          readyForZkProofs: data.privacyRegistered,
+          readyToParticipate: data.verified && data.privacyRegistered,
           missingSteps,
         },
       })
