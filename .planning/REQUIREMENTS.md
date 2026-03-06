@@ -22,10 +22,10 @@ Requirements for milestone v1.1. Each maps to roadmap phases.
 
 ### ZK Enforcement
 
-- [ ] **ZKRQ-01**: `join_auction` generates ZK proof by default when AGENT_STATE_FILE configured (no opt-out parameter)
-- [ ] **ZKRQ-02**: `place_bid` generates ZK proof by default when AGENT_STATE_FILE configured (no opt-out parameter)
-- [ ] **ZKRQ-03**: `check_identity` merges `readyForZkProofs` into `readyToParticipate` (ZK + identity = single readiness flag)
-- [ ] **ZKRQ-04**: `.env.example` marks AGENT_STATE_FILE and BASE_SEPOLIA_RPC as REQUIRED (not optional)
+- [x] **ZKRQ-01**: `join_auction` generates ZK proof by default when AGENT_STATE_FILE configured (no opt-out parameter)
+- [x] **ZKRQ-02**: `place_bid` generates ZK proof by default when AGENT_STATE_FILE configured (no opt-out parameter)
+- [x] **ZKRQ-03**: `check_identity` merges `readyForZkProofs` into `readyToParticipate` (ZK + identity = single readiness flag)
+- [x] **ZKRQ-04**: `.env.example` marks AGENT_STATE_FILE and BASE_SEPOLIA_RPC as REQUIRED (not optional)
 
 ### MCP Tools
 
@@ -78,10 +78,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PRIV-01 | Phase 8 | Complete |
 | PRIV-02 | Phase 8 | Complete |
 | PRIV-03 | Phase 8 | Complete |
-| ZKRQ-01 | Phase 9 | Pending |
-| ZKRQ-02 | Phase 9 | Pending |
-| ZKRQ-03 | Phase 9 | Pending |
-| ZKRQ-04 | Phase 9 | Pending |
+| ZKRQ-01 | Phase 9 | Complete |
+| ZKRQ-02 | Phase 9 | Complete |
+| ZKRQ-03 | Phase 9 | Complete |
+| ZKRQ-04 | Phase 9 | Complete |
 | TOOL-01 | Phase 10 | Pending |
 | TOOL-02 | Phase 10 | Pending |
 | TOOL-03 | Phase 10 | Pending |

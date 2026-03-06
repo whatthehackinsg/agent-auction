@@ -4,17 +4,17 @@ milestone: v1.1
 milestone_name: Autonomous Agent Onboarding
 current_phase: 9
 current_phase_name: zk enforcement
-current_plan: Not started
-status: planning
-stopped_at: Phase 9 plans created and verified
-last_updated: "2026-03-06T06:52:27.391Z"
-last_activity: 2026-03-05
+current_plan: 2
+status: executing
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-03-06T07:17:54Z"
+last_activity: 2026-03-06
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 6
-  completed_plans: 4
-  percent: 100
+  completed_plans: 5
+  percent: 92
 ---
 
 # Project State
@@ -24,19 +24,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-05)
 
 **Core value:** Working ZK proofs that actually verify — agents prove registry membership and bid range without revealing identity, demonstrated end-to-end.
-**Current focus:** Phase 8 - Participant Privacy
+**Current focus:** Phase 9 - ZK Enforcement
 
 ## Current Position
 
 **Current Phase:** 9
 **Current Phase Name:** zk enforcement
 **Total Phases:** 11
-**Current Plan:** Not started
+**Current Plan:** 2
 **Total Plans in Phase:** 2
-**Status:** Ready to plan
-**Last Activity:** 2026-03-05
+**Status:** Ready to execute
+**Last Activity:** 2026-03-06
 
-**Progress:** [██████████] 100%
+**Progress:** [█████████░] 92%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 | Phase 07 P01 | 17 min | 1 tasks | 5 files |
 | Phase 08 P01 | 12m | 2 tasks | 7 files |
 | Phase 08 P02 | 4m | 2 tasks | 5 files |
+| Phase 09-zk-enforcement P01 | 15m | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,9 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 - [Phase 08]: Self-recognition uses Set of hex-encoded nullifiers computed from agentSecret + auctionId
 - [Phase 08]: Events tool maps agent_id to zkNullifier field, wallet intentionally omitted from output
 - [Phase 08]: isOwn annotation omitted entirely when AGENT_STATE_FILE absent (graceful degradation, not misleading false)
+- [Phase 09-zk-enforcement]: ENGINE_REQUIRE_PROOFS now defaults to enabled unless explicitly set to false, making JOIN/BID proof enforcement fail-closed by default.
+- [Phase 09-zk-enforcement]: MCP join_auction and place_bid now auto-generate proofs from AGENT_STATE_FILE unless a proofPayload override is supplied.
+- [Phase 09-zk-enforcement]: check_identity now exposes a single readyToParticipate flag while keeping detailed diagnostic fields for ERC-8004 and privacy registry status.
 
 ### Pending Todos
 
@@ -100,7 +104,7 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 
 ## Session Continuity
 
-Last activity: 2026-03-05 — Roadmap finalized for v1.1 (5 phases, 18 requirements)
-**Last session:** 2026-03-06T06:52:27.387Z
-**Stopped At:** Phase 9 plans created and verified
-**Resume File:** .planning/phases/09-zk-enforcement/09-01-PLAN.md
+Last activity: 2026-03-06 — Completed Phase 09 Plan 01 and prepared Phase 09 Plan 02 handoff
+**Last session:** 2026-03-06T07:17:54Z
+**Stopped At:** Completed 09-01-PLAN.md
+**Resume File:** .planning/phases/09-zk-enforcement/09-02-PLAN.md
