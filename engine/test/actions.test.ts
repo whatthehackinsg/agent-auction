@@ -5,7 +5,7 @@
  * and the validateAction dispatcher.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest'
 import { ActionType, type ActionRequest } from '../src/types/engine'
 import {
   checkNonce,
@@ -18,6 +18,8 @@ import {
 } from '../src/handlers/actions'
 import * as identityLib from '../src/lib/identity'
 import * as cryptoLib from '../src/lib/crypto'
+import { generateTestBidRangeProof, generateTestMembershipProof, setupTestProofs } from '../src/test-helpers/proof-fixtures'
+import { toHex } from 'viem'
 
 // ─── Mock Helpers ─────────────────────────────────────────────────────
 
@@ -59,6 +61,10 @@ function makeAction(overrides?: Partial<ActionRequest>): ActionRequest {
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────
+
+beforeAll(async () => {
+  await setupTestProofs()
+}, 120000)
 
 describe('checkNonce', () => {
   let storage: ReturnType<typeof createMockStorage>
@@ -200,22 +206,25 @@ describe('handleJoin', () => {
     const action = makeAction({ type: ActionType.JOIN, nonce: 0 })
     await expect(
       handleJoin(action, storage, TEST_AUCTION_ID, { requireProofs: true }),
-    ).rejects.toThrow('Invalid membership proof')
+    ).rejects.toMatchObject({
+      name: 'StructuredActionError',
+      payload: expect.objectContaining({
+        error: 'PROOF_REQUIRED',
+      }),
+    })
   })
 
   it('accepts join when requireProofs=true and valid membership proof provided', async () => {
-    vi.spyOn(cryptoLib, 'verifyMembershipProof').mockResolvedValue({
-      valid: true,
-      registryRoot: '0x' + '11'.repeat(32),
-      nullifier: '0x' + '22'.repeat(32),
-    })
+    const proofPayload = await generateTestMembershipProof(BigInt(TEST_AGENT), 0)
+    vi.spyOn(identityLib, 'getAgentPoseidonRoot').mockResolvedValue(
+      toHex(BigInt(proofPayload.publicSignals[0]), { size: 32 }),
+    )
     const action = makeAction({
       type: ActionType.JOIN,
       nonce: 0,
-      proof: { mocked: true },
+      proof: proofPayload,
     })
-    // Note: ENGINE_ALLOW_INSECURE_STUBS=true bypasses EIP-712 sig check,
-    // so only the proof verification path is tested here
+
     const result = await handleJoin(action, storage, TEST_AUCTION_ID, { requireProofs: true })
     expect(result.action.type).toBe(ActionType.JOIN)
     expect(result.mutation.zkNullifier).toBeDefined()
@@ -427,21 +436,21 @@ describe('handleBid', () => {
     })
     await expect(
       handleBid(action, storage, TEST_AUCTION_ID, '1000000', '0', { requireProofs: true }),
-    ).rejects.toThrow('Invalid bid range proof')
+    ).rejects.toMatchObject({
+      name: 'StructuredActionError',
+      payload: expect.objectContaining({
+        error: 'PROOF_REQUIRED',
+      }),
+    })
   })
 
   it('accepts bid when requireProofs=true and valid bid range proof provided', async () => {
-    vi.spyOn(cryptoLib, 'verifyBidRangeProof').mockResolvedValue({
-      valid: true,
-      reservePrice: '0',
-      maxBudget: '0',
-      bidCommitment: '0',
-    })
+    const proofPayload = await generateTestBidRangeProof(BigInt(TEST_AGENT), 2_000_000n, 1_000_000n, 3_000_000n)
     const action = makeAction({
       type: ActionType.BID,
       nonce: 0,
       amount: '2000000',
-      proof: { mocked: true },
+      proof: proofPayload,
     })
     const result = await handleBid(action, storage, TEST_AUCTION_ID, '1000000', '0', {
       requireProofs: true,
