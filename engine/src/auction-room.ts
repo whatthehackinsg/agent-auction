@@ -9,7 +9,12 @@ import type {
 import { ActionType } from './types/engine'
 import { computeEventHash, computePayloadHash, ZERO_HASH } from './lib/crypto'
 import { toHex, toBytes, keccak256, encodePacked } from 'viem'
-import { validateAction, commitValidationMutation, type ValidationContext } from './handlers/actions'
+import {
+  validateAction,
+  commitValidationMutation,
+  StructuredActionError,
+  type ValidationContext,
+} from './handlers/actions'
 import type { AuctionSettlementPacket } from './types/contracts'
 import { ensureAuctionOnChain, recordResultOnChain, signSettlementPacket } from './lib/settlement'
 import { signInclusionReceipt } from './lib/inclusion-receipt'
@@ -501,7 +506,7 @@ export class AuctionRoom implements DurableObject {
 
       // Per-agent Poseidon root is fetched inside handleJoin() directly from chain reads
       const validationCtx: ValidationContext = {
-        requireProofs: this.env.ENGINE_REQUIRE_PROOFS === 'true',
+        requireProofs: this.env.ENGINE_REQUIRE_PROOFS !== 'false',
         verifyWallet: this.env.ENGINE_VERIFY_WALLET !== 'false',
       }
       const validation = await validateAction(
@@ -516,6 +521,12 @@ export class AuctionRoom implements DurableObject {
       await commitValidationMutation(validation.mutation, this.state.storage)
       return Response.json(result)
     } catch (err) {
+      if (err instanceof StructuredActionError) {
+        return Response.json(err.payload, {
+          status: err.status,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
       const message = err instanceof Error ? err.message : 'unknown error'
       return new Response(JSON.stringify({ error: message }), {
         status: 400,

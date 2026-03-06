@@ -5,8 +5,8 @@
  * Signs the Join typed data with the correct nullifier derivation,
  * then submits to POST /auctions/:id/action with type=JOIN.
  *
- * Optionally accepts a ZK membership proof (proofPayload) or generates
- * one server-side (generateProof: true).
+ * Accepts an advanced ZK membership proof override (proofPayload) or
+ * auto-generates one server-side from AGENT_STATE_FILE.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -17,7 +17,7 @@ import type { EngineClient } from '../lib/engine.js'
 import { ActionSigner } from '../lib/signer.js'
 import type { ServerConfig } from '../lib/config.js'
 import { requireSignerConfig } from '../lib/config.js'
-import { verifyIdentityPreFlight } from '../lib/identity-check.js'
+import { verifyParticipationReadiness } from '../lib/identity-check.js'
 import {
   loadAgentState,
   generateMembershipProofForAgent,
@@ -54,7 +54,7 @@ export function registerJoinTool(
       description:
         'Join an auction by signing an EIP-712 Join message and posting it to the engine. ' +
         'Requires AGENT_PRIVATE_KEY and AGENT_ID. The agent must have posted a bond before joining. ' +
-        'Optionally accepts a ZK membership proof (proofPayload) or generates one server-side (generateProof: true).',
+        'Accepts an advanced ZK membership proof override (proofPayload) or auto-generates one from AGENT_STATE_FILE.',
       inputSchema: z.object({
         auctionId: z.string().describe('The 0x-prefixed bytes32 auction ID to join'),
         bondAmount: z
@@ -73,20 +73,17 @@ export function registerJoinTool(
           })
           .optional()
           .describe(
-            'Pre-built Groth16 membership proof. If provided, passed directly to engine.',
-          ),
-        generateProof: z
-          .boolean()
-          .optional()
-          .describe(
-            'If true, generate membership proof server-side from AGENT_STATE_FILE. Requires AGENT_STATE_FILE env var.',
+            'Advanced: pre-built proof override. Omit to auto-generate.',
           ),
       }),
     },
-    async ({ auctionId, bondAmount, proofPayload, generateProof }) => {
+    async ({ auctionId, bondAmount, proofPayload }) => {
       const { agentPrivateKey, agentId } = requireSignerConfig(config)
       const account = privateKeyToAccount(agentPrivateKey)
-      const preflight = await verifyIdentityPreFlight(engine, agentId, account.address)
+      const preflight = await verifyParticipationReadiness(engine, agentId, account.address, {
+        agentStateFile: config.agentStateFile,
+        requireLocalState: !proofPayload,
+      })
       if (!preflight.ok) {
         return preflight.error
       }
@@ -97,17 +94,10 @@ export function registerJoinTool(
       if (proofPayload) {
         // Pre-built proof — pass through without local verification
         resolvedProof = proofPayload
-      } else if (generateProof) {
+      } else {
         // Server-side generation
-        if (!config.agentStateFile) {
-          return zkError(
-            'AGENT_NOT_REGISTERED',
-            'AGENT_STATE_FILE env var is not set',
-            'Set AGENT_STATE_FILE to the path of your agent-N.json file',
-          )
-        }
         try {
-          const agentState = loadAgentState(config.agentStateFile)
+          const agentState = loadAgentState(config.agentStateFile!)
           // Use the agent's own Poseidon capability tree root (stored in local state file).
           // This is the per-agent root the circuit constrains against — NOT the global
           // keccak registry root returned by AgentPrivacyRegistry.getRoot().

@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import type { EngineClient } from './engine.js'
 import { toolError } from './tool-response.js'
 
@@ -13,10 +14,24 @@ type IdentityPreFlightResult =
   | { ok: true }
   | { ok: false; error: ReturnType<typeof toolError> }
 
+interface ParticipationReadinessOptions {
+  agentStateFile?: string | null
+  requireLocalState?: boolean
+}
+
 export async function verifyIdentityPreFlight(
   engine: EngineClient,
   agentId: string,
   wallet: string,
+): Promise<IdentityPreFlightResult> {
+  return verifyParticipationReadiness(engine, agentId, wallet)
+}
+
+export async function verifyParticipationReadiness(
+  engine: EngineClient,
+  agentId: string,
+  wallet: string,
+  options?: ParticipationReadinessOptions,
 ): Promise<IdentityPreFlightResult> {
   let data: VerifyIdentityResponse
   try {
@@ -66,6 +81,30 @@ export async function verifyIdentityPreFlight(
         `agentId ${agentId} is not registered on AgentPrivacyRegistry`,
         'Register privacy membership first by running prepareOnboarding() then registerOnChain() from @agent-auction/crypto, then confirm with check_identity.',
       ),
+    }
+  }
+
+  if (options?.requireLocalState) {
+    if (!options.agentStateFile) {
+      return {
+        ok: false,
+        error: toolError(
+          'ZK_STATE_REQUIRED',
+          'AGENT_STATE_FILE not configured and no proofPayload provided',
+          'Set AGENT_STATE_FILE to your agent-N.json path, or provide a pre-built proofPayload',
+        ),
+      }
+    }
+
+    if (!fs.existsSync(options.agentStateFile)) {
+      return {
+        ok: false,
+        error: toolError(
+          'ZK_STATE_REQUIRED',
+          `AGENT_STATE_FILE does not exist: ${options.agentStateFile}`,
+          'Point AGENT_STATE_FILE to a valid agent-N.json path, or provide a pre-built proofPayload',
+        ),
+      }
     }
   }
 

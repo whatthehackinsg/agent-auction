@@ -5,8 +5,8 @@
  * Signs the Bid typed data and submits to POST /auctions/:id/action
  * with type=BID.
  *
- * Optionally accepts a ZK bid range proof (proofPayload) or generates
- * one server-side (generateProof: true).
+ * Accepts an advanced ZK bid range proof override (proofPayload) or
+ * auto-generates one server-side from AGENT_STATE_FILE.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -19,7 +19,7 @@ import type { ServerConfig } from '../lib/config.js'
 import { requireSignerConfig } from '../lib/config.js'
 import { loadAgentState, generateBidRangeProofForAgent } from '../lib/proof-generator.js'
 import { generateSecret, BID_RANGE_SIGNALS } from '@agent-auction/crypto'
-import { verifyIdentityPreFlight } from '../lib/identity-check.js'
+import { verifyParticipationReadiness } from '../lib/identity-check.js'
 
 interface EngineActionResponse {
   seq: number
@@ -61,7 +61,7 @@ export function registerBidTool(
       description:
         'Place a bid in an auction by signing an EIP-712 Bid message and posting it to the engine. ' +
         'The bid amount must exceed the current highest bid. Requires AGENT_PRIVATE_KEY and AGENT_ID. ' +
-        'Optionally accepts a ZK bid range proof (proofPayload) or generates one server-side (generateProof: true).',
+        'Accepts an advanced ZK bid range proof override (proofPayload) or auto-generates one from AGENT_STATE_FILE.',
       inputSchema: z.object({
         auctionId: z.string().describe('The 0x-prefixed bytes32 auction ID to bid in'),
         amount: z
@@ -70,7 +70,7 @@ export function registerBidTool(
         sealed: z
           .boolean()
           .optional()
-          .describe('If true, submit a sealed BID_COMMIT instead of a plaintext BID. Requires generateProof: true or proofPayload.'),
+          .describe('If true, submit a sealed BID_COMMIT instead of a plaintext BID. Requires proofPayload or AGENT_STATE_FILE auto-generation.'),
         salt: z
           .string()
           .optional()
@@ -87,19 +87,16 @@ export function registerBidTool(
             publicSignals: z.array(z.string()),
           })
           .optional()
-          .describe('Pre-built Groth16 bid range proof. If provided, passed directly to engine.'),
-        generateProof: z
-          .boolean()
-          .optional()
-          .describe(
-            'If true, generate bid range proof server-side. Fetches reservePrice and maxBid from engine automatically.',
-          ),
+          .describe('Advanced: pre-built proof override. Omit to auto-generate.'),
       }),
     },
-    async ({ auctionId, amount, sealed, salt: saltParam, proofPayload, generateProof }) => {
+    async ({ auctionId, amount, sealed, salt: saltParam, proofPayload }) => {
       const { agentPrivateKey, agentId } = requireSignerConfig(config)
       const account = privateKeyToAccount(agentPrivateKey)
-      const preflight = await verifyIdentityPreFlight(engine, agentId, account.address)
+      const preflight = await verifyParticipationReadiness(engine, agentId, account.address, {
+        agentStateFile: config.agentStateFile,
+        requireLocalState: !proofPayload,
+      })
       if (!preflight.ok) {
         return preflight.error
       }
@@ -129,15 +126,9 @@ export function registerBidTool(
         const providedSalt = BigInt(saltParam)
         revealSalt = providedSalt
         plainBidProofSalt = providedSalt
-      } else if (generateProof) {
-        if (!config.agentStateFile) {
-          return zkError(
-            'AGENT_NOT_REGISTERED',
-            'AGENT_STATE_FILE env var is not set',
-            'Set AGENT_STATE_FILE to the path of your agent-N.json file',
-          )
-        }
+      } else {
         try {
+          loadAgentState(config.agentStateFile!)
           // Fetch auction params for range proof
           const detail = await engine.get<AuctionDetailResponse>(
             `/auctions/${auctionId}`,
@@ -180,7 +171,7 @@ export function registerBidTool(
           return zkError(
             'PROOF_REQUIRED',
             'Sealed-bid BID_COMMIT requires a BidRange proof',
-            'Set generateProof: true or provide a pre-built proofPayload',
+            'Set AGENT_STATE_FILE or provide a pre-built proofPayload',
           )
         }
 
@@ -197,7 +188,7 @@ export function registerBidTool(
           return zkError(
             'SALT_REQUIRED',
             'Sealed BID_COMMIT proof is missing reveal salt.',
-            'Pass salt when using proofPayload, or set generateProof: true.',
+            'Pass salt when using proofPayload, or let AGENT_STATE_FILE auto-generate the proof.',
           )
         }
         const finalRevealSalt = revealSalt

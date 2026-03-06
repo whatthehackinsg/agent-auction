@@ -57,6 +57,30 @@ export interface ValidationResult {
   mutation: ValidationMutation
 }
 
+interface StructuredActionErrorPayload {
+  error: string
+  detail: string
+  suggestion: string
+}
+
+export class StructuredActionError extends Error {
+  constructor(
+    public readonly payload: StructuredActionErrorPayload,
+    public readonly status = 400,
+  ) {
+    super(payload.detail)
+    this.name = 'StructuredActionError'
+  }
+}
+
+function proofRequiredError(): StructuredActionError {
+  return new StructuredActionError({
+    error: 'PROOF_REQUIRED',
+    detail: 'ZK proof is mandatory for this action',
+    suggestion: 'Generate proof using AGENT_STATE_FILE or provide proofPayload',
+  })
+}
+
 // ─── Storage Key Helpers ──────────────────────────────────────────────
 
 /** Storage key for an agent's last accepted nonce for a given action type */
@@ -291,6 +315,10 @@ export async function handleJoin(
   auctionId: string,
   ctx?: ValidationContext,
 ): Promise<ValidationResult> {
+  if (ctx?.requireProofs && action.proof == null) {
+    throw proofRequiredError()
+  }
+
   // 0. Verify wallet matches ERC-8004 on-chain identity (if enabled)
   if (ctx?.verifyWallet) {
     const { verifyAgentWallet } = await import('../lib/identity')
@@ -417,6 +445,10 @@ export async function handleBid(
   maxBid: string,
   ctx?: ValidationContext,
 ): Promise<ValidationResult> {
+  if (ctx?.requireProofs && action.proof == null) {
+    throw proofRequiredError()
+  }
+
   // 1. Verify BidRange proof (optional unless ENGINE_REQUIRE_PROOFS=true)
   const bidRangeOptions: VerifyBidRangeOptions = {
     requireProof: ctx?.requireProofs,
