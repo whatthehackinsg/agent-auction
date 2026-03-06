@@ -75,10 +75,11 @@ Plans:
   2. Calling place_bid with AGENT_STATE_FILE configured always generates and submits a ZK proof (no parameter to skip it)
   3. check_identity returns a single readyToParticipate flag that is TRUE only when both ERC-8004 identity and ZK state (AGENT_STATE_FILE, privacy registry membership) are ready
   4. .env.example lists AGENT_STATE_FILE and BASE_SEPOLIA_RPC as REQUIRED fields with clear documentation
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 09-01: TBD
+- [ ] 09-01-PLAN.md — Engine default flip, MCP tool ZK enforcement, unified readiness check, .env.example
+- [ ] 09-02-PLAN.md — Engine test hardening with real Groth16 proofs
 
 ### Phase 10: Autonomous MCP Tools
 **Goal**: Agents can complete the full per-auction lifecycle autonomously via MCP tools — register identity, bond, participate, withdraw/refund
@@ -122,6 +123,6 @@ Phases execute in numeric order: 7 -> 7.x -> 8 -> 8.x -> 9 -> 9.x -> 10 -> 10.x 
 | 6. Refine Stats Card UI | v1.0 | 1/1 | Complete | 2026-03-04 |
 | 7. Identity Verification | 2/2 | Complete   | 2026-03-05 | - |
 | 8. Participant Privacy | v1.1 | 0/2 | Planning complete | - |
-| 9. ZK Enforcement | v1.1 | 0/? | Not started | - |
+| 9. ZK Enforcement | v1.1 | 0/2 | Planning complete | - |
 | 10. Autonomous MCP Tools | v1.1 | 0/? | Not started | - |
 | 11. Skill Rewrite | v1.1 | 0/? | Not started | - |
