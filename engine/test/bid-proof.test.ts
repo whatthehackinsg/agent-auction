@@ -81,7 +81,7 @@ function makeBidRequest(proof?: unknown): Request {
   })
 }
 
-describe('BID proof enforcement', () => {
+describe('BID proof enforcement (Node-style room coverage)', () => {
   let state: ReturnType<typeof createMockState>
   let room: AuctionRoom
 

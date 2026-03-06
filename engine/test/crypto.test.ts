@@ -12,7 +12,7 @@ import {
 } from '../src/lib/crypto'
 import { EIP712_DOMAIN } from '../src/lib/addresses'
 
-describe('Crypto Primitives', () => {
+describe('Crypto Primitives (Node runtime)', () => {
   describe('computeEventHash', () => {
     it('is deterministic — same inputs produce same output', async () => {
       const hash1 = await computeEventHash(1n, ZERO_HASH, ZERO_HASH)
