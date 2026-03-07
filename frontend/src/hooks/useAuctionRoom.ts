@@ -16,6 +16,64 @@ export interface AuctionEvent {
   bidCommitment?: string  // Bid commitment hash from BidRange proof (BID events)
 }
 
+const MAX_CACHED_EVENTS = 50
+const auctionRoomEventCache = new Map<string, AuctionEvent[]>()
+
+function storageKey(auctionId: string): string {
+  return `auction-room-events:${auctionId}`
+}
+
+function normalizeEvents(events: AuctionEvent[]): AuctionEvent[] {
+  return [...events]
+    .sort((a, b) => a.seq - b.seq)
+    .slice(-MAX_CACHED_EVENTS)
+}
+
+function persistEvents(auctionId: string, events: AuctionEvent[]): AuctionEvent[] {
+  const normalized = normalizeEvents(events)
+  auctionRoomEventCache.set(auctionId, normalized)
+
+  if (typeof window !== 'undefined') {
+    try {
+      window.sessionStorage.setItem(storageKey(auctionId), JSON.stringify(normalized))
+    } catch {
+      // Ignore sessionStorage failures and keep the in-memory cache.
+    }
+  }
+
+  return normalized
+}
+
+function loadCachedEvents(auctionId: string | undefined): AuctionEvent[] {
+  if (!auctionId) return []
+
+  const memoryCached = auctionRoomEventCache.get(auctionId)
+  if (memoryCached) {
+    return memoryCached
+  }
+
+  if (typeof window === 'undefined') {
+    return []
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(storageKey(auctionId))
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as AuctionEvent[]
+    if (!Array.isArray(parsed)) return []
+    return persistEvents(auctionId, parsed)
+  } catch {
+    return []
+  }
+}
+
+function mergeEvent(events: AuctionEvent[], incoming: AuctionEvent): AuctionEvent[] {
+  if (events.some((event) => event.seq === incoming.seq)) {
+    return events
+  }
+  return normalizeEvents([...events, incoming])
+}
+
 function maskAgentId(agentId: string): string {
   if (agentId === '0') return '0'
   if (agentId.startsWith('Agent ●●●●')) return agentId
@@ -24,7 +82,7 @@ function maskAgentId(agentId: string): string {
 }
 
 export function useAuctionRoom(auctionId: string | undefined) {
-  const [events, setEvents] = useState<AuctionEvent[]>([])
+  const [events, setEvents] = useState<AuctionEvent[]>(() => loadCachedEvents(auctionId))
   const [isConnected, setIsConnected] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
@@ -64,8 +122,9 @@ export function useAuctionRoom(auctionId: string | undefined) {
         }
 
         setEvents((prev) => {
-          if (prev.some((e) => e.seq === maskedMessage.seq)) return prev
-          return [...prev, maskedMessage].sort((a, b) => a.seq - b.seq)
+          const next = mergeEvent(prev, maskedMessage)
+          if (next === prev || !auctionId) return next
+          return persistEvents(auctionId, next)
         })
       } catch {
         // Ignore malformed messages.
@@ -90,17 +149,18 @@ export function useAuctionRoom(auctionId: string | undefined) {
       setIsConnected(false)
       setIsConnecting(false)
     }
-  }, [wsUrl])
+  }, [auctionId, wsUrl])
 
   useEffect(() => {
-    setEvents([])
     if (!auctionId) {
+      setEvents([])
       shouldReconnectRef.current = false
       setIsConnected(false)
       setIsConnecting(false)
       return
     }
 
+    setEvents(loadCachedEvents(auctionId))
     shouldReconnectRef.current = true
     connect()
 
