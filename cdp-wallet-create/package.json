@@ -1,0 +1,14 @@
+{
+  "name": "cdp-wallet-create",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "create-wallet": "node scripts/create-wallet.mjs",
+    "request-faucet": "node scripts/request-faucet.mjs"
+  },
+  "dependencies": {
+    "@coinbase/cdp-sdk": "^1.45.0",
+    "dotenv": "^16.4.7",
+    "viem": "^2.38.3"
+  }
+}
