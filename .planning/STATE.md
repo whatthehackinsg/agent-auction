@@ -5,16 +5,16 @@ milestone_name: Autonomous Agent Onboarding
 current_phase: 14
 current_phase_name: define agent participation standard and platform guidance
 current_plan: 2
-status: executing
-stopped_at: Completed 14-01-PLAN.md
-last_updated: "2026-03-07T11:16:15.640Z"
+status: verifying
+stopped_at: Completed 14-02-PLAN.md
+last_updated: "2026-03-07T11:27:32.307Z"
 last_activity: 2026-03-07
 progress:
   total_phases: 10
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 20
-  completed_plans: 19
-  percent: 70
+  completed_plans: 20
+  percent: 80
 ---
 
 # Project State
@@ -33,10 +33,10 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 **Total Phases:** 16
 **Current Plan:** 2
 **Total Plans in Phase:** 2
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 **Last Activity:** 2026-03-07
 
-**Progress:** [███████░░░] 70%
+**Progress:** [████████░░] 80%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 | Phase 11-internal-skill-and-prompt-cleanup P01 | 20m | 2 tasks | 5 files |
 | Phase 11-internal-skill-and-prompt-cleanup P02 | 25m | 2 tasks | 8 files |
 | Phase 14 P01 | 11min | 2 tasks | 4 files |
+| Phase 14 P02 | 9min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,9 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 - [Phase 14]: The execution split is now two waves — canonical participation guide + repo alignment first, then the public `/participate` handoff page and frontend guide links
 - [Phase 14]: `docs/participation-guide.md` is now the canonical operator-facing standard, and README/docs/MCP guidance now point to it consistently
 - [Phase 14]: Active participation is defined around one persistent Base Sepolia owner wallet that spans ERC-8004 ownership, EIP-712 signing, and bond/refund flows
+- [Phase 14]: The stable public handoff URL is the static /participate route, with all frontend surfaces importing the same shared constant instead of scattering links.
+- [Phase 14]: The public guide mirrors `docs/participation-guide.md` with a checklist-first Supported / Advanced / Future matrix and deep links to repo docs rather than duplicating every implementation detail.
+- [Phase 14]: Auction entry points may promote setup guidance, but they must stay spectator-first and avoid exposing identities, wallets, or per-agent bid history.
 
 ### Roadmap Evolution
 
@@ -113,6 +117,8 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 - Phase 14 context captured: the supported stack policy, guidance surfaces, minimum requirements, and fallback model are now locked for planning
 - Phase 14 planned: `PART-01` through `PART-04` are now defined in requirements, roadmap metadata is filled in, and `14-01` / `14-02` are ready for execution
 - Phase 14 wave 1 executed: the canonical participation guide is published and repo guidance surfaces are aligned ahead of the public `/participate` page
+- Phase 14 wave 2 executed: the public `/participate` handoff page and frontend setup-guide links are now live across landing and auction surfaces
+- Phase 14 wave 2 executed: the public `/participate` handoff page, shared frontend guide links, and spectator-safe setup CTAs are now live in the codebase
 
 ### Pending Todos
 
@@ -132,7 +138,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 
 ## Session Continuity
 
-Last activity: 2026-03-07 — Completed Phase 14 wave 1 by publishing the canonical participation guide and aligning repo guidance
-**Last session:** 2026-03-07T11:16:15.637Z
-**Stopped At:** Completed 14-01-PLAN.md
+Last activity: 2026-03-07 — Completed Phase 14 with the canonical guide plus the public `/participate` handoff page and frontend setup links
+**Last session:** 2026-03-07T11:27:32.299Z
+**Stopped At:** Completed 14-02-PLAN.md
 **Resume File:** None

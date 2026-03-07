@@ -36,7 +36,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 - [x] **Phase 11: Internal skill and prompt cleanup** - Remove stale repo-internal skill/prompt artifacts so they no longer contradict the post-Phase-13 toolchain (completed 2026-03-07)
 - [x] **Phase 12: Debug live Phase 10 registration and proof failures** - Fix onboarding truthfulness and privacy-registry deployment issues; hand off the remaining Worker blocker (completed 2026-03-06)
 - [x] **Phase 13: Worker Proof Runtime Compatibility** - Re-scoped from the old registry placeholder; completed 2026-03-07 with local + deployed fresh-agent JOIN success
-- [ ] **Phase 14: Define agent participation standard and platform guidance** - Specify the minimum supported participant stack, wallet requirements, and repo/website guidance for human and agent operators
+- [x] **Phase 14: Define agent participation standard and platform guidance** - Specify the minimum supported participant stack, wallet requirements, and repo/website guidance for human and agent operators (completed 2026-03-07)
 - [ ] **Phase 15: Integrate AgentKit wallet adapter without breaking ZK or ERC-8004** - Replace raw private-key assumptions with an AgentKit-compatible wallet abstraction while preserving identity, proof, and bond invariants
 - [ ] **Phase 16: Write agent auction skill and autonomous participation playbook** - Teach external agents the auction rules, required packages/config, and minimal-human-participation flow
 
@@ -176,7 +176,7 @@ Phases execute in numeric order: 7 -> 7.x -> 8 -> 8.x -> 9 -> 9.x -> 10 -> 10.x 
 | 11. Internal skill and prompt cleanup | v1.1 | 2/2 | Complete | 2026-03-07 |
 | 12. Debug live Phase 10 registration and proof failures | v1.1 | 3/3 | Complete with blocker handoff | 2026-03-06 |
 | 13. Worker Proof Runtime Compatibility | v1.1 | 3/3 | Complete | 2026-03-07 |
-| 14. Define agent participation standard and platform guidance | 1/2 | In Progress|  | 2026-03-07 |
+| 14. Define agent participation standard and platform guidance | v1.1 | 2/2 | Complete | 2026-03-07 |
 | 15. Integrate AgentKit wallet adapter without breaking ZK or ERC-8004 | v1.1 | 0/0 | Not started | - |
 | 16. Write agent auction skill and autonomous participation playbook | v1.1 | 0/0 | Not started | - |
 
@@ -185,11 +185,11 @@ Phases execute in numeric order: 7 -> 7.x -> 8 -> 8.x -> 9 -> 9.x -> 10 -> 10.x 
 **Goal:** Define and publish the minimum active-participant standard for humans and external agents, including the supported wallet stack, capability checklist, aligned repo guidance, and a public setup-guide entry point
 **Requirements**: PART-01, PART-02, PART-03, PART-04
 **Depends on:** Phase 13
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 14-01-PLAN.md — Canonical participation standard, wallet capability checklist, and repo guidance alignment
-- [ ] 14-02-PLAN.md — Public `/participate` setup guide and frontend handoff links
+- [x] 14-02-PLAN.md — Public `/participate` setup guide and frontend handoff links
 
 ### Phase 15: Integrate AgentKit wallet adapter without breaking ZK or ERC-8004
 
