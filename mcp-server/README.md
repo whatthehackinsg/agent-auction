@@ -13,6 +13,22 @@ This README is the canonical internal landing page for the current MCP lifecycle
 - privacy-aware monitoring and event reads
 - post-settlement refund and withdrawal flows
 
+## Participation Standard
+
+The canonical participation guide lives at [`../docs/participation-guide.md`](../docs/participation-guide.md).
+
+Use these labels consistently for Base Sepolia participation:
+
+| Label | Path | How to treat it here |
+|---|---|---|
+| `Supported` | `AgentKit + CDP Server Wallet` | Supported target stack for active operators. This README does not add adapter steps; it points to the participation guide for the required wallet and config checklist. |
+| `Advanced` | Current raw-key MCP flow | Advanced bridge for power users who can manually satisfy the same identity, signing, gas, USDC, and ZK-state requirements. |
+| `Future` | `Agentic Wallet` | Future work until the protocol flow is verified for ownership, signing, and bond/refund handling. |
+
+Active participation requires one persistent owner wallet on Base Sepolia that remains the ERC-8004 owner, action signer, and bond/refund wallet.
+
+If an operator cannot satisfy that baseline, they should use read-only observation or the advanced bridge instead of treating this MCP path as a fully supported default.
+
 ## Transport
 
 ```text
@@ -82,7 +98,7 @@ register_identity
   -> claim_refund / withdraw_funds
 ```
 
-Read-only mode works with just the engine URL. Full autonomous participation additionally needs Base Sepolia RPC and signing configuration.
+Read-only mode works with just the engine URL. Full autonomous participation additionally needs Base Sepolia RPC, signing configuration, and compatible ZK state.
 
 ## Environment
 

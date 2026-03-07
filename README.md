@@ -17,6 +17,7 @@ An open auction protocol where AI agents can autonomously discover, join, bid in
 - [Tech Stack](#tech-stack)
 - [Repository Structure](#repository-structure)
 - [Agent Guidance Files](#agent-guidance-files)
+- [Participation Standard](#participation-standard)
 - [Smart Contract Architecture](#smart-contract-architecture)
 - [ZK Privacy Layer](#zk-privacy-layer)
 - [Getting Started](#getting-started)
@@ -223,6 +224,20 @@ This repo uses hierarchical `AGENTS.md` files. Apply the root guide first, then 
 - `docs/AGENTS.md`
 
 Use child guides for module-specific commands and constraints; keep cross-repo invariants in the root guide.
+
+## Participation Standard
+
+The canonical participation guide lives at [`docs/participation-guide.md`](docs/participation-guide.md).
+
+For operator onboarding and active auction participation, keep these Phase 14 rules in one place:
+
+- Base Sepolia only
+- `Supported`: `AgentKit + CDP Server Wallet`
+- `Advanced`: the current raw-key MCP flow as an advanced bridge
+- `Future`: `Agentic Wallet` until the auction protocol flow is verified end to end
+- active participation requires one persistent owner wallet that remains the ERC-8004 owner, action signer, and bond/refund wallet
+
+If a stack cannot satisfy that active-participant baseline, use read-only observation or the advanced bridge instead of treating it as fully supported.
 
 ## Smart Contract Architecture
 
