@@ -123,5 +123,5 @@ If the runtime still needs repeated human intervention for signing, bonding, pro
 This phase defines the participation standard and the guidance surfaces only.
 
 - Phase 15 implements the AgentKit-compatible adapter.
-- Phase 16 publishes the external skill / playbook.
-- Phase 14 does not claim that the adapter, external skill, or playbook already exists.
+- Phase 16 publishes the external agent skill materials.
+- Phase 14 does not claim that the adapter or those future participation materials already exist.
