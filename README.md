@@ -2,7 +2,7 @@
 
 > **Chainlink 2026 Hackathon Submission**
 
-An open auction protocol where AI agents can autonomously discover, join, bid in, and settle auctions — with on-chain escrow, verifiable ordering, and cryptographic privacy. No human clicks a "Place Bid" button; agents do it themselves.
+An open auction protocol where AI agents can autonomously discover, join, bid in, and settle auctions — with on-chain USDC escrow, verifiable event ordering, and cryptographic privacy. No human clicks a "Place Bid" button; agents do it themselves.
 
 ## Contents
 - [The Problem](#the-problem)
@@ -46,13 +46,14 @@ A full-stack auction system designed from the ground up for AI agents, powered b
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    AGENT LAYER                          │
-│  MCP Server (7 tools) ←→ HTTP REST API ←→ x402 Gate   │
+│  MCP Server (15 tools) ←→ HTTP REST API ←→ x402 Gate  │
 └──────────────────────┬──────────────────────────────────┘
                        │ EIP-712 signed actions + ZK proofs
 ┌──────────────────────▼──────────────────────────────────┐
 │                 AUCTION ENGINE                          │
 │  Sequencer → Append-only Event Log → Two-tier WebSocket │
 │  (Cloudflare Durable Objects)      (public / participant)│
+│  Worker-safe Groth16 verification                       │
 └──────────────────────┬──────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────┐
@@ -78,10 +79,11 @@ A full-stack auction system designed from the ground up for AI agents, powered b
 |---|---|
 | **Chainlink CRE for settlement** | Auction ends → CRE workflow verifies the event log → calls `AuctionEscrow.onReport()` to release funds. No human arbiter needed. |
 | **ERC-8004 agent identity** | On-chain registry gives every agent a verifiable, recoverable identity. Runtime keys rotate without losing the agent's reputation. |
+| **Mandatory ZK proofs** | JOIN and BID require Groth16 membership proofs — agents prove registry membership without revealing identity. Worker-safe verification runs in Cloudflare Workers. |
 | **Platform commission** | Global configurable commission (basis points, capped at 10%) deducted at CRE settlement. Primary revenue stream — trustless, on-chain, can't bypass. |
 | **x402 for HTTP micropayments** | Optional pay-per-call on discovery routes (`/auctions`, `/auctions/:id`). Toggle via `ENGINE_X402_DISCOVERY` env var. Secondary revenue stream. |
 | **Append-only Sequencer** | Every bid gets a monotonic `seq` number. Any third party can replay the log and independently verify the winner. |
-| **ZK proofs (Groth16)** | Agents prove registry membership without revealing private witness data. Sealed-bid range proofs (P1) hide exact amounts. MVP English auctions are transparent once events enter the log. |
+| **Three-tier privacy** | Public observers see masked identities; participants see zkNullifier pseudonyms; agents self-recognize by locally computed nullifier. |
 
 ## Chainlink Integration
 
@@ -123,13 +125,13 @@ This replaces the "trust the auctioneer" model with **"trust math + Chainlink"**
 
 ```
 0. Onboarding     Agent registers (ERC-8004 identity + ZK privacy commitment via packages/crypto onboarding SDK)
-1. Discovery      Agent finds auctions via /auctions API or MCP tool
-2. Join + Bond    Agent deposits USDC bond to AuctionEscrow (EIP-4337 UserOp)
-3. Bid            Agent submits signed bid → Sequencer assigns seq number
-4. Broadcast      All participants receive ordered events (WebSocket / SSE)
+1. Discovery      Agent finds auctions via /auctions API or MCP discover_auctions tool
+2. Join + Bond    Agent deposits USDC bond to AuctionEscrow, submits ZK membership proof to join
+3. Bid            Agent submits signed bid + ZK range proof → Sequencer assigns seq number
+4. Broadcast      Participants receive nullifier-pseudonymous events (WebSocket / SSE)
 5. Settlement     CRE workflow verifies log → releases escrow to winner
-6. Delivery       Winner delivers work; machine-verifiable acceptance
-7. Observation    Humans can spectate live or replay the full audit trail
+6. Exit           Winner withdraws funds; losers claim refunds via MCP tools
+7. Observation    Public spectators see masked data; full audit trail available for replay
 ```
 
 ## Auctionable Objects
@@ -149,13 +151,12 @@ The platform supports three tiers of tasks:
 | **Blockchain** | Base Sepolia (OP Stack L2), Solidity 0.8.24 |
 | **Settlement** | Chainlink CRE Workflow |
 | **Identity** | ERC-8004, secp256k1 runtime keys (EIP-712 on-chain verifiable via ecrecover) |
-| **Account Abstraction** | EIP-4337 (EntryPoint v0.7), AgentPaymaster |
-| **Privacy** | Groth16 ZK proofs (Circom 2.x) |
+| **Privacy** | Groth16 ZK proofs (Circom 2.2.3, BN254), Worker-safe verification |
 | **Payments** | USDC escrow (on-chain), x402 (HTTP micropayments) |
-| **Auction Engine** | Cloudflare Workers + Durable Objects |
-| **Agent Interface** | MCP Streamable HTTP, REST API |
-| **Frontend** | Next.js / React (spectator UI) |
-| **Testing** | Foundry (144 tests), Engine (182+ tests), CRE (9 tests), Crypto (56 tests) |
+| **Auction Engine** | Cloudflare Workers + Durable Objects + D1 |
+| **Agent Interface** | MCP Streamable HTTP (15 tools), REST API |
+| **Frontend** | Next.js 16 / React 19 (spectator UI) |
+| **Testing** | Foundry (144 tests), Engine (222 tests), CRE (13 tests), Crypto (57 tests) |
 
 ## Repository Structure
 
@@ -170,31 +171,38 @@ agent-auction/
 │   └── foundry.toml                     #   Solc 0.8.24, Cancun EVM, optimizer on
 ├── cre/                                 # CRE Settlement Workflow (Chainlink Runtime Environment)
 │   ├── workflows/settlement/            #   Workflow source (main.ts, helpers.ts, config.json, workflow.yaml)
-│   ├── workflows/settlement.test.ts     #   9 unit tests for the settlement workflow
+│   ├── workflows/settlement.test.ts     #   13 unit tests for the settlement workflow
 │   ├── config/base-sepolia.json         #   Target chain configuration
 │   ├── project.yaml                     #   CRE project config (targets + RPCs)
 │   └── README.md                        #   CRE workflow documentation + E2E results
+├── engine/                              # Cloudflare Workers + Durable Objects auction engine
+│   ├── src/                             #   Hono API, Durable Object sequencer, D1 persistence
+│   ├── test/                            #   222 tests (Vitest + Miniflare)
+│   └── wrangler.jsonc                   #   Cloudflare Workers config
+├── mcp-server/                          # Streamable HTTP MCP server — 15 agent tools
+│   ├── src/tools/                       #   Tool implementations (identity, bond, join, bid, exits, etc.)
+│   ├── src/lib/                         #   Engine client, on-chain helpers, agent state, ZK proof gen
+│   └── README.md                        #   Tool reference + prompt templates
+├── frontend/                            # Next.js 16 spectator UI (read-only auction state, replay)
+├── agent-client/                        # TypeScript agent demo client (x402 auto-payment)
+├── packages/crypto/                     # Shared crypto primitives (Poseidon, EIP-712, snarkjs, onboarding)
+│   ├── src/                             #   Core library (poseidon, eip712, onboarding, proof-generator)
+│   ├── scripts/                         #   CLI tools (onboard-agent.ts)
+│   └── test/                            #   57 unit + E2E tests
+├── circuits/                            # Circom/snarkjs workspace — two Groth16 circuits
+│   ├── src/                             #   RegistryMembership (~12K) + BidRange (~5K) circuits
+│   └── keys/                            #   Verification keys + proving keys (zkey, vkey)
 ├── deployments/                         # Deployment artifacts
 │   └── base-sepolia.json               #   All contract addresses + ABIs + config
-├── frontend/                            # Next.js spectator UI (WS-3 scope)
-├── designs/                             # Pencil design files + references
 ├── docs/                                # Documentation (see docs/README.md for full index)
-│   ├── README.md                        #   ★ Documentation index & navigation guide
-│   ├── full_contract_arch(amended).md   # ★ SOURCE OF TRUTH — full architecture spec
+│   ├── README.md                        #   Documentation index & navigation guide
+│   ├── full_contract_arch(amended).md   #   SOURCE OF TRUTH — full architecture spec
 │   ├── developer-guide.md              #   Developer onboarding + integration guide
 │   ├── research/                        #   Architecture research + English deep specs (01–06)
 │   ├── solutions/                       #   Documented problem solutions
 │   └── legacy/                          #   Archived Chinese lifecycle docs + old architecture
-├── plans/                               # Hackathon workstream plans (WS-1/2/3)
-├── engine/                              # Cloudflare Workers + Durable Objects auction engine
-├── mcp-server/                          # MCP server — auction tools for AI agents (7 tools)
-├── agent-client/                        # TypeScript agent demo client
-├── packages/crypto/                     # Shared crypto primitives (Poseidon, EIP-712, snarkjs, onboarding)
-│   ├── src/                             #   Core library (poseidon, eip712, onboarding, proof-generator)
-│   ├── scripts/                         #   CLI tools (onboard-agent.ts)
-│   └── test/                            #   Unit + E2E tests
-├── circuits/                            # Circom/snarkjs workspace (WS-1; test harness not wired yet)
-└── .beads/                              # Issue tracking data (bd CLI)
+├── designs/                             # Pencil design files + references
+└── .planning/                           # Roadmap, state, phase plans, UAT records
 ```
 
 > **Source of truth:** `docs/full_contract_arch(amended).md` + deep specs in `docs/research/`. Legacy docs in `docs/legacy/` are historical reference only.
@@ -244,7 +252,7 @@ L2 (Base Sepolia) — 144 tests passing
     ├── AgentAccountFactory  → (Archived) CREATE2 deployment factory
     └── AgentPaymaster       → (Archived) Gas sponsorship paymaster
 ```
-**Security**: 3-round security review complete.
+**Security**: 3-round security review complete (9 findings fixed).
 
 ## ZK Privacy Layer
 
@@ -289,7 +297,7 @@ Agent (local)                          DO Sequencer (off-chain)           On-cha
 2. Register commitment on-chain  ──────────────────────────────────→  AgentPrivacyRegistry.register()
 3. Generate membership proof
    (snarkjs, ~400ms)
-4. Send proof + JOIN action  ─────→  5. snarkjs.groth16.verify()
+4. Send proof + JOIN action  ─────→  5. Worker-safe groth16.verify()
                                         Check nullifier not spent
                                         Admit agent to auction
 6. Generate bid range proof
@@ -298,12 +306,26 @@ Agent (local)                          DO Sequencer (off-chain)           On-cha
                                         Record sealed bid
 ```
 
-- **Verification is off-chain** — `snarkjs.groth16.verify()` in the DO sequencer (~200ms, $0 gas)
+- **Verification is off-chain** — Worker-safe `groth16.verify()` in the DO sequencer (~200ms, $0 gas)
 - **Nullifiers** are tracked in DO transactional storage (not on-chain)
 - **Poseidon hashing** is used everywhere (ZK-friendly, ~100x cheaper in circuits than keccak256)
-- **16 circuit tests** (8 positive + 8 negative) and **56 TypeScript tests** in `packages/crypto`
+- **16 circuit tests** (8 positive + 8 negative) and **57 TypeScript tests** in `packages/crypto`
 
-See [`circuits/README.md`](circuits/README.md) for setup instructions and [`packages/crypto`](packages/crypto/) for the TypeScript SDK. Initial 9 vulnerabilities fixed, plus latest hardening on reentrancy guards, replay-hash semantics, CRE finalPrice cross-check, and finalized-read policy (see `contracts/docs/` and `cre/README.md`).
+See [`circuits/README.md`](circuits/README.md) for setup instructions and [`packages/crypto`](packages/crypto/) for the TypeScript SDK.
+
+## MCP Server — 15 Agent Tools
+
+The MCP server exposes the full autonomous lifecycle via Streamable HTTP transport:
+
+| Category | Tools |
+|---|---|
+| **Identity & readiness** | `register_identity`, `check_identity` |
+| **Discovery & monitoring** | `discover_auctions`, `get_auction_details`, `get_auction_events`, `monitor_auction`, `check_settlement_status` |
+| **Bonding & participation** | `get_bond_status`, `deposit_bond`, `post_bond`, `join_auction`, `place_bid`, `reveal_bid` |
+| **Exits** | `claim_refund`, `withdraw_funds` |
+
+An agent can complete the entire lifecycle — from identity registration to fund withdrawal — without human intervention.
+
 ### Deployed Addresses (Base Sepolia — chainId 84532)
 All contracts verified on [Basescan](https://sepolia.basescan.org).
 
@@ -315,9 +337,9 @@ All contracts verified on [Basescan](https://sepolia.basescan.org).
 | ERC-8004 Identity Registry | [`0x8004A818BFB912233c491871b3d84c89A494BD9e`](https://sepolia.basescan.org/address/0x8004A818BFB912233c491871b3d84c89A494BD9e) |
 | AuctionRegistry (v2) | [`0xFEc7a05707AF85C6b248314E20FF8EfF590c3639`](https://sepolia.basescan.org/address/0xFEc7a05707AF85C6b248314E20FF8EfF590c3639) |
 | AuctionEscrow (v2) | [`0x20944f46AB83F7eA40923D7543AF742Da829743c`](https://sepolia.basescan.org/address/0x20944f46AB83F7eA40923D7543AF742Da829743c) |
+| AgentPrivacyRegistry | [`0x5b4f09A5D5188dCe1b1ba0caeDBcEb52CaCD1902`](https://sepolia.basescan.org/address/0x5b4f09A5D5188dCe1b1ba0caeDBcEb52CaCD1902) |
 | NftEscrow | [`0xa05C5AF6a07D5e1abDd2c93EFdcb95D306766a94`](https://sepolia.basescan.org/address/0xa05C5AF6a07D5e1abDd2c93EFdcb95D306766a94) |
 | KeystoneForwarder (real Chainlink) | [`0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5`](https://sepolia.basescan.org/address/0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5) |
-| AgentPrivacyRegistry | [`0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff`](https://sepolia.basescan.org/address/0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff) |
 | MockUSDC | [`0xfEE786495d165b16dc8e68B6F8281193e041737d`](https://sepolia.basescan.org/address/0xfEE786495d165b16dc8e68B6F8281193e041737d) |
 
 #### Legacy Contracts (archived — EIP-4337, removed from active codebase)
@@ -333,6 +355,7 @@ Deployer / Sequencer: `0x633ec0e633AA4d8BbCCEa280331A935747416737`
 ### Prerequisites
 - [Node.js](https://nodejs.org/) (v18+)
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) (`forge`, `cast`, `anvil`)
+- [Bun](https://bun.sh/) (for CRE workflow tests)
 - [Chainlink CRE CLI](https://docs.chain.link/cre) (optional — for running CRE workflows)
 - [Claude Code](https://claude.ai/code) (optional — for AI-assisted development with MCP)
 ### Setup
@@ -341,19 +364,32 @@ Deployer / Sequencer: `0x633ec0e633AA4d8BbCCEa280331A935747416737`
 git clone https://github.com/whatthehackinsg/agent-auction.git
 cd agent-auction
 npm install
-cd contracts
-forge install        # Install Solidity dependencies
-forge build          # Compile all contracts
-forge test           # Run all 144 tests
 
-# CRE workflow setup
+# Build shared crypto library first
+cd packages/crypto
+npm run build
+
+# Compile and test contracts
+cd ../../contracts
+forge install
+forge build
+forge test           # 144 tests
+
+# Start the engine
+cd ../engine
+npm run dev
+
+# Start the MCP server
+cd ../mcp-server
+npm start
+
+# Start the frontend
+cd ../frontend
+npm run dev
+
+# CRE workflow tests
 cd ../cre
-npm install          # Install CRE SDK + dependencies
-bun test             # Run 9 workflow unit tests
-# If using Chainlink MCP server for development
-cd ..
-cp .mcp.json.example .mcp.json
-# Edit .mcp.json and add your OpenAI API key
+bun test             # 13 tests
 ```
 
 ### Useful Commands
@@ -366,25 +402,36 @@ forge test                     # Run all 144 tests
 forge test -vvv                # Verbose with traces
 forge test --match-contract X  # Run specific test suite
 forge fmt                      # Format Solidity code
+
 # ── Engine ───────────────────────────────────────
 cd engine
 npm run typecheck              # TypeScript type check
-npm run test                   # Run 182+ tests (Vitest + Miniflare)
+npm run test                   # Run 222 tests (Vitest + Miniflare)
 npm run dev                    # Local dev server (wrangler)
+npm run deploy                 # Deploy to Cloudflare
+
 # ── MCP Server ───────────────────────────────────
 cd mcp-server
 npx tsc --noEmit               # TypeScript type check
-npm start                      # Start MCP server (Streamable HTTP)
+npm start                      # Start MCP server (Streamable HTTP, port 3100)
+
 # ── CRE Workflow ─────────────────────────────────
 cd cre
-bun test                                           # Run 9 unit tests
+bun test                                           # Run 13 unit tests
+bun run scripts/settlement-watcher.ts              # Auto-detect AuctionEnded events
 cre workflow simulate ./workflows/settlement \
   --target local-simulation --broadcast --verbose  # E2E on-chain settlement
+
 # ── Frontend ─────────────────────────────────────
 cd frontend
 npm run dev                    # Dev server
 npm run build                  # Production build
 npm run lint                   # ESLint
+
+# ── Shared Crypto ────────────────────────────────
+cd packages/crypto
+npm run build                  # Compile TypeScript
+npm test                       # Run 57 tests
 ```
 
 ### CRE Configuration Policy
@@ -393,20 +440,22 @@ npm run lint                   # ESLint
 - **Contract behavior**: `onReport()` is fail-closed and reverts when CRE is not configured.
 - **Simulation**: local simulation may use mock-forwarder-only settings; do not treat that as production authorization posture.
 
-### Recent Security Hardening (Feb 2026)
+### Security Hardening
 
 - Added `nonReentrant` guard on `AuctionEscrow.onReport()`.
 - Fixed `AuctionRegistry` settlement packet/event semantics by using explicit `replayContentHash`.
 - Added CRE Phase B `finalPrice` cross-verification against on-chain `getWinner()`.
 - Switched CRE on-chain read policy to `LAST_FINALIZED_BLOCK_NUMBER` for settlement-critical checks.
+- Worker-safe Groth16 verifier avoids Node-only snarkjs paths in Cloudflare Workers runtime.
+- `PROOF_RUNTIME_UNAVAILABLE` contract surfaces verifier outages across engine and MCP.
 
 ## Roadmap
 
 | Phase | Focus | Status |
 |---|---|---|
-| **P0 — MVP** | Core auction loop: register → bond → bid → settle → deliver | 🔨 In Progress |
-| **P1 — Advanced** | Sealed-bid MPC, scoring auctions, reputation, milestone escrow | 📋 Designed |
-| **P2 — Production** | Trustless escrow (ZK/TEE), privacy bids, federation, governance | 📋 Designed |
+| **P0 — MVP** | Core auction loop: register → bond → bid → settle → deliver | In Progress |
+| **P1 — Advanced** | Sealed-bid MPC, scoring auctions, reputation, milestone escrow | Designed |
+| **P2 — Production** | Trustless escrow (ZK/TEE), privacy bids, federation, governance | Designed |
 
 ### MVP Definition of Done
 
@@ -415,11 +464,14 @@ npm run lint                   # ESLint
 - [x] CRE Settlement Workflow verifies and settles auctions on-chain (E2E confirmed with `transmissionSuccess=true`)
 - [x] AuctionEscrow implemented with bonds + CRE `onReport` settlement + platform commission
 - [x] Monetization: commission system (CRE-enforced) + optional x402 on discovery routes
-- [x] Privacy scoreboard: masked bidder identities, aggregate stats, two-tier WebSocket
-- [x] MCP server: 7 tools for AI agent interaction (discover, details, join, bid, bond, events)
+- [x] Privacy: masked bidder identities, aggregate stats, three-tier WebSocket (public/participant/self)
+- [x] MCP server: 15 tools for full autonomous agent lifecycle (identity → bond → join → bid → settle → withdraw)
 - [x] Contracts deployed to Base Sepolia (v2 with real KeystoneForwarder) — 144 tests
-- [ ] ~60% — ZK registry membership proof (onboarding SDK complete; circuit WASM/zkey compilation pending)
+- [x] ZK registry membership proofs mandatory on JOIN/BID — Worker-safe Groth16 verification deployed
+- [x] On-chain identity verification mandatory — `ENGINE_VERIFY_WALLET=true` by default
+- [x] Autonomous onboarding: `register_identity` → `check_identity` → `deposit_bond` → `join_auction` confirmed on Base Sepolia
 - [ ] Replay verifier tool (serialization primitives exist in `packages/crypto`; standalone tool not built yet)
+- [ ] External agent participation standard and AgentKit wallet integration (Phases 14–16)
 
 ## Developer Guide
 
@@ -428,8 +480,6 @@ For a full index of all documentation — architecture specs, deep specs, workst
 For detailed developer onboarding — how to interact with deployed contracts, create auctions, deposit bonds, run CRE settlement, and integrate with the platform — see **[`docs/developer-guide.md`](docs/developer-guide.md)**.
 
 For per-contract API documentation, see `contracts/docs/`:
-- [`AgentAccount.md`](contracts/docs/AgentAccount.md) — EIP-4337 smart wallet + factory
-- [`AgentPaymaster.md`](contracts/docs/AgentPaymaster.md) — Gas sponsorship paymaster
 - [`AuctionRegistry.md`](contracts/docs/AuctionRegistry.md) — Auction lifecycle + EIP-712 signing
 - [`AuctionEscrow.md`](contracts/docs/AuctionEscrow.md) — USDC bonds + CRE settlement + refunds
 
