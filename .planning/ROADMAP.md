@@ -3,7 +3,7 @@
 ## Milestones
 
 - v1.0 ZK Privacy E2E - Phases 1-6 (shipped 2026-03-04)
-- v1.1 Autonomous Agent Onboarding - Phases 7-13 (in progress)
+- v1.1 Autonomous Agent Onboarding - Phases 7-16 (in progress)
 
 ## Phases
 
@@ -23,19 +23,22 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 
 ### v1.1 Autonomous Agent Onboarding (In Progress)
 
-**Milestone Goal:** Make agents fully autonomous for the per-auction lifecycle — human does one-time setup, agent handles everything via MCP tools with mandatory ZK proofs and verified identity.
+**Milestone Goal:** Make agents fully autonomous for the per-auction lifecycle, then publish a first-class participation standard for external agents — human does one-time setup, agent handles identity, bond, join, bid, and settlement-safe exits with mandatory ZK proofs and verified identity.
 
 **Phase Numbering:**
-- Integer phases (7, 8, 9, 10, 11, 12, 13): milestone work plus follow-up blocker phases
+- Integer phases (7, 8, 9, 10, 11, 12, 13, 14, 15, 16): milestone work plus follow-up blocker phases
 - Decimal phases (7.1, 8.1): urgent insertions if needed (marked with INSERTED)
 
 - [x] **Phase 7: Identity Verification** - Make ENGINE_VERIFY_WALLET mandatory, audit identity chain, pre-flight gates, edge cases (completed 2026-03-05)
 - [x] **Phase 8: Participant Privacy** - Strip identity from participant WebSocket; agents self-recognize by nullifier only (completed 2026-03-05)
 - [x] **Phase 9: ZK Enforcement** - Make ZK proofs mandatory on join/bid; unify readiness check (completed 2026-03-06)
 - [x] **Phase 10: Autonomous MCP Tools** - Add register_identity, deposit_bond, withdraw_funds, claim_refund tools (completed 2026-03-06)
-- [ ] **Phase 11: Skill Rewrite** - Replace stale skill docs with correct ERC-8004 ABI and full autonomous flow
+- [x] **Phase 11: Internal skill and prompt cleanup** - Remove stale repo-internal skill/prompt artifacts so they no longer contradict the post-Phase-13 toolchain (completed 2026-03-07)
 - [x] **Phase 12: Debug live Phase 10 registration and proof failures** - Fix onboarding truthfulness and privacy-registry deployment issues; hand off the remaining Worker blocker (completed 2026-03-06)
 - [x] **Phase 13: Worker Proof Runtime Compatibility** - Re-scoped from the old registry placeholder; completed 2026-03-07 with local + deployed fresh-agent JOIN success
+- [ ] **Phase 14: Define agent participation standard and platform guidance** - Specify the minimum supported participant stack, wallet requirements, and repo/website guidance for human and agent operators
+- [ ] **Phase 15: Integrate AgentKit wallet adapter without breaking ZK or ERC-8004** - Replace raw private-key assumptions with an AgentKit-compatible wallet abstraction while preserving identity, proof, and bond invariants
+- [ ] **Phase 16: Write agent auction skill and autonomous participation playbook** - Teach external agents the auction rules, required packages/config, and minimal-human-participation flow
 
 ## Phase Details
 
@@ -100,18 +103,26 @@ Plans:
 - [x] 10-03-PLAN.md — `claim_refund` and `withdraw_funds`
 - [x] 10-04-PLAN.md — MCP prompts, README, and env docs for the autonomous lifecycle
 
-### Phase 11: Skill Rewrite
-**Goal**: Skill documentation accurately describes the current tool set, mandatory ZK flow, and full autonomous per-auction loop
-**Depends on**: Phase 10 (skills document the final state of all tools)
+### Phase 11: Internal skill and prompt cleanup
+**Goal**: Clean up stale repo-internal skill and prompt artifacts so local guidance stops contradicting the current MCP tool set, ERC-8004 onboarding ABI, and mandatory ZK flow
+**Depends on**: Phase 13 (cleanup should reflect the stabilized post-Worker-fix toolchain)
 **Requirements**: SKIL-01, SKIL-02, SKIL-03
 **Success Criteria** (what must be TRUE):
-  1. The 3 stale skill files (`SKILL.md`, `bond-management/SKILL.md`, `sealed-bid/SKILL.md`) no longer exist
-  2. A new auction skill document describes the correct ERC-8004 `register(string agentURI)` ABI and the mandatory ZK proof flow
-  3. The new skill document covers the full autonomous per-auction loop: discover -> bond -> join(ZK) -> bid(ZK) -> monitor -> withdraw/claim
-**Plans**: 0 plans
+  1. The known stale repo-internal skill artifacts (`SKILL.md`, `bond-management/SKILL.md`, `sealed-bid/SKILL.md`) are removed, archived, or replaced so they no longer teach invalid flows
+  2. Remaining repo-internal prompts/examples reference the correct ERC-8004 `register(string agentURI)` ABI, current MCP tool names, and mandatory ZK proof path
+  3. Phase 11 does not attempt to define the external agent participation standard, AgentKit wallet requirements, or the public playbook; those are owned by Phases 14-16
+**Plans**: 2 plans
 
 Plans:
-- [ ] 11-01: TBD
+- [x] 11-01-PLAN.md — Remove the stale `.claude/skills/auction/*` tree and align `check_identity` with the current MCP onboarding path
+- [x] 11-02-PLAN.md — Clean the remaining live MCP prompts/docs/help text and make `mcp-server/README.md` the canonical internal landing page
+
+Notes:
+- Phase 11 is intentionally internal-facing only.
+- Verified complete on 2026-03-07 via `11-UAT.md`.
+- Phase 14 defines the supported participant stack and platform guidance.
+- Phase 15 implements the AgentKit-compatible wallet path.
+- Phase 16 publishes the external-facing participation skill/playbook after the integration path is frozen.
 
 ### Phase 12: Debug live Phase 10 registration and proof failures
 **Goal**: Make live onboarding truthful and restore the fail-closed Base Sepolia `deposit_bond -> join_auction` path for freshly registered agents
@@ -148,7 +159,7 @@ Current blocker:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 7 -> 7.x -> 8 -> 8.x -> 9 -> 9.x -> 10 -> 10.x -> 11 -> 12 -> 13
+Phases execute in numeric order: 7 -> 7.x -> 8 -> 8.x -> 9 -> 9.x -> 10 -> 10.x -> 11 -> 12 -> 13 -> 14 -> 15 -> 16
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -162,6 +173,39 @@ Phases execute in numeric order: 7 -> 7.x -> 8 -> 8.x -> 9 -> 9.x -> 10 -> 10.x 
 | 8. Participant Privacy | v1.1 | 2/2 | Complete | 2026-03-05 |
 | 9. ZK Enforcement | v1.1 | 2/2 | Complete | 2026-03-06 |
 | 10. Autonomous MCP Tools | v1.1 | 4/4 | Complete | 2026-03-06 |
-| 11. Skill Rewrite | v1.1 | 0/0 | Not started | - |
+| 11. Internal skill and prompt cleanup | v1.1 | 2/2 | Complete | 2026-03-07 |
 | 12. Debug live Phase 10 registration and proof failures | v1.1 | 3/3 | Complete with blocker handoff | 2026-03-06 |
 | 13. Worker Proof Runtime Compatibility | v1.1 | 3/3 | Complete | 2026-03-07 |
+| 14. Define agent participation standard and platform guidance | v1.1 | 0/0 | Not started | - |
+| 15. Integrate AgentKit wallet adapter without breaking ZK or ERC-8004 | v1.1 | 0/0 | Not started | - |
+| 16. Write agent auction skill and autonomous participation playbook | v1.1 | 0/0 | Not started | - |
+
+### Phase 14: Define agent participation standard and platform guidance
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 13
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 14 to break down)
+
+### Phase 15: Integrate AgentKit wallet adapter without breaking ZK or ERC-8004
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 14
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 15 to break down)
+
+### Phase 16: Write agent auction skill and autonomous participation playbook
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 15
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 16 to break down)

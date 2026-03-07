@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Autonomous Agent Onboarding
-current_phase: 11
-current_phase_name: internal skill and prompt cleanup
+current_phase: 14
+current_phase_name: define agent participation standard and platform guidance
 current_plan: 0
-status: verifying
-stopped_at: Phase 11 context gathered
-last_updated: "2026-03-06T19:36:03.156Z"
+status: planning
+stopped_at: Phase 11 verified complete — next up Phase 14 planning
+last_updated: "2026-03-07T08:38:00+08:00"
 last_activity: 2026-03-07
 progress:
   total_phases: 10
-  completed_phases: 6
-  total_plans: 16
-  completed_plans: 16
-  percent: 60
+  completed_phases: 7
+  total_plans: 18
+  completed_plans: 18
+  percent: 70
 ---
 
 # Project State
@@ -24,19 +24,19 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-03-05)
 
 **Core value:** Working ZK proofs that actually verify — agents prove registry membership and bid range without revealing identity, demonstrated end-to-end.
-**Current focus:** Phase 11 - Internal skill and prompt cleanup, with follow-on phases for the external participation standard, AgentKit adapter path, and agent playbook
+**Current focus:** Phase 14 - Define the agent participation standard and platform guidance, followed by the AgentKit adapter path and the external agent playbook
 
 ## Current Position
 
-**Current Phase:** 11
-**Current Phase Name:** internal skill and prompt cleanup
+**Current Phase:** 14
+**Current Phase Name:** define agent participation standard and platform guidance
 **Total Phases:** 16
 **Current Plan:** 0
 **Total Plans in Phase:** 0
-**Status:** Phase 13 is complete — the Worker-safe verifier is deployed, the remote D1 schema is reconciled, and both local and deployed fresh-agent JOIN tracks passed. Remaining milestone work is the narrowed internal cleanup in Phase 11 plus new phases 14-16 for the external participation standard, AgentKit wallet integration, and autonomous agent playbook.
+**Status:** Phase 11 is verified complete. The stale internal skill tree is removed, live MCP helper surfaces now point to the current autonomous lifecycle, and the active milestone focus moves to Phase 14 for the external participation standard and platform guidance.
 **Last Activity:** 2026-03-07
 
-**Progress:** [██████░░░░] 60%
+**Progress:** [███████░░░] 70%
 
 ## Performance Metrics
 
@@ -55,6 +55,8 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 | Phase 08 P02 | 4m | 2 tasks | 5 files |
 | Phase 09-zk-enforcement P01 | 15m | 2 tasks | 7 files |
 | Phase 09-zk-enforcement P02 | 23min | 2 tasks | 5 files |
+| Phase 11-internal-skill-and-prompt-cleanup P01 | 20m | 2 tasks | 5 files |
+| Phase 11-internal-skill-and-prompt-cleanup P02 | 25m | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -87,6 +89,9 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 - [Phase 13]: The engine verifier now uses a shared Worker-safe `verifyGroth16()` backend that loads imported/precompiled `.wasm` in Workers and raw bytes in Node
 - [Phase 13]: Fresh local and deployed sign-off succeeded for `register_identity -> check_identity -> deposit_bond -> join_auction`
 - [Phase 13]: Remote D1 schema and `d1_migrations` were reconciled so deployed JOIN can persist `zk_nullifier`
+- [Phase 11]: The stale `.claude/skills/auction/*` tree is removed; `mcp-server/README.md` is now the canonical internal landing page while preserved `.planning/**` records remain untouched history
+- [Phase 11]: Active MCP helper text now routes onboarding through `register_identity`, treats JOIN/BID as fail-closed `AGENT_STATE_FILE` / `proofPayload` flows, and points exits to `claim_refund` + `withdraw_funds`
+- [Phase 11]: `11-UAT.md` passed 6/6 checks with no gaps, closing the internal cleanup phase
 
 ### Roadmap Evolution
 
@@ -98,6 +103,8 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 - Phase 15 added: Integrate an AgentKit-compatible wallet adapter while preserving ZK proof and ERC-8004 ownership invariants
 - Phase 16 added: Publish the external-facing agent auction skill and autonomous participation playbook
 - Phase 11 re-scoped: internal stale skill/prompt cleanup only; public AgentKit participation guidance moved to Phases 14-16
+- Phase 11 executed: removed stale internal skill artifacts and aligned live MCP helper/docs surfaces with the post-Phase-13 lifecycle
+- Phase 11 verified complete: `11-UAT.md` passed with no gaps, and focus advances to Phase 14
 
 ### Pending Todos
 
@@ -117,7 +124,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 
 ## Session Continuity
 
-Last activity: 2026-03-07 — Completed Phase 13 with local + deployed fresh-agent JOIN success and remote D1 reconciliation
+Last activity: 2026-03-07 — Verified Phase 11 complete with 6/6 passing UAT checks and moved milestone focus to Phase 14
 **Last session:** 2026-03-06T19:36:03.154Z
-**Stopped At:** Phase 11 context gathered
-**Resume File:** .planning/phases/11-internal-skill-and-prompt-cleanup/11-CONTEXT.md
+**Stopped At:** Phase 11 verified complete — next up Phase 14 planning
+**Resume File:** .planning/phases/11-internal-skill-and-prompt-cleanup/11-UAT.md
