@@ -4,16 +4,16 @@ milestone: v1.1
 milestone_name: Autonomous Agent Onboarding
 current_phase: 14
 current_phase_name: define agent participation standard and platform guidance
-current_plan: 0
-status: planning
-stopped_at: Phase 14 planned — next up Phase 14 execution
-last_updated: "2026-03-07T18:57:58+08:00"
+current_plan: 1
+status: executing
+stopped_at: Phase 14 wave 1 complete — next up 14-02 execution
+last_updated: "2026-03-07T19:14:00+08:00"
 last_activity: 2026-03-07
 progress:
   total_phases: 10
   completed_phases: 7
-  total_plans: 18
-  completed_plans: 18
+  total_plans: 20
+  completed_plans: 19
   percent: 70
 ---
 
@@ -31,9 +31,9 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 **Current Phase:** 14
 **Current Phase Name:** define agent participation standard and platform guidance
 **Total Phases:** 16
-**Current Plan:** 0
-**Total Plans in Phase:** 0
-**Status:** Phase 14 is now planned. The participation-standard requirements are added to the roadmap and requirements map, and two execution plans are ready: one for the canonical guide plus repo guidance alignment, and one for the public `/participate` handoff page and frontend links.
+**Current Plan:** 1
+**Total Plans in Phase:** 2
+**Status:** Phase 14 is in execution. Wave 1 is complete: the canonical participation guide is live in `docs/participation-guide.md`, and the repo’s major guidance surfaces now align on the same support matrix, wallet baseline, and fallback policy. Wave 2 is next for the public `/participate` handoff page and frontend links.
 **Last Activity:** 2026-03-07
 
 **Progress:** [███████░░░] 70%
@@ -94,6 +94,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 - [Phase 11]: `11-UAT.md` passed 6/6 checks with no gaps, closing the internal cleanup phase
 - [Phase 14]: The platform standard should center on `AgentKit + CDP Server Wallet`, with the current raw-key MCP path retained only as an advanced bridge and a new public setup-guide surface added for humans and agents
 - [Phase 14]: The execution split is now two waves — canonical participation guide + repo alignment first, then the public `/participate` handoff page and frontend guide links
+- [Phase 14]: `docs/participation-guide.md` is now the canonical operator-facing standard, and README/docs/MCP guidance now point to it consistently
 
 ### Roadmap Evolution
 
@@ -109,6 +110,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 - Phase 11 verified complete: `11-UAT.md` passed with no gaps, and focus advances to Phase 14
 - Phase 14 context captured: the supported stack policy, guidance surfaces, minimum requirements, and fallback model are now locked for planning
 - Phase 14 planned: `PART-01` through `PART-04` are now defined in requirements, roadmap metadata is filled in, and `14-01` / `14-02` are ready for execution
+- Phase 14 wave 1 executed: the canonical participation guide is published and repo guidance surfaces are aligned ahead of the public `/participate` page
 
 ### Pending Todos
 
@@ -128,7 +130,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 
 ## Session Continuity
 
-Last activity: 2026-03-07 — Planned Phase 14 into two execution waves for the participation standard and public setup-guide surfaces
+Last activity: 2026-03-07 — Completed Phase 14 wave 1 by publishing the canonical participation guide and aligning repo guidance
 **Last session:** 2026-03-06T19:36:03.154Z
-**Stopped At:** Phase 14 planned — next up Phase 14 execution
-**Resume File:** .planning/phases/14-define-agent-participation-standard-and-platform-guidance/14-01-PLAN.md
+**Stopped At:** Phase 14 wave 1 complete — next up 14-02 execution
+**Resume File:** .planning/phases/14-define-agent-participation-standard-and-platform-guidance/14-02-PLAN.md
