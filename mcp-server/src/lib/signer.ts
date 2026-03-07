@@ -15,6 +15,11 @@ import {
 import { privateKeyToAccount } from 'viem/accounts'
 import { MEMBERSHIP_SIGNALS } from '@agent-auction/crypto'
 
+export interface ActionSigningAccount {
+  address: Address
+  signTypedData(typedData: unknown): Promise<Hex>
+}
+
 // ── Constants ────────────────────────────────────────────────────────────
 
 const AUCTION_REGISTRY = '0xFEc7a05707AF85C6b248314E20FF8EfF590c3639' as const
@@ -98,14 +103,23 @@ export function deriveJoinNullifier(agentId: bigint, auctionId: Hex): bigint {
 // ── Signer ───────────────────────────────────────────────────────────────
 
 export class ActionSigner {
-  private readonly account
+  private readonly signerAddress: Address
+  private readonly signTypedDataImpl: (typedData: unknown) => Promise<Hex>
 
-  constructor(privateKey: Hex) {
-    this.account = privateKeyToAccount(privateKey)
+  constructor(source: Hex | ActionSigningAccount) {
+    if (typeof source === 'string') {
+      const account = privateKeyToAccount(source)
+      this.signerAddress = account.address
+      this.signTypedDataImpl = (typedData) => account.signTypedData(typedData as never)
+      return
+    }
+
+    this.signerAddress = source.address
+    this.signTypedDataImpl = source.signTypedData.bind(source)
   }
 
   get address(): Address {
-    return this.account.address
+    return this.signerAddress
   }
 
   /**
@@ -146,7 +160,7 @@ export class ActionSigner {
       nullifier = deriveJoinNullifier(BigInt(params.agentId), params.auctionId)
     }
 
-    const signature = await this.account.signTypedData({
+    const signature = await this.signTypedDataImpl({
       domain: EIP712_DOMAIN,
       types: JOIN_TYPES,
       primaryType: 'Join',
@@ -162,7 +176,7 @@ export class ActionSigner {
     return {
       type: 'JOIN',
       agentId: params.agentId,
-      wallet: this.account.address,
+      wallet: this.signerAddress,
       amount: params.bondAmount.toString(),
       nonce: params.nonce,
       deadline: deadline.toString(),
@@ -191,7 +205,7 @@ export class ActionSigner {
   }> {
     const deadline = BigInt(Math.floor(Date.now() / 1000) + (params.deadlineSec ?? 300))
 
-    const signature = await this.account.signTypedData({
+    const signature = await this.signTypedDataImpl({
       domain: EIP712_DOMAIN,
       types: BID_TYPES,
       primaryType: 'Bid',
@@ -206,7 +220,7 @@ export class ActionSigner {
     return {
       type: 'BID',
       agentId: params.agentId,
-      wallet: this.account.address,
+      wallet: this.signerAddress,
       amount: params.amount.toString(),
       nonce: params.nonce,
       deadline: deadline.toString(),
@@ -239,7 +253,7 @@ export class ActionSigner {
     const deadline = BigInt(Math.floor(Date.now() / 1000) + (params.deadlineSec ?? 300))
     const zeroBytes32 = ('0x' + '00'.repeat(32)) as Hex
 
-    const signature = await this.account.signTypedData({
+    const signature = await this.signTypedDataImpl({
       domain: EIP712_DOMAIN,
       types: BID_COMMIT_TYPES,
       primaryType: 'BidCommit',
@@ -256,7 +270,7 @@ export class ActionSigner {
     return {
       type: 'BID_COMMIT',
       agentId: params.agentId,
-      wallet: this.account.address,
+      wallet: this.signerAddress,
       amount: '0',
       nonce: params.nonce,
       deadline: deadline.toString(),
@@ -289,7 +303,7 @@ export class ActionSigner {
   }> {
     const deadline = BigInt(Math.floor(Date.now() / 1000) + (params.deadlineSec ?? 300))
 
-    const signature = await this.account.signTypedData({
+    const signature = await this.signTypedDataImpl({
       domain: EIP712_DOMAIN,
       types: REVEAL_TYPES,
       primaryType: 'Reveal',
@@ -305,7 +319,7 @@ export class ActionSigner {
     return {
       type: 'REVEAL',
       agentId: params.agentId,
-      wallet: this.account.address,
+      wallet: this.signerAddress,
       amount: params.bid.toString(),
       revealSalt: params.salt.toString(),
       nonce: params.nonce,

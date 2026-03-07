@@ -5,14 +5,38 @@
  * missing config, nonce incrementation.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   makeCapturingMcpServer,
   makeMockEngine,
   makeConfig,
   parseToolResponse,
   TEST_AUCTION_ID,
+  TEST_WALLET,
 } from './helpers.js'
+
+vi.mock('../src/lib/wallet-backend.js', async () => {
+  const actual = await vi.importActual<typeof import('../src/lib/wallet-backend.js')>(
+    '../src/lib/wallet-backend.js',
+  )
+  return {
+    ...actual,
+    getEvmWalletProvider: vi.fn(async (config: import('../src/lib/config.js').ServerConfig) => {
+      if (config.walletBackendMode !== 'agentkit') {
+        return actual.getEvmWalletProvider(config)
+      }
+
+      return {
+        kind: 'agentkit' as const,
+        path: 'supported-agentkit-cdp' as const,
+        wallet: TEST_WALLET,
+        signTypedData: async () => `0x${'3'.repeat(130)}`,
+        writeContract: vi.fn(),
+      }
+    }),
+  }
+})
+
 import { registerRevealTool } from '../src/tools/reveal.js'
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -116,6 +140,40 @@ describe('reveal_bid', () => {
     expect(body.success).toBe(false)
     const error = body.error as { code: string }
     expect(error.code).toBe('MISSING_CONFIG')
+  })
+
+  it('uses the supported AgentKit/CDP backend when configured', async () => {
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+    const { mockEngine } = makeMockEngine({
+      postImpl: async () => ({ seq: 4, eventHash: '0xreveal', prevHash: '0xprev' }),
+    })
+    const config = makeConfig({
+      agentPrivateKey: null,
+      walletBackendMode: 'agentkit',
+      cdp: {
+        apiKeyId: 'cdp-key-id',
+        apiKeySecret: 'cdp-key-secret',
+        walletSecret: 'cdp-wallet-secret',
+        walletAddress: TEST_WALLET,
+        networkId: 'base-sepolia',
+      },
+      baseSepoliaRpc: 'https://sepolia.base.org',
+    })
+    const nonceTracker = new Map<string, number>()
+
+    registerRevealTool(mockServer, mockEngine, config, nonceTracker)
+    const handler = getHandler()
+
+    const result = await handler({
+      auctionId: TEST_AUCTION_ID,
+      bid: '100000000',
+      salt: '12345678901234567890',
+    })
+    const body = parseToolResponse(result)
+
+    expect(body.success).toBe(true)
+    expect(body.walletBackend).toBe('supported-agentkit-cdp')
+    expect(body.wallet).toBe(TEST_WALLET)
   })
 
   it('increments nonce after successful reveal', async () => {

@@ -129,7 +129,15 @@ export function makeMockEngine(overrides?: {
 export function makeConfig(overrides?: Partial<ServerConfig>): ServerConfig {
   return {
     engineUrl: 'http://localhost:8787',
+    walletBackendMode: 'auto',
     agentPrivateKey: TEST_PRIVATE_KEY,
+    cdp: {
+      apiKeyId: null,
+      apiKeySecret: null,
+      walletSecret: null,
+      walletAddress: null,
+      networkId: 'base-sepolia',
+    },
     agentId: TEST_AGENT_ID,
     port: 3100,
     engineAdminKey: null,

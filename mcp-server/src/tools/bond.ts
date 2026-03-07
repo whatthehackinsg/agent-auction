@@ -12,16 +12,17 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { Hex } from 'viem'
+import { privateKeyToAccount } from 'viem/accounts'
 import type { EngineClient } from '../lib/engine.js'
 import type { ServerConfig } from '../lib/config.js'
-import { resolveBondTarget, resolveWriteTarget } from '../lib/agent-target.js'
+import { resolveBackendWriteTarget } from '../lib/agent-target.js'
 import {
+  createBackendAwareBaseSepoliaClients,
   createBaseSepoliaClients,
   readIdentityOwner,
   transferUsdcToEscrow,
   type BaseSepoliaClients,
 } from '../lib/onchain.js'
-import { ActionSigner } from '../lib/signer.js'
 import { toolError, toolSuccess } from '../lib/tool-response.js'
 
 interface BondStatusResponse {
@@ -41,7 +42,7 @@ interface AuctionDetailResponse {
 }
 
 interface BondToolsDeps {
-  createClients?: (rpcUrl: string, privateKey: Hex) => BaseSepoliaClients
+  createClients?: (config: ServerConfig) => Promise<BaseSepoliaClients> | BaseSepoliaClients
   smartWaitAttempts?: number
   pollDelayMs?: number
   sleep?: (ms: number) => Promise<void>
@@ -133,17 +134,20 @@ export function registerBondTools(
       }),
     },
     async ({ auctionId, agentId: inputAgentId, amount, txHash }) => {
-      let target: ReturnType<typeof resolveWriteTarget>
+      let target: ReturnType<typeof resolveBackendWriteTarget>
       try {
-        target = resolveWriteTarget(config, {
+        target = resolveBackendWriteTarget(config, {
           agentId: inputAgentId,
         })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        return toolError('MISSING_CONFIG', msg, 'Set AGENT_PRIVATE_KEY and AGENT_ID env vars')
+        return toolError(
+          'MISSING_CONFIG',
+          msg,
+          'Complete the supported AgentKit + CDP Server Wallet setup, or explicitly opt into MCP_WALLET_BACKEND=raw-key.',
+        )
       }
-      const signer = new ActionSigner(target.agentPrivateKey)
-      const depositor = signer.address
+      const depositor = target.wallet
 
       let result: BondRecordResponse
       try {
@@ -177,6 +181,7 @@ export function registerBondTools(
                 success: true,
                 auctionId,
                 agentId: target.agentId,
+                walletBackend: target.backend.path,
                 depositor,
                 amount,
                 bondStatus: result.status,
@@ -217,20 +222,32 @@ export function registerBondTools(
       }),
     },
     async ({ auctionId, agentId: inputAgentId, amount, fundingPrivateKey }) => {
-      let target: ReturnType<typeof resolveBondTarget>
+      let target: ReturnType<typeof resolveBackendWriteTarget>
       try {
-        target = resolveBondTarget(config, {
+        target = resolveBackendWriteTarget(config, {
           agentId: inputAgentId,
-          fundingPrivateKey: normalizeOptionalPrivateKey(fundingPrivateKey),
         })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         return toolError(
           'MISSING_CONFIG',
           msg,
-          'Set AGENT_PRIVATE_KEY and AGENT_ID env vars, or pass agentId with a configured signer.',
+          'Complete the supported AgentKit + CDP Server Wallet setup, or explicitly opt into MCP_WALLET_BACKEND=raw-key.',
         )
       }
+
+      const normalizedFundingOverride = normalizeOptionalPrivateKey(fundingPrivateKey)
+      if (normalizedFundingOverride && target.backend.kind !== 'raw-key') {
+        return toolError(
+          'FUNDING_OVERRIDE_UNSUPPORTED',
+          'fundingPrivateKey overrides are only supported on the advanced raw-key bridge.',
+          'Remove fundingPrivateKey for the supported AgentKit path, or explicitly opt into MCP_WALLET_BACKEND=raw-key.',
+        )
+      }
+
+      const fundingWallet = normalizedFundingOverride
+        ? privateKeyToAccount(normalizedFundingOverride).address
+        : target.wallet!
 
       let currentStatus: BondStatusResponse
       try {
@@ -248,7 +265,8 @@ export function registerBondTools(
           agentId: target.agentId,
           bondStatus: currentStatus.status,
           amount: amount ?? null,
-          depositor: target.fundingWallet,
+          depositor: fundingWallet,
+          walletBackend: target.backend.path,
           idempotent: true,
           nextAction: currentStatus.status === 'CONFIRMED' ? 'join_auction' : 'get_bond_status',
         })
@@ -279,8 +297,9 @@ export function registerBondTools(
         )
       }
 
-      const createClients = deps.createClients ?? createBaseSepoliaClients
-      const fundingClients = createClients(config.baseSepoliaRpc, target.fundingPrivateKey)
+      const fundingClients = normalizedFundingOverride
+        ? createBaseSepoliaClients(config.baseSepoliaRpc, normalizedFundingOverride)
+        : await getBondClients(config, deps)
 
       let identityOwner: string
       try {
@@ -294,10 +313,10 @@ export function registerBondTools(
         )
       }
 
-      if (identityOwner.toLowerCase() !== target.fundingWallet.toLowerCase()) {
+      if (identityOwner.toLowerCase() !== fundingWallet.toLowerCase()) {
         return toolError(
           'FUNDING_WALLET_MISMATCH',
-          `Funding wallet ${target.fundingWallet} does not own agentId ${target.agentId} (owner is ${identityOwner})`,
+          `Funding wallet ${fundingWallet} does not own agentId ${target.agentId} (owner is ${identityOwner})`,
           'Use the ERC-8004 owner wallet for this agent, or remove the funding override and retry deposit_bond.',
         )
       }
@@ -318,7 +337,7 @@ export function registerBondTools(
       try {
         engineResult = await engine.post<BondRecordResponse>(`/auctions/${auctionId}/bonds`, {
           agentId: target.agentId,
-          depositor: target.fundingWallet,
+          depositor: fundingWallet,
           amount: resolvedAmount,
           txHash: transfer.txHash,
         })
@@ -354,7 +373,8 @@ export function registerBondTools(
           auctionId,
           agentId: target.agentId,
           amount: resolvedAmount,
-          depositor: target.fundingWallet,
+          depositor: fundingWallet,
+          walletBackend: target.backend.path,
           txHash: engineResult.txHash,
           bondStatus: 'CONFIRMED',
           idempotent: false,
@@ -367,7 +387,8 @@ export function registerBondTools(
         auctionId,
         agentId: target.agentId,
         amount: resolvedAmount,
-        depositor: target.fundingWallet,
+        depositor: fundingWallet,
+        walletBackend: target.backend.path,
         txHash: engineResult.txHash,
         bondStatus: 'PENDING',
         idempotent: false,
@@ -441,4 +462,12 @@ function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms)
   })
+}
+
+async function getBondClients(
+  config: ServerConfig,
+  deps: BondToolsDeps,
+): Promise<BaseSepoliaClients> {
+  const createClients = deps.createClients ?? createBackendAwareBaseSepoliaClients
+  return await createClients(config)
 }

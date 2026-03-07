@@ -15,6 +15,8 @@ import {
   computeCapabilityCommitment,
   type AgentPrivateState,
 } from '@agent-auction/crypto'
+import type { ServerConfig } from './config.js'
+import { getEvmWalletProvider, resolveWriteBackend, type ResolvedWriteBackend } from './wallet-backend.js'
 
 export const BASE_SEPOLIA_CONTRACTS = {
   identityRegistry: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
@@ -147,12 +149,16 @@ export const auctionEscrowAbi = [
 ] as const
 
 export type BaseSepoliaPublicClient = ReturnType<typeof createBaseSepoliaPublicClient>
-export type BaseSepoliaWalletClient = ReturnType<typeof createWalletClient>
+export interface BaseSepoliaWalletClient {
+  writeContract(parameters: unknown): Promise<Hex>
+}
 
 export interface BaseSepoliaClients {
-  account: PrivateKeyAccount
+  account: Pick<PrivateKeyAccount, 'address'>
   publicClient: BaseSepoliaPublicClient
   walletClient: BaseSepoliaWalletClient
+  wallet: Address
+  backend: ResolvedWriteBackend
 }
 
 export interface IdentityRegistrationResult {
@@ -191,7 +197,59 @@ export function createBaseSepoliaWalletClient(rpcUrl: string, privateKey: Hex) {
 export function createBaseSepoliaClients(rpcUrl: string, privateKey: Hex): BaseSepoliaClients {
   const publicClient = createBaseSepoliaPublicClient(rpcUrl)
   const { account, walletClient } = createBaseSepoliaWalletClient(rpcUrl, privateKey)
-  return { account, publicClient, walletClient }
+  return {
+    account,
+    publicClient,
+    walletClient,
+    wallet: account.address,
+    backend: {
+      kind: 'raw-key',
+      path: 'advanced-raw-key',
+      configured: true,
+      supportLevel: 'advanced',
+      selectionSource: 'explicit',
+      wallet: account.address,
+      networkId: 'base-sepolia',
+    },
+  }
+}
+
+export async function createBackendAwareBaseSepoliaClients(
+  config: ServerConfig,
+): Promise<BaseSepoliaClients> {
+  if (!config.baseSepoliaRpc) {
+    throw new Error('BASE_SEPOLIA_RPC is required for on-chain writes')
+  }
+
+  const backend = resolveWriteBackend(config)
+  if (!backend.configured || backend.kind === 'none' || !backend.wallet) {
+    throw new Error(
+      'No write backend is configured. Complete the supported AgentKit + CDP Server Wallet setup or explicitly opt into the advanced raw-key bridge.',
+    )
+  }
+
+  const publicClient = createBaseSepoliaPublicClient(config.baseSepoliaRpc)
+
+  return {
+    account: { address: backend.wallet },
+    publicClient,
+    walletClient: {
+      writeContract: async (parameters: unknown) => {
+        const walletProvider = await getEvmWalletProvider(config, {}, {
+          // Recreate the AgentKit/CDP provider per write. Reusing a long-lived
+          // provider causes stale nonce / gas-estimation failures on the second
+          // on-chain transaction in the same process.
+          fresh: backend.kind === 'agentkit',
+        })
+        return walletProvider.writeContract(parameters as never)
+      },
+    },
+    wallet: backend.wallet,
+    backend: {
+      ...backend,
+      wallet: backend.wallet,
+    },
+  }
 }
 
 export function parseRegisteredEvent(

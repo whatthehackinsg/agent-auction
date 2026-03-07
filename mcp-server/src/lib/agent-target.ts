@@ -3,6 +3,7 @@ import type { Address, Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import type { ServerConfig } from './config.js'
 import { defaultAgentStatePath } from './agent-state.js'
+import { resolveWriteBackend, type ResolvedWriteBackend } from './wallet-backend.js'
 
 export interface AgentTargetInput {
   agentId?: string | null
@@ -26,24 +27,58 @@ export interface ResolvedBondTarget extends ResolvedWriteTarget {
   usesFundingOverride: boolean
 }
 
+export interface ResolvedBackendTarget {
+  agentId: string
+  wallet: Address | null
+  agentStateFile: string | null
+  backend: ResolvedWriteBackend
+}
+
+export function resolveBackendWriteTarget(
+  config: ServerConfig,
+  input: AgentTargetInput = {},
+): ResolvedBackendTarget {
+  const agentId = input.agentId ?? config.agentId
+  if (!agentId) {
+    throw new Error('AGENT_ID is required for this action')
+  }
+
+  const backend = resolveWriteBackend(config)
+  if (!backend.configured) {
+    throw new Error(
+      'No write backend is configured. Set the supported AgentKit/CDP env vars or explicitly opt into MCP_WALLET_BACKEND=raw-key.',
+    )
+  }
+
+  return {
+    agentId,
+    wallet: backend.wallet,
+    agentStateFile: resolveAgentStateFile(config, agentId, input.agentStateFile ?? null),
+    backend,
+  }
+}
+
 export function resolveWriteTarget(
   config: ServerConfig,
   input: AgentTargetInput = {},
 ): ResolvedWriteTarget {
-  const agentId = input.agentId ?? config.agentId
-  if (!config.agentPrivateKey) {
-    throw new Error('AGENT_PRIVATE_KEY is required for this action')
+  const backendTarget = resolveBackendWriteTarget(config, input)
+  if (backendTarget.backend.kind !== 'raw-key' || !config.agentPrivateKey || !backendTarget.wallet) {
+    throw new Error(
+      `The active write backend is ${backendTarget.backend.path}. This raw-key-only code path is unavailable until the backend-aware signer/on-chain helpers are used.`,
+    )
   }
+
+  const agentId = input.agentId ?? config.agentId
   if (!agentId) {
     throw new Error('AGENT_ID is required for this action')
   }
   const agentPrivateKey = config.agentPrivateKey
-  const wallet = privateKeyToAccount(agentPrivateKey).address
 
   return {
     agentId,
     agentPrivateKey,
-    wallet,
+    wallet: backendTarget.wallet,
     agentStateFile: resolveAgentStateFile(config, agentId, input.agentStateFile ?? null),
   }
 }

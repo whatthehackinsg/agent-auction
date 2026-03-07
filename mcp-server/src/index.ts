@@ -33,11 +33,13 @@ import { registerIdentityTool as registerCheckIdentityTool } from './tools/ident
 import { registerRegisterIdentityTool } from './tools/register-identity.js'
 import { registerExitTools } from './tools/exits.js'
 import { registerPrompts } from './prompts.js'
+import { describeWriteBackend } from './lib/wallet-backend.js'
 
 // ── Configuration ────────────────────────────────────────────────────
 
 const config = loadConfig()
 const engine = new EngineClient(config.engineUrl, config.engineAdminKey)
+const writeBackend = describeWriteBackend(config)
 
 /** Per-action-type nonce tracker: "JOIN:<agentId>" | "BID:<agentId>" → next nonce */
 const nonceTracker = new Map<string, number>()
@@ -153,8 +155,9 @@ app.get('/health', (_req, res) => {
     status: 'ok',
     server: 'auction-mcp-server',
     engineUrl: config.engineUrl,
-    agentConfigured: config.agentPrivateKey !== null,
+    agentConfigured: writeBackend.configured,
     agentId: config.agentId,
+    writeBackend,
   })
 })
 
@@ -163,7 +166,11 @@ app.get('/health', (_req, res) => {
 app.listen(config.port, () => {
   console.log(`Auction MCP server listening on http://127.0.0.1:${config.port}/mcp`)
   console.log(`Engine URL: ${config.engineUrl}`)
-  console.log(`Agent configured: ${config.agentPrivateKey !== null}`)
+  console.log(`Write backend: ${writeBackend.path}`)
+  console.log(`Agent configured: ${writeBackend.configured}`)
+  if (writeBackend.error) {
+    console.log(`Write backend issue: ${writeBackend.error}`)
+  }
   if (config.agentId) {
     console.log(`Agent ID: ${config.agentId}`)
   }

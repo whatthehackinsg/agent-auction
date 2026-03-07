@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@agent-auction/crypto": "file:../packages/crypto",
+    "@coinbase/agentkit": "^0.10.4",
     "@modelcontextprotocol/sdk": "^1.27.0",
     "ethers": "^6.16.0",
     "express": "^5.1.0",

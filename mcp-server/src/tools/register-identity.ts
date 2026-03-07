@@ -1,15 +1,16 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { setTimeout as sleep } from 'node:timers/promises'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { prepareOnboarding } from '@agent-auction/crypto'
 import type { Hex } from 'viem'
 import type { EngineClient } from '../lib/engine.js'
 import type { ServerConfig } from '../lib/config.js'
-import { requireRegistrationConfig } from '../lib/config.js'
 import { defaultAgentStatePath, persistAgentState } from '../lib/agent-state.js'
+import { assessCompatibleZkState, type ZkStateAssessment } from '../lib/identity-check.js'
 import {
-  createBaseSepoliaClients,
+  createBackendAwareBaseSepoliaClients,
   registerAgentIdentity,
   registerPrivacyMembership,
   type BaseSepoliaClients,
@@ -17,6 +18,8 @@ import {
   type PrivacyRegistrationResult,
 } from '../lib/onchain.js'
 import { toolError, toolSuccess } from '../lib/tool-response.js'
+import { resolveBackendWriteTarget } from '../lib/agent-target.js'
+import { resolveWriteBackend } from '../lib/wallet-backend.js'
 
 interface VerifyIdentityResponse {
   verified: boolean
@@ -37,12 +40,17 @@ interface ReadinessSnapshot {
 interface RegistrationSuccessData extends Record<string, unknown> {
   agentId: string
   wallet: string
+  walletBackend: string
   resolvedWallet: string
-  agentURI: string
-  erc8004TxHash: Hex
+  agentURI: string | null
+  erc8004TxHash: Hex | null
   privacyTxHash: Hex | null
   stateFilePath: string | null
   readiness: ReadinessSnapshot
+  attach?: {
+    attached: boolean
+    mode: 'attach-existing'
+  }
   warning?: {
     code: string
     detail: string
@@ -75,8 +83,14 @@ interface RegistrationMetadataInput {
 }
 
 interface RegisterIdentityDeps {
-  createClients?: (rpcUrl: string, privateKey: Hex) => BaseSepoliaClients
+  createClients?: (config: ServerConfig) => Promise<BaseSepoliaClients> | BaseSepoliaClients
+  assessZkState?: (input: {
+    agentId: string
+    stateFilePath: string | null
+    baseSepoliaRpc: string | null
+  }) => Promise<ZkStateAssessment> | ZkStateAssessment
   now?: () => Date
+  sleep?: (ms: number) => Promise<void>
 }
 
 export function buildRegistrationDataUri(input: RegistrationMetadataInput): string {
@@ -108,6 +122,14 @@ export function registerRegisterIdentityTool(
       description:
         'Mint a real ERC-8004 identity, register AgentPrivacyRegistry membership, save the agent state file, and confirm readiness in one call.',
       inputSchema: z.object({
+        attachExisting: z
+          .boolean()
+          .optional()
+          .describe('If true, attach an existing ERC-8004 identity plus compatible local ZK state instead of minting a new identity.'),
+        agentId: z
+          .string()
+          .optional()
+          .describe('Optional explicit agent ID for attachExisting mode. Defaults to AGENT_ID when omitted.'),
         name: z
           .string()
           .optional()
@@ -130,19 +152,7 @@ export function registerRegisterIdentityTool(
           .describe('Optional extra JSON metadata to embed in the ERC-8004 data URI payload.'),
       }),
     },
-    async ({ name, description, capabilityIds, stateFilePath, metadata }) => {
-      let registrationConfig: ReturnType<typeof requireRegistrationConfig>
-      try {
-        registrationConfig = requireRegistrationConfig(config)
-      } catch (err) {
-        const detail = err instanceof Error ? err.message : String(err)
-        return toolError(
-          'MISSING_CONFIG',
-          detail,
-          'Set AGENT_PRIVATE_KEY and BASE_SEPOLIA_RPC before calling register_identity.',
-        )
-      }
-
+    async ({ attachExisting, agentId, name, description, capabilityIds, stateFilePath, metadata }) => {
       let normalizedCapabilityIds: bigint[]
       try {
         normalizedCapabilityIds = normalizeCapabilityIds(capabilityIds)
@@ -155,15 +165,56 @@ export function registerRegisterIdentityTool(
         )
       }
 
-      const createClients = deps.createClients ?? createBaseSepoliaClients
-      const clients = createClients(
-        registrationConfig.baseSepoliaRpc,
-        registrationConfig.agentPrivateKey,
-      )
+      if (attachExisting) {
+        return attachExistingIdentity(
+          engine,
+          config,
+          deps,
+          {
+            agentId,
+            stateFilePath,
+          },
+        )
+      }
+
+      let backendPath: string
+      try {
+        const backend = resolveWriteBackend(config)
+        if (!backend.configured || !backend.wallet) {
+          throw new Error(
+            'A configured write backend is required for register_identity.',
+          )
+        }
+        if (!config.baseSepoliaRpc) {
+          throw new Error('BASE_SEPOLIA_RPC is required for on-chain registration')
+        }
+        backendPath = backend.path
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err)
+        return toolError(
+          'MISSING_CONFIG',
+          detail,
+          'Complete the supported AgentKit + CDP Server Wallet setup, or explicitly opt into MCP_WALLET_BACKEND=raw-key with BASE_SEPOLIA_RPC.',
+        )
+      }
+
+      let clients: BaseSepoliaClients
+      try {
+        clients = await getRegistrationClients(config, deps)
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err)
+        return toolError(
+          'MISSING_CONFIG',
+          detail,
+          'Complete the supported AgentKit + CDP Server Wallet setup, or explicitly opt into MCP_WALLET_BACKEND=raw-key with BASE_SEPOLIA_RPC.',
+        )
+      }
+      const clientWallet = getClientsWallet(clients)
+      const clientBackendPath = getClientsBackendPath(clients, config)
 
       const now = deps.now?.() ?? new Date()
       const agentURI = buildRegistrationDataUri({
-        wallet: clients.account.address,
+        wallet: clientWallet,
         name,
         description,
         capabilityIds: normalizedCapabilityIds,
@@ -185,7 +236,11 @@ export function registerRegisterIdentityTool(
 
       const resolvedStateFilePath = path.resolve(
         stateFilePath ??
-          defaultAgentStatePath(identityRegistration.agentId, registrationConfig.agentStateDir),
+          defaultAgentStatePath(
+            identityRegistration.agentId,
+            config.agentStateDir
+            ?? (config.agentStateFile ? path.dirname(path.resolve(config.agentStateFile)) : '.'),
+          ),
       )
 
       let privateState: Awaited<ReturnType<typeof prepareOnboarding>>
@@ -201,7 +256,8 @@ export function registerRegisterIdentityTool(
               detail,
             },
             identityRegistration,
-            wallet: clients.account.address,
+            wallet: clientWallet,
+            walletBackend: clientBackendPath,
             agentURI,
             stateFilePath: resolvedStateFilePath,
           },
@@ -213,7 +269,7 @@ export function registerRegisterIdentityTool(
           outputPath: resolvedStateFilePath,
           metadata: {
             createdAt: now.toISOString(),
-            wallet: clients.account.address,
+            wallet: clientWallet,
             erc8004TxHash: identityRegistration.txHash,
             agentURI,
           },
@@ -228,7 +284,8 @@ export function registerRegisterIdentityTool(
               detail,
             },
             identityRegistration,
-            wallet: clients.account.address,
+            wallet: clientWallet,
+            walletBackend: clientBackendPath,
             agentURI,
             stateFilePath: resolvedStateFilePath,
           },
@@ -237,7 +294,12 @@ export function registerRegisterIdentityTool(
 
       let privacyRegistration: PrivacyRegistrationResult
       try {
-        privacyRegistration = await registerPrivacyMembership(clients, privateState)
+        privacyRegistration = await registerPrivacyMembershipWithRetry(
+          clients,
+          privateState,
+          clientBackendPath,
+          deps.sleep ?? sleep,
+        )
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err)
         return reconcilePartialFailure(
@@ -248,7 +310,8 @@ export function registerRegisterIdentityTool(
               detail,
             },
             identityRegistration,
-            wallet: clients.account.address,
+            wallet: clientWallet,
+            walletBackend: clientBackendPath,
             agentURI,
             stateFilePath: resolvedStateFilePath,
           },
@@ -259,7 +322,7 @@ export function registerRegisterIdentityTool(
       try {
         readinessCheck = await engine.post<VerifyIdentityResponse>('/verify-identity', {
           agentId: identityRegistration.agentId.toString(),
-          wallet: clients.account.address,
+          wallet: clientWallet,
         })
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err)
@@ -271,7 +334,8 @@ export function registerRegisterIdentityTool(
               detail,
             },
             identityRegistration,
-            wallet: clients.account.address,
+            wallet: clientWallet,
+            walletBackend: clientBackendPath,
             agentURI,
             privacyTxHash: privacyRegistration.txHash,
             stateFilePath: resolvedStateFilePath,
@@ -291,7 +355,8 @@ export function registerRegisterIdentityTool(
           'ONBOARDING_INCOMPLETE',
           buildIncompleteOnboardingDetail(reconciledState),
           buildNextAction(identityRegistration.agentId.toString(), resolvedStateFilePath, reconciledState),
-          buildPartialRecovery(identityRegistration, clients.account.address, {
+          buildPartialRecovery(identityRegistration, clientWallet, {
+            walletBackend: backendPath,
             resolvedWallet: reconciledState.resolvedWallet,
             privacyTxHash: privacyRegistration.txHash,
             stateFilePath: resolvedStateFilePath,
@@ -304,7 +369,8 @@ export function registerRegisterIdentityTool(
       return toolSuccess(
         buildRegistrationSuccess({
           identityRegistration,
-          wallet: clients.account.address,
+          wallet: clientWallet,
+          walletBackend: backendPath,
           resolvedWallet: reconciledState.resolvedWallet,
           agentURI,
           privacyTxHash: privacyRegistration.txHash,
@@ -330,6 +396,39 @@ function normalizeCapabilityIds(input?: string[]): bigint[] {
 
     return parsed
   })
+}
+
+async function registerPrivacyMembershipWithRetry(
+  clients: BaseSepoliaClients,
+  privateState: Awaited<ReturnType<typeof prepareOnboarding>>,
+  backendPath: string,
+  sleeper: (ms: number) => Promise<void>,
+): Promise<PrivacyRegistrationResult> {
+  const retryDelaysMs = [4_000, 8_000, 12_000]
+  let lastError: unknown
+
+  for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
+    try {
+      return await registerPrivacyMembership(clients, privateState)
+    } catch (error) {
+      lastError = error
+      if (!shouldRetryPrivacyBootstrap(backendPath, error) || attempt === retryDelaysMs.length) {
+        throw error
+      }
+      await sleeper(retryDelaysMs[attempt]!)
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
+}
+
+function shouldRetryPrivacyBootstrap(backendPath: string, error: unknown): boolean {
+  if (backendPath !== 'supported-agentkit-cdp') {
+    return false
+  }
+
+  const detail = error instanceof Error ? error.message : String(error)
+  return /unable to estimate gas|nonce too low/i.test(detail)
 }
 
 function buildReadinessSnapshot(data: VerifyIdentityResponse): ReadinessSnapshot {
@@ -370,22 +469,26 @@ function buildUnavailableReadinessSnapshot(detail: string): ReadinessSnapshot {
 function buildRegistrationSuccess(input: {
   identityRegistration: IdentityRegistrationResult
   wallet: string
+  walletBackend: string
   resolvedWallet: string
-  agentURI: string
+  agentURI: string | null
   privacyTxHash?: Hex
   stateFilePath?: string
   readiness: ReadinessSnapshot
+  attach?: RegistrationSuccessData['attach']
   warning?: RegistrationSuccessData['warning']
 }): RegistrationSuccessData {
   return {
     agentId: input.identityRegistration.agentId.toString(),
     wallet: input.wallet,
+    walletBackend: input.walletBackend,
     resolvedWallet: input.resolvedWallet,
     agentURI: input.agentURI,
     erc8004TxHash: input.identityRegistration.txHash,
     privacyTxHash: input.privacyTxHash ?? null,
     stateFilePath: input.stateFilePath ?? null,
     readiness: input.readiness,
+    attach: input.attach,
     warning: input.warning,
   }
 }
@@ -396,7 +499,8 @@ async function reconcilePartialFailure(
     error: RecoveryError
     identityRegistration: IdentityRegistrationResult
     wallet: string
-    agentURI: string
+    walletBackend: string
+    agentURI: string | null
     privacyTxHash?: Hex
     stateFilePath?: string
   },
@@ -413,6 +517,7 @@ async function reconcilePartialFailure(
       buildRegistrationSuccess({
         identityRegistration: input.identityRegistration,
         wallet: input.wallet,
+        walletBackend: input.walletBackend,
         resolvedWallet: reconciledState.resolvedWallet,
         agentURI: input.agentURI,
         privacyTxHash: input.privacyTxHash,
@@ -428,6 +533,7 @@ async function reconcilePartialFailure(
     input.error.detail,
     buildNextAction(input.identityRegistration.agentId.toString(), input.stateFilePath, reconciledState),
     buildPartialRecovery(input.identityRegistration, input.wallet, {
+      walletBackend: input.walletBackend,
       resolvedWallet: reconciledState.resolvedWallet,
       privacyTxHash: input.privacyTxHash,
       stateFilePath: input.stateFilePath,
@@ -560,4 +666,121 @@ function partialFailure(
       },
     ],
   }
+}
+
+async function getRegistrationClients(
+  config: ServerConfig,
+  deps: RegisterIdentityDeps,
+): Promise<BaseSepoliaClients> {
+  const createClients = deps.createClients ?? createBackendAwareBaseSepoliaClients
+  return await createClients(config)
+}
+
+function getClientsWallet(clients: BaseSepoliaClients): string {
+  return clients.wallet ?? clients.account.address
+}
+
+function getClientsBackendPath(clients: BaseSepoliaClients, config: ServerConfig): string {
+  return clients.backend?.path ?? resolveWriteBackend(config).path
+}
+
+async function attachExistingIdentity(
+  engine: EngineClient,
+  config: ServerConfig,
+  deps: RegisterIdentityDeps,
+  input: {
+    agentId?: string
+    stateFilePath?: string
+  },
+) {
+  let target: ReturnType<typeof resolveBackendWriteTarget>
+  try {
+    target = resolveBackendWriteTarget(config, {
+      agentId: input.agentId ?? null,
+      agentStateFile: input.stateFilePath ?? null,
+    })
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    return toolError(
+      'MISSING_CONFIG',
+      detail,
+      'Complete the supported AgentKit + CDP Server Wallet setup, or explicitly opt into MCP_WALLET_BACKEND=raw-key and provide agentId for attachExisting.',
+    )
+  }
+
+  const assessZkState = deps.assessZkState ?? assessCompatibleZkState
+  const zkState = await assessZkState({
+    agentId: target.agentId,
+    stateFilePath: target.agentStateFile,
+    baseSepoliaRpc: config.baseSepoliaRpc,
+  })
+
+  if (zkState.status !== 'configured') {
+    return toolError(
+      'ATTACH_STATE_INVALID',
+      zkState.detail
+      ?? `Compatible local proof state is ${zkState.status} for agentId ${target.agentId}.`,
+      `Only use attachExisting with a matching agent-N.json. Re-run register_identity({ attachExisting: true, agentId: "${target.agentId}", stateFilePath: "${zkState.stateFilePath}" }) once the state is aligned.`,
+    )
+  }
+
+  let readinessCheck: VerifyIdentityResponse
+  try {
+    readinessCheck = await engine.post<VerifyIdentityResponse>('/verify-identity', {
+      agentId: target.agentId,
+      wallet: target.wallet,
+    })
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    return toolError(
+      'READINESS_CHECK_FAILED',
+      detail,
+      `Run check_identity(agentId="${target.agentId}") once the engine recovers, then continue only when readiness.readyToParticipate is true.`,
+    )
+  }
+
+  const readiness = buildReadinessSnapshot(readinessCheck)
+  const localStateFileExists = Boolean(target.agentStateFile && fs.existsSync(target.agentStateFile))
+  const targetWallet = target.wallet!
+  if (!readiness.readyToParticipate || !localStateFileExists) {
+    return partialFailure(
+      'ONBOARDING_INCOMPLETE',
+      buildIncompleteOnboardingDetail({
+        readiness,
+        resolvedWallet: readinessCheck.resolvedWallet ?? targetWallet,
+        localStateFileExists,
+        verifiedBy: '/verify-identity',
+      }),
+      buildNextAction(target.agentId, target.agentStateFile ?? undefined, {
+        readiness,
+        resolvedWallet: readinessCheck.resolvedWallet ?? targetWallet,
+        localStateFileExists,
+        verifiedBy: '/verify-identity',
+      }),
+      {
+        agentId: target.agentId,
+        wallet: targetWallet,
+        walletBackend: target.backend.path,
+        erc8004TxHash: null,
+        privacyTxHash: null,
+        stateFilePath: target.agentStateFile,
+      },
+    )
+  }
+
+  return toolSuccess({
+    agentId: target.agentId,
+    wallet: targetWallet,
+    walletBackend: target.backend.path,
+    resolvedWallet: readinessCheck.resolvedWallet ?? targetWallet,
+    agentURI: null,
+    erc8004TxHash: null,
+    privacyTxHash: null,
+    stateFilePath: target.agentStateFile,
+    readiness,
+    attach: {
+      attached: true,
+      mode: 'attach-existing',
+    },
+  })
 }

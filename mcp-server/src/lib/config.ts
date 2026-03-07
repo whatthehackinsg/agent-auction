@@ -9,11 +9,25 @@
 import path from 'node:path'
 import type { Address, Hex } from 'viem'
 
+export type WalletBackendMode = 'auto' | 'agentkit' | 'raw-key'
+
+export interface CdpWalletBackendConfig {
+  apiKeyId: string | null
+  apiKeySecret: string | null
+  walletSecret: string | null
+  walletAddress: Address | null
+  networkId: string
+}
+
 export interface ServerConfig {
   /** Engine base URL (e.g. http://localhost:8787) */
   engineUrl: string
+  /** Wallet backend selection mode */
+  walletBackendMode: WalletBackendMode
   /** Agent's 0x-prefixed private key for EIP-712 signing */
   agentPrivateKey: Hex | null
+  /** Supported AgentKit/CDP wallet backend config */
+  cdp: CdpWalletBackendConfig
   /** Agent's numeric ERC-8004 ID */
   agentId: string | null
   /** MCP server port */
@@ -41,7 +55,9 @@ export interface ToolIdentityOverrides {
 
 export function loadConfig(): ServerConfig {
   const engineUrl = process.env.ENGINE_URL ?? 'http://localhost:8787'
+  const rawWalletBackendMode = process.env.MCP_WALLET_BACKEND ?? 'auto'
   const rawKey = process.env.AGENT_PRIVATE_KEY ?? null
+  const rawCdpWalletAddress = process.env.CDP_WALLET_ADDRESS ?? null
   const agentId = process.env.AGENT_ID ?? null
   const port = parseInt(process.env.MCP_PORT ?? '3100', 10)
   const engineAdminKey = process.env.ENGINE_ADMIN_KEY ?? null
@@ -49,9 +65,25 @@ export function loadConfig(): ServerConfig {
   const agentStateFile = process.env.AGENT_STATE_FILE ?? null
   const configuredStateDir = process.env.AGENT_STATE_DIR ?? null
   const baseSepoliaRpc = process.env.BASE_SEPOLIA_RPC ?? null
+  const cdpApiKeyId = process.env.CDP_API_KEY_ID ?? null
+  const cdpApiKeySecret = process.env.CDP_API_KEY_SECRET ?? null
+  const cdpWalletSecret = process.env.CDP_WALLET_SECRET ?? null
+  const cdpNetworkId = process.env.CDP_NETWORK_ID ?? 'base-sepolia'
 
   let agentPrivateKey: Hex | null = null
   let bondFundingPrivateKey: Hex | null = null
+  let walletBackendMode: WalletBackendMode
+  let cdpWalletAddress: Address | null = null
+
+  if (
+    rawWalletBackendMode !== 'auto'
+    && rawWalletBackendMode !== 'agentkit'
+    && rawWalletBackendMode !== 'raw-key'
+  ) {
+    throw new Error('MCP_WALLET_BACKEND must be one of: auto, agentkit, raw-key')
+  }
+  walletBackendMode = rawWalletBackendMode
+
   if (rawKey) {
     if (!/^0x[0-9a-fA-F]{64}$/.test(rawKey)) {
       throw new Error('AGENT_PRIVATE_KEY must be a 0x-prefixed 64-char hex string')
@@ -64,13 +96,30 @@ export function loadConfig(): ServerConfig {
     }
     bondFundingPrivateKey = rawBondFundingKey as Hex
   }
+  if (rawCdpWalletAddress) {
+    if (!/^0x[0-9a-fA-F]{40}$/.test(rawCdpWalletAddress)) {
+      throw new Error('CDP_WALLET_ADDRESS must be a 0x-prefixed 40-char hex address')
+    }
+    cdpWalletAddress = rawCdpWalletAddress as Address
+  }
+  if (cdpNetworkId !== 'base-sepolia') {
+    throw new Error('CDP_NETWORK_ID must be base-sepolia for the supported participant path')
+  }
 
   const agentStateDir =
     configuredStateDir ?? (agentStateFile ? path.dirname(agentStateFile) : null)
 
   return {
     engineUrl,
+    walletBackendMode,
     agentPrivateKey,
+    cdp: {
+      apiKeyId: cdpApiKeyId,
+      apiKeySecret: cdpApiKeySecret,
+      walletSecret: cdpWalletSecret,
+      walletAddress: cdpWalletAddress,
+      networkId: cdpNetworkId,
+    },
     agentId,
     port,
     engineAdminKey,

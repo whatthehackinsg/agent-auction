@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest'
+import type { BaseSepoliaClients } from '../src/lib/onchain.js'
 import {
   makeCapturingMcpServerMulti,
   makeMockEngine,
@@ -18,6 +19,32 @@ import {
   TEST_WALLET,
 } from './helpers.js'
 import { registerBondTools } from '../src/tools/bond.js'
+
+const agentKitConfig = {
+  agentPrivateKey: null,
+  cdp: {
+    apiKeyId: 'cdp-key-id',
+    apiKeySecret: 'cdp-key-secret',
+    walletSecret: 'cdp-wallet-secret',
+    walletAddress: TEST_WALLET,
+    networkId: 'base-sepolia',
+  },
+  baseSepoliaRpc: 'https://base-sepolia.example',
+} as const
+
+function withSupportedBackend(clients: BaseSepoliaClients): BaseSepoliaClients {
+  ;(clients as BaseSepoliaClients & Record<string, unknown>).wallet = TEST_WALLET
+  ;(clients as BaseSepoliaClients & Record<string, unknown>).backend = {
+    kind: 'agentkit',
+    path: 'supported-agentkit-cdp',
+    configured: true,
+    supportLevel: 'supported',
+    selectionSource: 'auto-default',
+    wallet: TEST_WALLET,
+    networkId: 'base-sepolia',
+  }
+  return clients
+}
 
 function makeBondFlowEngine(options?: {
   bondStatuses?: Array<'NONE' | 'PENDING' | 'CONFIRMED' | 'TIMEOUT'>
@@ -194,6 +221,84 @@ describe('post_bond', () => {
 })
 
 describe('deposit_bond', () => {
+  it('uses the supported AgentKit backend for bond deposits and reports walletBackend', async () => {
+    const txHash = makeFakeTxHash('90')
+    const { clients } = makeOnchainClients({
+      readContractImpl: async () => TEST_WALLET,
+      writeContractImpl: async () => txHash,
+      waitForReceiptImpl: async (hash) => makeFakeReceipt({ transactionHash: hash }),
+    })
+    const { mockEngine, capturedPosts } = makeBondFlowEngine()
+    const { mockServer, getHandler } = makeCapturingMcpServerMulti()
+
+    registerBondTools(
+      mockServer,
+      mockEngine as any,
+      makeConfig({
+        ...agentKitConfig,
+        agentId: '5',
+      }),
+      {
+        createClients: async () => withSupportedBackend(clients),
+        smartWaitAttempts: 1,
+        pollDelayMs: 0,
+      } as any,
+    )
+    const handler = getHandler('deposit_bond')
+
+    const result = await handler({
+      auctionId: TEST_AUCTION_ID,
+      agentId: '5',
+    })
+    const body = parseToolResponse(result)
+
+    expect(body.success).toBe(true)
+    expect(body.bondStatus).toBe('CONFIRMED')
+    expect(body.depositor).toBe(TEST_WALLET)
+    expect(body.walletBackend).toBe('supported-agentkit-cdp')
+    expect(capturedPosts[0]?.body).toMatchObject({
+      depositor: TEST_WALLET,
+      txHash,
+    })
+  })
+
+  it('keeps owner-wallet authorization on the supported backend', async () => {
+    const { clients, writeCalls } = makeOnchainClients({
+      readContractImpl: async () => '0x0000000000000000000000000000000000000005',
+    })
+    const { mockEngine } = makeBondFlowEngine({
+      bondStatuses: ['NONE'],
+    })
+    const { mockServer, getHandler } = makeCapturingMcpServerMulti()
+
+    registerBondTools(
+      mockServer,
+      mockEngine as any,
+      makeConfig({
+        ...agentKitConfig,
+        agentId: '5',
+      }),
+      {
+        createClients: async () => withSupportedBackend(clients),
+        smartWaitAttempts: 1,
+        pollDelayMs: 0,
+      } as any,
+    )
+    const handler = getHandler('deposit_bond')
+
+    const result = await handler({
+      auctionId: TEST_AUCTION_ID,
+      agentId: '5',
+    })
+    const body = parseToolResponse(result)
+
+    expect(body.success).toBe(false)
+    expect(body.error).toMatchObject({
+      code: 'FUNDING_WALLET_MISMATCH',
+    })
+    expect(writeCalls).toHaveLength(0)
+  })
+
   it('auto-loads depositAmount, transfers USDC to escrow, and records a confirmed bond', async () => {
     const txHash = makeFakeTxHash('44')
     const { clients, writeCalls } = makeOnchainClients({

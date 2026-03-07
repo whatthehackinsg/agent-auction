@@ -3,10 +3,10 @@ import { z } from 'zod'
 import type { Hex } from 'viem'
 import type { EngineClient } from '../lib/engine.js'
 import type { ServerConfig } from '../lib/config.js'
-import { resolveWriteTarget } from '../lib/agent-target.js'
+import { resolveBackendWriteTarget } from '../lib/agent-target.js'
 import {
   claimEscrowRefund,
-  createBaseSepoliaClients,
+  createBackendAwareBaseSepoliaClients,
   readDesignatedWallet,
   readIdentityOwner,
   readWithdrawableBalance,
@@ -18,7 +18,7 @@ import { toolError, toolSuccess } from '../lib/tool-response.js'
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 interface ExitToolsDeps {
-  createClients?: (rpcUrl: string, privateKey: Hex) => BaseSepoliaClients
+  createClients?: (config: ServerConfig) => Promise<BaseSepoliaClients> | BaseSepoliaClients
 }
 
 interface AuctionDetailsResponse {
@@ -53,9 +53,9 @@ export function registerExitTools(
       }),
     },
     async ({ auctionId, agentId: inputAgentId }) => {
-      let target: ReturnType<typeof resolveWriteTarget>
+      let target: ReturnType<typeof resolveBackendWriteTarget>
       try {
-        target = resolveWriteTarget(config, {
+        target = resolveBackendWriteTarget(config, {
           agentId: inputAgentId,
         })
       } catch (err) {
@@ -63,7 +63,7 @@ export function registerExitTools(
         return toolError(
           'MISSING_CONFIG',
           detail,
-          'Set AGENT_PRIVATE_KEY and AGENT_ID env vars, or pass agentId with a configured signer.',
+          'Complete the supported AgentKit + CDP Server Wallet setup, or explicitly opt into MCP_WALLET_BACKEND=raw-key.',
         )
       }
 
@@ -98,7 +98,7 @@ export function registerExitTools(
         )
       }
 
-      const clients = getExitClients(config, deps, target.agentPrivateKey)
+      const clients = await getExitClients(config, deps)
 
       const withdrawableBefore = await safeReadWithdrawable(clients, target.agentId)
       const designatedWalletBefore = await safeReadDesignatedWallet(clients, target.agentId)
@@ -107,6 +107,7 @@ export function registerExitTools(
           auctionId,
           agentId: target.agentId,
           refundStatus: 'ALREADY_WITHDRAWABLE',
+          walletBackend: target.backend.path,
           idempotent: true,
           withdrawableAmount: withdrawableBefore.toString(),
           destinationWallet: designatedWalletBefore,
@@ -148,6 +149,7 @@ export function registerExitTools(
         auctionId,
         agentId: target.agentId,
         refundStatus: 'CLAIMED',
+        walletBackend: target.backend.path,
         txHash: claimResult.txHash,
         withdrawableAmount: withdrawableAfter.toString(),
         destinationWallet: designatedWalletAfter,
@@ -171,9 +173,9 @@ export function registerExitTools(
       }),
     },
     async ({ agentId: inputAgentId }) => {
-      let target: ReturnType<typeof resolveWriteTarget>
+      let target: ReturnType<typeof resolveBackendWriteTarget>
       try {
-        target = resolveWriteTarget(config, {
+        target = resolveBackendWriteTarget(config, {
           agentId: inputAgentId,
         })
       } catch (err) {
@@ -181,11 +183,11 @@ export function registerExitTools(
         return toolError(
           'MISSING_CONFIG',
           detail,
-          'Set AGENT_PRIVATE_KEY and AGENT_ID env vars, or pass agentId with a configured signer.',
+          'Complete the supported AgentKit + CDP Server Wallet setup, or explicitly opt into MCP_WALLET_BACKEND=raw-key.',
         )
       }
 
-      const clients = getExitClients(config, deps, target.agentPrivateKey)
+      const clients = await getExitClients(config, deps)
 
       let ownerWallet: string
       try {
@@ -199,10 +201,11 @@ export function registerExitTools(
         )
       }
 
-      if (ownerWallet.toLowerCase() !== target.wallet.toLowerCase()) {
+      const targetWallet = target.wallet!
+      if (ownerWallet.toLowerCase() !== targetWallet.toLowerCase()) {
         return toolError(
           'UNAUTHORIZED_WITHDRAW',
-          `Configured wallet ${target.wallet} is not the ERC-8004 owner for agentId ${target.agentId} (owner is ${ownerWallet})`,
+          `Configured wallet ${targetWallet} is not the ERC-8004 owner for agentId ${target.agentId} (owner is ${ownerWallet})`,
           'Use the owner wallet for this agent before calling withdraw_funds.',
         )
       }
@@ -213,6 +216,7 @@ export function registerExitTools(
       if (withdrawableBefore === 0n) {
         return toolSuccess({
           agentId: target.agentId,
+          walletBackend: target.backend.path,
           withdrawalStatus: 'NOTHING_TO_WITHDRAW',
           amount: '0',
           destinationWallet: designatedWalletBefore,
@@ -244,6 +248,7 @@ export function registerExitTools(
 
       return toolSuccess({
         agentId: target.agentId,
+        walletBackend: target.backend.path,
         withdrawalStatus: 'WITHDRAWN',
         txHash: withdrawResult.txHash,
         amount: withdrawableBefore.toString(),
@@ -257,14 +262,9 @@ export function registerExitTools(
 function getExitClients(
   config: ServerConfig,
   deps: ExitToolsDeps,
-  privateKey: Hex,
-): BaseSepoliaClients {
-  if (!config.baseSepoliaRpc) {
-    throw new Error('BASE_SEPOLIA_RPC is required for exit tools')
-  }
-
-  const createClients = deps.createClients ?? createBaseSepoliaClients
-  return createClients(config.baseSepoliaRpc, privateKey)
+): Promise<BaseSepoliaClients> {
+  const createClients = deps.createClients ?? createBackendAwareBaseSepoliaClients
+  return Promise.resolve(createClients(config))
 }
 
 function normalizeAuctionStatus(details: AuctionDetailsResponse): 'OPEN' | 'CLOSED' | 'SETTLED' | 'CANCELLED' | 'UNKNOWN' {

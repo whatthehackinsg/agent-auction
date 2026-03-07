@@ -12,15 +12,15 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { Hex } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
 import type { EngineClient } from '../lib/engine.js'
 import { ActionSigner } from '../lib/signer.js'
 import type { ServerConfig } from '../lib/config.js'
-import { resolveWriteTarget } from '../lib/agent-target.js'
+import { resolveBackendWriteTarget } from '../lib/agent-target.js'
 import { loadAgentState, generateBidRangeProofForAgent } from '../lib/proof-generator.js'
 import { parseEngineStructuredError } from '../lib/proof-errors.js'
 import { generateSecret, BID_RANGE_SIGNALS } from '@agent-auction/crypto'
 import { verifyParticipationReadiness } from '../lib/identity-check.js'
+import { getEvmWalletProvider } from '../lib/wallet-backend.js'
 
 interface EngineActionResponse {
   seq: number
@@ -66,7 +66,8 @@ export function registerBidTool(
       title: 'Place Bid',
       description:
         'Place a bid in an auction by signing an EIP-712 Bid message and posting it to the engine. ' +
-        'The bid amount must exceed the current highest bid. Requires AGENT_PRIVATE_KEY and AGENT_ID. ' +
+        'The bid amount must exceed the current highest bid. Requires a configured write backend and AGENT_ID. ' +
+        'Supported path: AgentKit + CDP Server Wallet. Advanced bridge: MCP_WALLET_BACKEND=raw-key with AGENT_PRIVATE_KEY. ' +
         'Accepts an advanced ZK bid range proof override (proofPayload) or auto-generates one from AGENT_STATE_FILE.',
       inputSchema: z.object({
         auctionId: z.string().describe('The 0x-prefixed bytes32 auction ID to bid in'),
@@ -113,19 +114,34 @@ export function registerBidTool(
       salt: saltParam,
       proofPayload,
     }) => {
-      const target = resolveWriteTarget(config, {
-        agentId: inputAgentId,
-        agentStateFile,
-      })
-      const account = privateKeyToAccount(target.agentPrivateKey)
-      const preflight = await verifyParticipationReadiness(engine, target.agentId, account.address, {
+      let target
+      let signer: ActionSigner
+      try {
+        target = resolveBackendWriteTarget(config, {
+          agentId: inputAgentId,
+          agentStateFile,
+        })
+        const walletProvider = await getEvmWalletProvider(config)
+        signer = new ActionSigner({
+          address: walletProvider.wallet,
+          signTypedData: (typedData) => walletProvider.signTypedData(typedData),
+        })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return zkError(
+          'MISSING_CONFIG',
+          msg,
+          'Complete the supported AgentKit + CDP Server Wallet setup, or explicitly opt into MCP_WALLET_BACKEND=raw-key for the advanced bridge.',
+        )
+      }
+
+      const preflight = await verifyParticipationReadiness(engine, target.agentId, signer.address, {
         agentStateFile: target.agentStateFile,
         requireLocalState: !proofPayload,
       })
       if (!preflight.ok) {
         return preflight.error
       }
-      const signer = new ActionSigner(target.agentPrivateKey)
       const bidNonceKey = `BID:${target.agentId}`
       const bidNonce = nonceTracker.get(bidNonceKey) ?? 0
       const commitNonceKey = `BID_COMMIT:${target.agentId}`
@@ -245,6 +261,7 @@ export function registerBidTool(
               text: JSON.stringify({
                 success: true,
                 action: 'BID_COMMIT',
+                walletBackend: target.backend.path,
                 auctionId,
                 agentId: target.agentId,
                 wallet: signer.address,
@@ -312,6 +329,7 @@ export function registerBidTool(
       const response = {
         success: true,
         action: 'BID',
+        walletBackend: target.backend.path,
         auctionId,
         agentId: target.agentId,
         wallet: signer.address,

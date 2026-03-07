@@ -24,6 +24,32 @@ const { buildRegistrationDataUri, registerRegisterIdentityTool } = await import(
   '../src/tools/register-identity.js'
 )
 
+const agentKitConfig = {
+  agentPrivateKey: null,
+  cdp: {
+    apiKeyId: 'cdp-key-id',
+    apiKeySecret: 'cdp-key-secret',
+    walletSecret: 'cdp-wallet-secret',
+    walletAddress: TEST_WALLET,
+    networkId: 'base-sepolia',
+  },
+  baseSepoliaRpc: 'https://base-sepolia.example',
+} as const
+
+function withSupportedBackend(clients: BaseSepoliaClients): BaseSepoliaClients {
+  ;(clients as BaseSepoliaClients & Record<string, unknown>).wallet = TEST_WALLET
+  ;(clients as BaseSepoliaClients & Record<string, unknown>).backend = {
+    kind: 'agentkit',
+    path: 'supported-agentkit-cdp',
+    configured: true,
+    supportLevel: 'supported',
+    selectionSource: 'auto-default',
+    wallet: TEST_WALLET,
+    networkId: 'base-sepolia',
+  }
+  return clients
+}
+
 function makeVerifyEngine(options?: {
   readiness?: ReturnType<typeof makeReadinessResponse>
   postImpl?: (path: string, body: unknown) => Promise<unknown>
@@ -245,6 +271,61 @@ describe('register_identity', () => {
     expect(identityWrite.args[0].startsWith('agent://')).toBe(false)
   })
 
+  it('retries transient AgentKit privacy bootstrap failures after the ERC-8004 mint', async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'register-identity-retry-'))
+    tempDirs.push(tempDir)
+
+    const identityTxHash = makeFakeTxHash('51')
+    const privacyTxHash = makeFakeTxHash('52')
+    const mintedAgentId = 88n
+    const retrySleep = vi.fn(async (_ms: number) => {})
+
+    const { clients, writeCalls } = makeOnchainClients({
+      writeContractImpl: async (_args) => {
+        if (writeCalls.length === 1) {
+          return identityTxHash
+        }
+        if (writeCalls.length === 2) {
+          throw new Error('unable to estimate gas')
+        }
+        return privacyTxHash
+      },
+      waitForReceiptImpl: async (hash) => {
+        if (hash === identityTxHash) {
+          const pendingWrite = writeCalls[0] as { args: [string] }
+          return makeRegisteredReceipt(mintedAgentId, pendingWrite.args[0], hash)
+        }
+        return makeFakeReceipt({ transactionHash: hash })
+      },
+    })
+    const { mockEngine } = makeVerifyEngine()
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+
+    registerRegisterIdentityTool(
+      mockServer,
+      mockEngine,
+      makeConfig({
+        ...agentKitConfig,
+        agentStateDir: tempDir,
+      }),
+      {
+        createClients: () => withSupportedBackend(clients),
+        sleep: retrySleep,
+        now: () => new Date('2026-03-06T08:00:00.000Z'),
+      },
+    )
+
+    const handler = getHandler()
+    const result = await handler({})
+
+    const body = parseToolResponse(result)
+    expect(body.success).toBe(true)
+    expect(body.agentId).toBe(mintedAgentId.toString())
+    expect(body.privacyTxHash).toBe(privacyTxHash)
+    expect(retrySleep).toHaveBeenCalledWith(4_000)
+    expect(writeCalls).toHaveLength(3)
+  })
+
   it('falls back to the ERC-721 mint Transfer log when Registered is absent', async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'register-identity-transfer-'))
     tempDirs.push(tempDir)
@@ -316,6 +397,176 @@ describe('register_identity', () => {
     })
     expect((body.error as Record<string, unknown>).detail).toContain('BASE_SEPOLIA_RPC')
     expect(createClients).not.toHaveBeenCalled()
+  })
+
+  it('uses the supported AgentKit backend for onboarding and reports walletBackend on success', async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'register-identity-agentkit-'))
+    tempDirs.push(tempDir)
+
+    const identityTxHash = makeFakeTxHash('71')
+    const privacyTxHash = makeFakeTxHash('72')
+    const mintedAgentId = 314n
+
+    const { clients, writeCalls } = makeOnchainClients({
+      writeContractImpl: async () => {
+        return writeCalls.length === 1 ? identityTxHash : privacyTxHash
+      },
+      waitForReceiptImpl: async (hash) => {
+        if (hash === identityTxHash) {
+          const identityWrite = writeCalls[0] as { args: [string] }
+          return makeRegisteredReceipt(mintedAgentId, identityWrite.args[0], hash)
+        }
+        return makeFakeReceipt({ transactionHash: hash })
+      },
+    })
+    const { mockEngine } = makeVerifyEngine()
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+
+    registerRegisterIdentityTool(
+      mockServer,
+      mockEngine,
+      makeConfig({
+        ...agentKitConfig,
+        agentStateDir: tempDir,
+      }),
+      {
+        createClients: async () => withSupportedBackend(clients),
+      } as any,
+    )
+
+    const handler = getHandler()
+    const result = await handler({})
+    const body = parseToolResponse(result)
+
+    expect(body.success).toBe(true)
+    expect(body.agentId).toBe('314')
+    expect(body.wallet).toBe(TEST_WALLET)
+    expect(body.walletBackend).toBe('supported-agentkit-cdp')
+  })
+
+  it('supports explicit attach for an existing identity only when compatible local state is provided deliberately', async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'register-identity-attach-'))
+    tempDirs.push(tempDir)
+    const stateFilePath = path.join(tempDir, 'agent-42.json')
+    fs.writeFileSync(
+      stateFilePath,
+      JSON.stringify(
+        {
+          agentId: '42n',
+          agentSecret: '7n',
+          capabilities: [{ capabilityId: '1n' }],
+          leafHashes: ['11n'],
+          capabilityMerkleRoot: '21n',
+        },
+        null,
+        2,
+      ),
+      'utf8',
+    )
+
+    const { mockEngine, verifyCalls } = makeVerifyEngine({
+      readiness: makeReadinessResponse({
+        verified: true,
+        privacyRegistered: true,
+        poseidonRoot: '0x1234',
+      }),
+    })
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+
+    registerRegisterIdentityTool(
+      mockServer,
+      mockEngine,
+      makeConfig({
+        ...agentKitConfig,
+        agentId: '42',
+        agentStateDir: tempDir,
+      }),
+      {
+        assessZkState: async () => ({
+          status: 'configured',
+          attachRequired: false,
+          stateFilePath: path.resolve(stateFilePath),
+          detail: null,
+        }),
+      } as any,
+    )
+
+    const handler = getHandler()
+    const result = await handler({
+      attachExisting: true,
+      agentId: '42',
+      stateFilePath,
+    })
+    const body = parseToolResponse(result)
+
+    expect(body.success).toBe(true)
+    expect(body.agentId).toBe('42')
+    expect(body.stateFilePath).toBe(path.resolve(stateFilePath))
+    expect(body.walletBackend).toBe('supported-agentkit-cdp')
+    expect(body.attach).toMatchObject({
+      attached: true,
+      mode: 'attach-existing',
+    })
+    expect(body.erc8004TxHash).toBeNull()
+    expect(body.privacyTxHash).toBeNull()
+    expect(verifyCalls).toEqual([
+      {
+        path: '/verify-identity',
+        body: {
+          agentId: '42',
+          wallet: TEST_WALLET,
+        },
+      },
+    ])
+  })
+
+  it('fails closed on explicit attach when the provided state is missing or mismatched', async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'register-identity-attach-fail-'))
+    tempDirs.push(tempDir)
+    const missingStatePath = path.join(tempDir, 'agent-404.json')
+
+    const { mockEngine } = makeVerifyEngine({
+      readiness: makeReadinessResponse({
+        verified: true,
+        privacyRegistered: true,
+        poseidonRoot: '0x1234',
+      }),
+    })
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+
+    registerRegisterIdentityTool(
+      mockServer,
+      mockEngine,
+      makeConfig({
+        ...agentKitConfig,
+        agentId: '404',
+        agentStateDir: tempDir,
+      }),
+      {
+        assessZkState: async () => ({
+          status: 'mismatch',
+          attachRequired: true,
+          stateFilePath: path.resolve(missingStatePath),
+          detail:
+            'Local poseidon root does not match the on-chain privacy registration for agentId 404.',
+        }),
+      } as any,
+    )
+
+    const handler = getHandler()
+    const result = await handler({
+      attachExisting: true,
+      agentId: '404',
+      stateFilePath: missingStatePath,
+    })
+    const body = parseToolResponse(result)
+
+    expect(body.success).toBe(false)
+    expect(body.error).toMatchObject({
+      code: 'ATTACH_STATE_INVALID',
+    })
+    expect((body.error as Record<string, unknown>).detail).toContain('poseidon root')
+    expect((body.error as Record<string, unknown>).suggestion).toContain('attachExisting')
   })
 
   it('returns recovered success with warning metadata when reconciliation proves the minted agent is ready', async () => {

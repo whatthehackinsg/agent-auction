@@ -39,6 +39,28 @@ vi.mock('../src/lib/proof-generator.js', async () => {
   }
 })
 
+vi.mock('../src/lib/wallet-backend.js', async () => {
+  const actual = await vi.importActual<typeof import('../src/lib/wallet-backend.js')>(
+    '../src/lib/wallet-backend.js',
+  )
+  return {
+    ...actual,
+    getEvmWalletProvider: vi.fn(async (config: ServerConfig) => {
+      if (config.walletBackendMode !== 'agentkit') {
+        return actual.getEvmWalletProvider(config)
+      }
+
+      return {
+        kind: 'agentkit' as const,
+        path: 'supported-agentkit-cdp' as const,
+        wallet: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+        signTypedData: async () => `0x${'1'.repeat(130)}`,
+        writeContract: vi.fn(),
+      }
+    }),
+  }
+})
+
 const proofGenerator = await import('../src/lib/proof-generator.js')
 const { registerJoinTool } = await import('../src/tools/join.js')
 
@@ -65,7 +87,15 @@ const TEST_AGENT_STATE_FILE = fileURLToPath(
 function makeConfig(overrides?: Partial<ServerConfig>): ServerConfig {
   return {
     engineUrl: 'http://localhost:8787',
+    walletBackendMode: 'auto',
     agentPrivateKey: TEST_PRIVATE_KEY,
+    cdp: {
+      apiKeyId: null,
+      apiKeySecret: null,
+      walletSecret: null,
+      walletAddress: null,
+      networkId: 'base-sepolia',
+    },
     agentId: TEST_AGENT_ID,
     port: 3100,
     engineAdminKey: null,
@@ -253,6 +283,39 @@ describe('join_auction proof pass-through to engine', () => {
     // publicSignals should have 3 entries for membership proof
     const proofData = payload.proof as { publicSignals: string[] }
     expect(proofData.publicSignals).toHaveLength(3)
+  })
+
+  it('uses the supported AgentKit/CDP backend when configured', async () => {
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+    const { mockEngine, capturedPayloads } = makeCapturingEngine()
+    const config = makeConfig({
+      agentPrivateKey: null,
+      walletBackendMode: 'agentkit',
+      cdp: {
+        apiKeyId: 'cdp-key-id',
+        apiKeySecret: 'cdp-key-secret',
+        walletSecret: 'cdp-wallet-secret',
+        walletAddress: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+        networkId: 'base-sepolia',
+      },
+      baseSepoliaRpc: 'https://sepolia.base.org',
+    })
+    const nonceTracker = new Map<string, number>()
+
+    registerJoinTool(mockServer, mockEngine, config, nonceTracker)
+    const handler = getHandler()
+
+    const result = (await handler({
+      auctionId: TEST_AUCTION_ID,
+      bondAmount: '50000000',
+      proofPayload: membershipFixture,
+    })) as { content: Array<{ text: string }> }
+
+    const body = JSON.parse(result.content[0].text) as Record<string, unknown>
+    expect(body.success).toBe(true)
+    expect(body.walletBackend).toBe('supported-agentkit-cdp')
+    expect(body.wallet).toBe('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266')
+    expect(capturedPayloads).toHaveLength(1)
   })
 
   it('auto-generates a membership proof from AGENT_STATE_FILE when no manual proof is provided', async () => {

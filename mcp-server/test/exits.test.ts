@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { EngineClient } from '../src/lib/engine.js'
 import { registerExitTools } from '../src/tools/exits.js'
+import type { BaseSepoliaClients } from '../src/lib/onchain.js'
 import {
   makeCapturingMcpServerMulti,
   makeConfig,
@@ -11,6 +12,32 @@ import {
   TEST_AUCTION_ID,
   TEST_WALLET,
 } from './helpers.js'
+
+const agentKitConfig = {
+  agentPrivateKey: null,
+  cdp: {
+    apiKeyId: 'cdp-key-id',
+    apiKeySecret: 'cdp-key-secret',
+    walletSecret: 'cdp-wallet-secret',
+    walletAddress: TEST_WALLET,
+    networkId: 'base-sepolia',
+  },
+  baseSepoliaRpc: 'https://base-sepolia.example',
+} as const
+
+function withSupportedBackend(clients: BaseSepoliaClients): BaseSepoliaClients {
+  ;(clients as BaseSepoliaClients & Record<string, unknown>).wallet = TEST_WALLET
+  ;(clients as BaseSepoliaClients & Record<string, unknown>).backend = {
+    kind: 'agentkit',
+    path: 'supported-agentkit-cdp',
+    configured: true,
+    supportLevel: 'supported',
+    selectionSource: 'auto-default',
+    wallet: TEST_WALLET,
+    networkId: 'base-sepolia',
+  }
+  return clients
+}
 
 function makeAuctionDetails(status: number, winnerAgentId: string = '0') {
   return {
@@ -79,6 +106,41 @@ function makeExitClients(options?: {
 }
 
 describe('claim_refund', () => {
+  it('claims refunds through the supported AgentKit backend and reports walletBackend', async () => {
+    const txHash = makeFakeTxHash('70')
+    const { clients } = makeExitClients({
+      withdrawableBefore: 0n,
+      withdrawableAfter: 50000000n,
+      designatedWalletBefore: TEST_WALLET,
+      designatedWalletAfter: TEST_WALLET,
+      txHash,
+    })
+    const { mockServer, getHandler } = makeCapturingMcpServerMulti()
+
+    registerExitTools(
+      mockServer,
+      makeExitEngine(makeAuctionDetails(3, '9')),
+      makeConfig({
+        ...agentKitConfig,
+        agentId: '5',
+      }),
+      {
+        createClients: async () => withSupportedBackend(clients),
+      } as any,
+    )
+
+    const handler = getHandler('claim_refund')
+    const result = await handler({
+      auctionId: TEST_AUCTION_ID,
+      agentId: '5',
+    })
+    const body = parseToolResponse(result)
+
+    expect(body.success).toBe(true)
+    expect(body.refundStatus).toBe('CLAIMED')
+    expect(body.walletBackend).toBe('supported-agentkit-cdp')
+  })
+
   it('returns a preflight error when the auction is still OPEN', async () => {
     const createClients = vi.fn()
     const { mockServer, getHandler } = makeCapturingMcpServerMulti()
@@ -191,6 +253,40 @@ describe('claim_refund', () => {
 })
 
 describe('withdraw_funds', () => {
+  it('withdraws through the supported AgentKit backend and reports walletBackend', async () => {
+    const txHash = makeFakeTxHash('91')
+    const { clients } = makeExitClients({
+      withdrawableBefore: 50000000n,
+      withdrawableAfter: 0n,
+      designatedWalletBefore: TEST_WALLET,
+      designatedWalletAfter: '0x0000000000000000000000000000000000000000',
+      txHash,
+    })
+    const { mockServer, getHandler } = makeCapturingMcpServerMulti()
+
+    registerExitTools(
+      mockServer,
+      makeExitEngine(),
+      makeConfig({
+        ...agentKitConfig,
+        agentId: '5',
+      }),
+      {
+        createClients: async () => withSupportedBackend(clients),
+      } as any,
+    )
+
+    const handler = getHandler('withdraw_funds')
+    const result = await handler({
+      agentId: '5',
+    })
+    const body = parseToolResponse(result)
+
+    expect(body.success).toBe(true)
+    expect(body.withdrawalStatus).toBe('WITHDRAWN')
+    expect(body.walletBackend).toBe('supported-agentkit-cdp')
+  })
+
   it('returns a no-op result when nothing is withdrawable', async () => {
     const { clients, writeCalls } = makeExitClients({
       withdrawableBefore: 0n,

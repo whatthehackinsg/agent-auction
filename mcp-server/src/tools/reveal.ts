@@ -14,8 +14,9 @@ import type { Hex } from 'viem'
 import type { EngineClient } from '../lib/engine.js'
 import { ActionSigner } from '../lib/signer.js'
 import type { ServerConfig } from '../lib/config.js'
-import { requireSignerConfig } from '../lib/config.js'
+import { resolveBackendWriteTarget } from '../lib/agent-target.js'
 import { toolError } from '../lib/tool-response.js'
+import { getEvmWalletProvider } from '../lib/wallet-backend.js'
 
 interface EngineActionResponse {
   seq: number
@@ -38,7 +39,8 @@ export function registerRevealTool(
         'Reveal a sealed bid during the reveal window of a sealed-bid auction. ' +
         'The bid and salt must match the commitment submitted via place_bid (sealed mode). ' +
         'The engine verifies that Poseidon(bid, salt) equals the stored commitment. ' +
-        'Requires AGENT_PRIVATE_KEY and AGENT_ID.',
+        'Requires a configured write backend and AGENT_ID. Supported path: AgentKit + CDP Server Wallet. ' +
+        'Advanced bridge: MCP_WALLET_BACKEND=raw-key with AGENT_PRIVATE_KEY.',
       inputSchema: z.object({
         auctionId: z.string().describe('The 0x-prefixed bytes32 auction ID'),
         bid: z
@@ -50,15 +52,25 @@ export function registerRevealTool(
       }),
     },
     async ({ auctionId, bid, salt }) => {
-      let agentPrivateKey: Hex
+      let target
+      let signer: ActionSigner
       let agentId: string
       try {
-        ;({ agentPrivateKey, agentId } = requireSignerConfig(config))
+        target = resolveBackendWriteTarget(config)
+        agentId = target.agentId
+        const walletProvider = await getEvmWalletProvider(config)
+        signer = new ActionSigner({
+          address: walletProvider.wallet,
+          signTypedData: (typedData) => walletProvider.signTypedData(typedData),
+        })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        return toolError('MISSING_CONFIG', msg, 'Set AGENT_PRIVATE_KEY and AGENT_ID env vars')
+        return toolError(
+          'MISSING_CONFIG',
+          msg,
+          'Complete the supported AgentKit + CDP Server Wallet setup, or explicitly opt into MCP_WALLET_BACKEND=raw-key for the advanced bridge.',
+        )
       }
-      const signer = new ActionSigner(agentPrivateKey)
 
       const nonceKey = `REVEAL:${agentId}`
       const nonce = nonceTracker.get(nonceKey) ?? 0
@@ -105,6 +117,7 @@ export function registerRevealTool(
             text: JSON.stringify({
               success: true,
               action: 'REVEAL',
+              walletBackend: target.backend.path,
               auctionId,
               agentId,
               wallet: signer.address,

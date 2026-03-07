@@ -5,12 +5,16 @@
  * Helps agents understand what onboarding steps are complete and what's missing.
  */
 
+import path from 'node:path'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { privateKeyToAccount } from 'viem/accounts'
 import type { EngineClient } from '../lib/engine.js'
 import type { ServerConfig } from '../lib/config.js'
+import { defaultAgentStatePath } from '../lib/agent-state.js'
+import { assessCompatibleZkState } from '../lib/identity-check.js'
 import { toolError, toolSuccess } from '../lib/tool-response.js'
+import { describeWriteBackend } from '../lib/wallet-backend.js'
 
 interface VerifyIdentityResponse {
   verified: boolean
@@ -40,7 +44,6 @@ export function registerIdentityTool(server: McpServer, engine: EngineClient, co
       }),
     },
     async ({ agentId, wallet }) => {
-      // Resolve agentId
       const resolvedAgentId = agentId ?? config.agentId
       if (!resolvedAgentId) {
         return toolError(
@@ -50,21 +53,25 @@ export function registerIdentityTool(server: McpServer, engine: EngineClient, co
         )
       }
 
-      // Resolve wallet
       let resolvedWallet = wallet
+      let walletBackend: string | null = null
       if (!resolvedWallet) {
-        if (!config.agentPrivateKey) {
+        const backend = describeWriteBackend(config)
+        if (backend.configured && backend.wallet) {
+          resolvedWallet = backend.wallet
+          walletBackend = backend.path
+        } else if (config.agentPrivateKey) {
+          resolvedWallet = privateKeyToAccount(config.agentPrivateKey).address
+          walletBackend = 'advanced-raw-key'
+        } else {
           return toolError(
             'MISSING_CONFIG',
-            'Wallet address is required',
-            'Provide wallet parameter or set AGENT_PRIVATE_KEY env var',
+            backend.error ?? 'Wallet address is required',
+            'Provide wallet explicitly, configure the supported AgentKit + CDP Server Wallet path, or explicitly opt into MCP_WALLET_BACKEND=raw-key.',
           )
         }
-        const account = privateKeyToAccount(config.agentPrivateKey)
-        resolvedWallet = account.address
       }
 
-      // Call engine verify-identity
       let data: VerifyIdentityResponse
       try {
         data = await engine.post<VerifyIdentityResponse>('/verify-identity', {
@@ -77,6 +84,8 @@ export function registerIdentityTool(server: McpServer, engine: EngineClient, co
       }
 
       const missingSteps: string[] = []
+      let readyToParticipate = data.verified && data.privacyRegistered
+
       if (!data.verified) {
         missingSteps.push(
           `Preferred MCP recovery: call register_identity, then rerun check_identity with the returned agentId instead of relying on agentId ${resolvedAgentId}.`,
@@ -87,7 +96,26 @@ export function registerIdentityTool(server: McpServer, engine: EngineClient, co
         )
       }
 
-      return toolSuccess({
+      const stateFilePath = resolveStateFilePath(config, resolvedAgentId)
+      const zkState =
+        data.verified && data.privacyRegistered && stateFilePath
+          ? await assessCompatibleZkState({
+              agentId: resolvedAgentId,
+              stateFilePath,
+              baseSepoliaRpc: config.baseSepoliaRpc,
+            })
+          : null
+
+      if (zkState && zkState.status !== 'configured' && zkState.status !== 'untracked') {
+        readyToParticipate = false
+        missingSteps.push(
+          `Compatible local ZK state is ${zkState.status} for agentId ${resolvedAgentId}. ` +
+            `Use register_identity({ attachExisting: true, agentId: "${resolvedAgentId}", stateFilePath: "${zkState.stateFilePath}" }) ` +
+            'once the matching agent-N.json is available and aligned with the on-chain privacy registration.',
+        )
+      }
+
+      const response: Record<string, unknown> = {
         agentId: resolvedAgentId,
         wallet: resolvedWallet,
         erc8004Verified: data.verified,
@@ -97,10 +125,47 @@ export function registerIdentityTool(server: McpServer, engine: EngineClient, co
           walletConfigured: true,
           erc8004Registered: data.verified,
           privacyRegistryRegistered: data.privacyRegistered,
-          readyToParticipate: data.verified && data.privacyRegistered,
+          readyToParticipate,
           missingSteps,
+          ...(zkState && zkState.status !== 'untracked'
+            ? {
+                zkState: {
+                  status: zkState.status,
+                  attachRequired: zkState.attachRequired,
+                  stateFilePath: zkState.stateFilePath,
+                  detail: zkState.detail,
+                },
+              }
+            : {}),
         },
-      })
+        ...(walletBackend ? { walletBackend } : {}),
+      }
+
+      if (zkState && zkState.status !== 'untracked') {
+        response.attach = {
+          supported: true,
+          required: zkState.attachRequired,
+          mode: 'attach-existing',
+        }
+      }
+
+      return toolSuccess(response)
     },
   )
+}
+
+function resolveStateFilePath(config: ServerConfig, agentId: string): string | null {
+  if (config.agentStateFile && config.agentId === agentId) {
+    return path.resolve(config.agentStateFile)
+  }
+
+  const stateDir =
+    config.agentStateDir
+    ?? (config.agentStateFile ? path.dirname(path.resolve(config.agentStateFile)) : null)
+
+  if (!stateDir) {
+    return null
+  }
+
+  return defaultAgentStatePath(agentId, stateDir)
 }
