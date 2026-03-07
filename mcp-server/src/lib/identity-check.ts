@@ -79,7 +79,7 @@ export async function verifyParticipationReadiness(
       error: toolError(
         'PRIVACY_NOT_REGISTERED',
         `agentId ${agentId} is not registered on AgentPrivacyRegistry`,
-        'Register privacy membership first by running prepareOnboarding() then registerOnChain() from @agent-auction/crypto, then confirm with check_identity.',
+        'Preferred MCP recovery: call register_identity, then re-run check_identity with the returned agentId before attempting join_auction or place_bid.',
       ),
     }
   }

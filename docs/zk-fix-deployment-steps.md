@@ -158,8 +158,8 @@ npx tsx scripts/register-test-agents.ts
 ```
 
 This script:
-1. Calls `prepareOnboarding()` for each test agent → derives `capabilityMerkleRoot` (Poseidon root) and `capabilityCommitment`
-2. Calls `registerOnChain(agentId, commit, poseidonRoot, capCommitment)` on the new contract
+1. Builds fresh private onboarding state for each test agent → derives `capabilityMerkleRoot` (Poseidon root) and `capabilityCommitment`
+2. Submits the per-agent privacy registration to the new contract with the derived commitments
 3. Writes updated agent state JSON to `packages/crypto/agent-N.json`
 
 ### 3.3 — Verify on-chain
@@ -232,7 +232,7 @@ npx tsc --noEmit
 export ENGINE_URL="https://your-engine.workers.dev"
 export AGENT_PRIVATE_KEY="0x..."
 export AGENT_ID="1"
-export AGENT_STATE_FILE="packages/crypto/agent-1.json"   # for proof generation
+export AGENT_STATE_FILE="packages/crypto/agent-1.json"   # for automatic JOIN/BID proof generation
 ```
 
 ### 5.3 — Start
@@ -247,7 +247,7 @@ Default port: `3100`. Health check: `curl http://localhost:3100/health`.
 ### 5.4 — Verify sealed-bid tools
 
 Test the new tools with the MCP client or a curl test against the engine:
-- `place_bid` with `sealed: true, generateProof: true` → must return `action: "BID_COMMIT"` with `revealSalt`
+- `place_bid` with `sealed: true` on the normal path (or an advanced `proofPayload` override) → must return `action: "BID_COMMIT"` with `revealSalt`
 - `reveal_bid` with the returned `bid` and `revealSalt` → must return `action: "REVEAL"`
 
 ---

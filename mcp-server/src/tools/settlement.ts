@@ -24,7 +24,7 @@ const SETTLEMENT_SUGGESTIONS: Record<string, string> = {
   OPEN: 'Auction still open — settlement happens after close',
   CLOSED: 'Auction closed — CRE settlement in progress',
   SETTLED: "Settlement complete — winner's bond applied as payment",
-  CANCELLED: 'Auction cancelled — bonds eligible for refund via claimRefund()',
+  CANCELLED: 'Auction cancelled — call claim_refund, then withdraw_funds, to recover bonded funds',
 }
 
 interface RoomSnapshot {

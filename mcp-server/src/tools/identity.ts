@@ -19,9 +19,6 @@ interface VerifyIdentityResponse {
   poseidonRoot: string | null
 }
 
-const ERC8004_ADDRESS = '0x8004A818BFB912233c491871b3d84c89A494BD9e'
-const PRIVACY_REGISTRY_ADDRESS = '0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff'
-
 export function registerIdentityTool(server: McpServer, engine: EngineClient, config: ServerConfig): void {
   server.registerTool(
     'check_identity',
@@ -79,16 +76,14 @@ export function registerIdentityTool(server: McpServer, engine: EngineClient, co
         return toolError('ENGINE_ERROR', msg, 'Check engine connectivity and try again')
       }
 
-      // Build missing steps
       const missingSteps: string[] = []
       if (!data.verified) {
         missingSteps.push(
-          `Register on ERC-8004: call selfRegister(${resolvedAgentId}) on ${ERC8004_ADDRESS}`,
+          `Preferred MCP recovery: call register_identity, then rerun check_identity with the returned agentId instead of relying on agentId ${resolvedAgentId}.`,
         )
-      }
-      if (!data.privacyRegistered) {
+      } else if (!data.privacyRegistered) {
         missingSteps.push(
-          `Register on AgentPrivacyRegistry: run prepareOnboarding() then registerOnChain() from @agent-auction/crypto on ${PRIVACY_REGISTRY_ADDRESS}`,
+          `agentId ${resolvedAgentId} is missing privacy bootstrap. Current MCP recovery is to call register_identity and continue with the returned fully bootstrapped agentId before joining auctions.`,
         )
       }
 

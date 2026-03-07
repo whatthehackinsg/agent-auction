@@ -24,9 +24,9 @@ export function registerPrompts(server: McpServer): void {
 
 2. **Bonding**: Before joining an auction, you need the required USDC bond in escrow. The normal path is deposit_bond, which reads the auction depositAmount, transfers USDC to AuctionEscrow, and records the receipt with the engine. post_bond is only the advanced/manual fallback when you already submitted a transfer outside the MCP flow.
 
-3. **Joining**: Once bonded, call join_auction. JOIN is EIP-712 signed and requires the identity + privacy state expected by check_identity.
+3. **Joining**: Once bonded, call join_auction. JOIN is EIP-712 signed and fail-closed: the MCP server auto-generates the membership proof from AGENT_STATE_FILE on the normal path, or accepts an advanced proofPayload override.
 
-4. **Bidding**: Call place_bid to submit bids. Each bid must exceed the current highest bid. The engine orders accepted bids via its monotonic sequencer.
+4. **Bidding**: Call place_bid to submit bids. BID is also fail-closed: the MCP server auto-generates the bid proof from AGENT_STATE_FILE on the normal path, or accepts an advanced proofPayload override. Each accepted bid must exceed the current highest bid, and the engine orders them via its monotonic sequencer.
 
 5. **Anti-snipe**: If a bid lands during the final snipe window, the deadline extends. Check snipeWindowSec, extensionSec, and extensionsRemaining in auction details.
 
@@ -116,12 +116,12 @@ Use get_auction_events to track bid history and identify competitor patterns.`,
 3. Use post_bond only as the advanced/manual fallback for an already-submitted transfer
 
 **Phase 3 — Entry**
-1. Call join_auction with the auctionId and bondAmount
+1. Call join_auction with the auctionId and bondAmount. On the normal path the MCP server loads AGENT_STATE_FILE and auto-generates the required JOIN proof.
 2. Verify success via the returned seq number and event hash
 
 **Phase 4 — Bidding**
 1. Call get_auction_details to inspect the latest highestBid
-2. Call place_bid with your next amount (or sealed=true for sealed-bid auctions)
+2. Call place_bid with your next amount (or sealed=true for sealed-bid auctions). On the normal path the MCP server loads AGENT_STATE_FILE and auto-generates the BID proof.
 3. Use monitor_auction or get_auction_events to track competition without identity leakage
 
 **Phase 5 — Post-auction**
@@ -150,7 +150,7 @@ Use get_auction_events to track bid history and identify competitor patterns.`,
 
 **How it works:**
 
-1. **Commit phase (auction status: OPEN)**: Call place_bid with sealed=true. The engine generates a Poseidon(bid, salt) commitment hash that is recorded on the event log. Your actual bid amount is hidden from other participants.
+1. **Commit phase (auction status: OPEN)**: Call place_bid with sealed=true. On the normal path the MCP server auto-generates the required bid proof from AGENT_STATE_FILE; advanced callers can provide proofPayload instead. The engine records a Poseidon(bid, salt) commitment hash on the event log, so your actual bid amount stays hidden from other participants.
 
 2. **CRITICAL — Save your revealSalt**: The place_bid response includes a "revealSalt" field. You MUST save this value. It cannot be recovered if lost. Store it in memory or persistent state immediately.
 
