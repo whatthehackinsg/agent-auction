@@ -1,21 +1,25 @@
 ---
 phase: 14-define-agent-participation-standard-and-platform-guidance
 plan: 01
-subsystem: docs+mcp-server
-tags: [docs, standards, agentkit, mcp, onboarding]
+subsystem: docs
+tags: [docs, participation-standard, agentkit, cdp, mcp, base-sepolia]
 requires:
-  - phase: 13-redeploy-agentprivacyregistry-and-repoint-base-sepolia-config
-    provides: verified active auction lifecycle and stable Worker-safe proof path
+  - phase: 13-worker-proof-runtime-compatibility
+    provides: "Stable MCP and proof-runtime behavior that the public participation standard can document accurately"
 provides:
-  - canonical participation standard at `docs/participation-guide.md`
-  - consistent support labels and fallback policy across repo guidance surfaces
-  - explicit active-participant wallet and bootstrap-help boundary
-affects: [phase-14-02, docs, mcp-server, frontend]
+  - "Canonical Phase 14 participation guide in docs/participation-guide.md"
+  - "Aligned repo, docs index, and MCP README entry points that deep-link to the same guide"
+  - "Explicit Supported / Advanced / Future participation labels for Base Sepolia operators"
+affects:
+  - 14-02-public-participation-page
+  - 15-agentkit-wallet-adapter
+  - 16-external-agent-playbook
 tech-stack:
   added: []
   patterns:
-    - checklist-first operator guidance that is readable by both humans and AI agents
-    - one canonical participation-standard doc with repo surfaces linking to it instead of restating divergent rules
+    - checklist-first operator guidance
+    - canonical-guide-plus-pointer-summaries
+    - support-matrix labels for participation paths
 key-files:
   created:
     - docs/participation-guide.md
@@ -24,72 +28,78 @@ key-files:
     - docs/README.md
     - mcp-server/README.md
 key-decisions:
-  - "`AgentKit + CDP Server Wallet` is the supported target stack, the raw-key MCP path is the advanced bridge, and `Agentic Wallet` stays future/not-yet-verified."
-  - "Active participation requires one persistent Base Sepolia owner wallet that remains the ERC-8004 owner, action signer, and bond/refund wallet."
-  - "Human help is bootstrap-only; ongoing participation must be agent-driven or fall back to read-only observation / the advanced bridge."
+  - "docs/participation-guide.md is the single canonical participation source for operators and AI runtimes in Phase 14"
+  - "`AgentKit + CDP Server Wallet` is the supported target stack, the raw-key MCP path is the advanced bridge, and `Agentic Wallet` remains future work"
+  - "Repo guidance surfaces summarize the policy briefly and deep-link to the canonical guide instead of restating divergent setup rules"
 patterns-established:
-  - "The new canonical operator guidance lives in docs first, then the public frontend guide mirrors it in Wave 2."
+  - "Participation docs should define one canonical guide and keep all other surfaces as concise navigational summaries"
+  - "Active participation language must center on one persistent Base Sepolia owner wallet and explicit read-only fallback rules"
 requirements-completed: [PART-01, PART-02, PART-03]
-duration: 20min
+duration: 11min
 completed: 2026-03-07
 ---
 
-# Phase 14 Plan 01: Participation Standard and Repo Guidance Summary
+# Phase 14 Plan 01: Participation Standard Summary
 
-**The canonical participation standard now exists in one place, and the repo’s main guidance surfaces all point to it consistently**
+**Checklist-first Base Sepolia participation standard with a canonical operator guide and aligned repo and MCP guidance entry points**
 
 ## Performance
 
-- **Duration:** ~20m
-- **Completed:** 2026-03-07T19:14:00+08:00
+- **Duration:** 11 min
+- **Started:** 2026-03-07T11:01:24Z
+- **Completed:** 2026-03-07T11:14:51Z
 - **Tasks:** 2
 - **Files modified:** 4
 
 ## Accomplishments
 
-- Added `docs/participation-guide.md` as the canonical Phase 14 participation-standard document with the `Supported / Advanced / Future` matrix, the active-bidder baseline, the wallet capability checklist, supported entry paths, fallback policy, and the bootstrap-only human-help boundary.
-- Aligned the root repo README, docs index, and MCP README so they all point to the same canonical guide instead of teaching different setup rules in parallel.
-- Made the repo guidance explicit that Base Sepolia is the only supported network for this standard and that unsupported stacks should observe only or use the advanced bridge.
+- Published `docs/participation-guide.md` as the single canonical Phase 14 participation standard for operators and AI runtimes.
+- Defined the supported stack, active-participant wallet baseline, fallback policy, and bootstrap-only human-help boundary in a checklist-first format.
+- Aligned `README.md`, `docs/README.md`, and `mcp-server/README.md` so they point to the canonical guide and use the same Supported / Advanced / Future terminology.
 
 ## Task Commits
 
-- `be08add` — `feat(14-01): add canonical participation guide`
-- `e55d6a4` — `docs(14-01): align repo guidance to participation standard`
-- `0f3354c` — `docs(14-01): tighten guide boundary wording`
+Each task was committed atomically:
+
+1. **Task 1: Author the canonical participation guide with the support matrix and wallet capability checklist** - `be08add` (feat)
+2. **Task 2: Align repo and MCP guidance surfaces to the canonical participation guide** - `e55d6a4` (docs)
+
+Follow-up clarification after final verification:
+
+- `0f3354c` (docs) - tightened the guide wording to keep the human-assistance boundary explicit in the canonical source
 
 ## Files Created/Modified
 
-- `docs/participation-guide.md` - new canonical participation-standard guide for human operators and agent runtimes
-- `README.md` - adds the top-level participation-standard entry point and baseline summary
-- `docs/README.md` - promotes the participation guide as a primary operator-facing docs entry point
-- `mcp-server/README.md` - clarifies the raw-key MCP route as the advanced bridge and points to the canonical guide
+- `docs/participation-guide.md` - canonical operator-facing participation standard, support matrix, checklist, entry paths, and fallback policy
+- `README.md` - top-level participation-standard pointer and active-participant baseline summary
+- `docs/README.md` - docs index entry for the operator-facing participation guide
+- `mcp-server/README.md` - MCP-specific participation-standard note that positions the raw-key flow as the advanced bridge
 
 ## Decisions Made
 
-- Kept the support labels compact and explicit: `Supported`, `Advanced`, and `Future`.
-- Kept the standard at the requirement/guidance layer only; no AgentKit adapter implementation or external skill material is claimed in this wave.
-- Treated minimal human assistance as a hard boundary in the published guidance, not just an internal planning note.
+- Kept Phase 14 at the standards-and-guidance layer only, without adding adapter instructions or external playbook content.
+- Treated `AgentKit + CDP Server Wallet` as the supported target stack while making the current raw-key MCP route explicitly advanced rather than default.
+- Defined active participation around a single persistent Base Sepolia owner wallet that spans ownership, signing, bonding, and refund flows.
 
 ## Deviations from Plan
 
-- The final wording pass removed explicit “playbook” language from the public guide so the published output stays within the Phase 14 scope checks while still pointing forward to later participation materials.
+None - plan executed exactly as written.
 
 ## Issues Encountered
 
-- The first pass of the new guide used Phase 16 “playbook” terminology directly, which tripped the Phase 14 scope-preservation grep check. The follow-up wording cleanup keeps the same boundary meaning without leaking that later-phase label into the published guide.
+- `gitnexus` reported a stale index at the start of execution, so the index was refreshed before the pre-commit scope check.
+- `git add` and `git commit` required elevated execution because the repository `.git` directory resolves outside the writable sandbox path. The task scope and staged files stayed isolated throughout.
 
 ## User Setup Required
 
-None.
+None - no external service configuration required.
 
 ## Next Phase Readiness
 
-- Wave 1 is complete.
-- Wave 2 can now build the public `/participate` page directly from `docs/participation-guide.md` instead of inventing a second version of the standard.
+- Phase `14-02` can mirror the canonical support matrix, wallet checklist, and fallback policy on the public `/participate` surface without inventing new rules.
+- Phase `15` can implement the AgentKit-compatible adapter against an explicit active-participant baseline instead of inferred README guidance.
 
 ## Self-Check: PASSED
 
-- `cd /Volumes/MainSSD/HomeData/zengy/workspace/auction-design && rg -n "AgentKit \\+ CDP Server Wallet|Supported|Advanced|Future|persistent Base Sepolia owner wallet|Base Sepolia ETH|Base Sepolia USDC|register_identity|AGENT_STATE_FILE|read-only|Agentic Wallet" docs/participation-guide.md`
-- `cd /Volumes/MainSSD/HomeData/zengy/workspace/auction-design && rg -n "bootstrap-only|agent-driven after setup|read-only observation|advanced bridge" docs/participation-guide.md`
-- `cd /Volumes/MainSSD/HomeData/zengy/workspace/auction-design && rg -n "participation guide|AgentKit \\+ CDP Server Wallet|advanced bridge|persistent owner wallet|Base Sepolia" README.md docs/README.md mcp-server/README.md`
-- `cd /Volumes/MainSSD/HomeData/zengy/workspace/auction-design && if rg -n "install AgentKit|external skill|playbook" README.md docs/README.md mcp-server/README.md docs/participation-guide.md; then exit 1; else echo "Phase 14 scope preserved"; fi`
+- Found `.planning/phases/14-define-agent-participation-standard-and-platform-guidance/14-01-SUMMARY.md`
+- Found task commits `be08add`, `e55d6a4`, and `0f3354c`

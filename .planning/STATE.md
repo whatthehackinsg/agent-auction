@@ -4,10 +4,10 @@ milestone: v1.1
 milestone_name: Autonomous Agent Onboarding
 current_phase: 14
 current_phase_name: define agent participation standard and platform guidance
-current_plan: 1
+current_plan: 2
 status: executing
-stopped_at: Phase 14 wave 1 complete — next up 14-02 execution
-last_updated: "2026-03-07T19:14:00+08:00"
+stopped_at: Completed 14-01-PLAN.md
+last_updated: "2026-03-07T11:16:15.640Z"
 last_activity: 2026-03-07
 progress:
   total_phases: 10
@@ -31,9 +31,9 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 **Current Phase:** 14
 **Current Phase Name:** define agent participation standard and platform guidance
 **Total Phases:** 16
-**Current Plan:** 1
+**Current Plan:** 2
 **Total Plans in Phase:** 2
-**Status:** Phase 14 is in execution. Wave 1 is complete: the canonical participation guide is live in `docs/participation-guide.md`, and the repo’s major guidance surfaces now align on the same support matrix, wallet baseline, and fallback policy. Wave 2 is next for the public `/participate` handoff page and frontend links.
+**Status:** Ready to execute
 **Last Activity:** 2026-03-07
 
 **Progress:** [███████░░░] 70%
@@ -57,6 +57,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 | Phase 09-zk-enforcement P02 | 23min | 2 tasks | 5 files |
 | Phase 11-internal-skill-and-prompt-cleanup P01 | 20m | 2 tasks | 5 files |
 | Phase 11-internal-skill-and-prompt-cleanup P02 | 25m | 2 tasks | 8 files |
+| Phase 14 P01 | 11min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 - [Phase 14]: The platform standard should center on `AgentKit + CDP Server Wallet`, with the current raw-key MCP path retained only as an advanced bridge and a new public setup-guide surface added for humans and agents
 - [Phase 14]: The execution split is now two waves — canonical participation guide + repo alignment first, then the public `/participate` handoff page and frontend guide links
 - [Phase 14]: `docs/participation-guide.md` is now the canonical operator-facing standard, and README/docs/MCP guidance now point to it consistently
+- [Phase 14]: Active participation is defined around one persistent Base Sepolia owner wallet that spans ERC-8004 ownership, EIP-712 signing, and bond/refund flows
 
 ### Roadmap Evolution
 
@@ -131,6 +133,6 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 ## Session Continuity
 
 Last activity: 2026-03-07 — Completed Phase 14 wave 1 by publishing the canonical participation guide and aligning repo guidance
-**Last session:** 2026-03-06T19:36:03.154Z
-**Stopped At:** Phase 14 wave 1 complete — next up 14-02 execution
-**Resume File:** .planning/phases/14-define-agent-participation-standard-and-platform-guidance/14-02-PLAN.md
+**Last session:** 2026-03-07T11:16:15.637Z
+**Stopped At:** Completed 14-01-PLAN.md
+**Resume File:** None
