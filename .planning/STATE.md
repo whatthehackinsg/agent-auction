@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Autonomous Agent Onboarding
-current_phase: 14
-current_phase_name: define agent participation standard and platform guidance
-current_plan: 2
-status: verifying
-stopped_at: Completed 14-02-PLAN.md
-last_updated: "2026-03-07T11:27:32.307Z"
+current_phase: 15
+current_phase_name: Integrate AgentKit wallet adapter without breaking ZK or ERC-8004
+current_plan: 0
+status: ready_to_plan
+stopped_at: Verified Phase 14 complete
+last_updated: "2026-03-07T11:44:06.000Z"
 last_activity: 2026-03-07
 progress:
   total_phases: 10
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 20
   completed_plans: 20
-  percent: 80
+  percent: 90
 ---
 
 # Project State
@@ -24,19 +24,19 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-03-05)
 
 **Core value:** Working ZK proofs that actually verify — agents prove registry membership and bid range without revealing identity, demonstrated end-to-end.
-**Current focus:** Phase 14 - Define the agent participation standard and platform guidance, followed by the AgentKit adapter path and the external agent playbook
+**Current focus:** Phase 15 - Integrate the AgentKit wallet adapter without breaking ZK or ERC-8004, followed by the external agent playbook
 
 ## Current Position
 
-**Current Phase:** 14
-**Current Phase Name:** define agent participation standard and platform guidance
+**Current Phase:** 15
+**Current Phase Name:** Integrate AgentKit wallet adapter without breaking ZK or ERC-8004
 **Total Phases:** 16
-**Current Plan:** 2
-**Total Plans in Phase:** 2
-**Status:** Phase complete — ready for verification
+**Current Plan:** 0
+**Total Plans in Phase:** 0
+**Status:** Ready to plan Phase 15
 **Last Activity:** 2026-03-07
 
-**Progress:** [████████░░] 80%
+**Progress:** [█████████░] 90%
 
 ## Performance Metrics
 
@@ -119,6 +119,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 - Phase 14 wave 1 executed: the canonical participation guide is published and repo guidance surfaces are aligned ahead of the public `/participate` page
 - Phase 14 wave 2 executed: the public `/participate` handoff page and frontend setup-guide links are now live across landing and auction surfaces
 - Phase 14 wave 2 executed: the public `/participate` handoff page, shared frontend guide links, and spectator-safe setup CTAs are now live in the codebase
+- Phase 14 verified complete: `14-UAT.md` passed 7/7 checks, the public `/participate` route is accepted, and focus advances to Phase 15 planning
 
 ### Pending Todos
 
@@ -138,7 +139,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 
 ## Session Continuity
 
-Last activity: 2026-03-07 — Completed Phase 14 with the canonical guide plus the public `/participate` handoff page and frontend setup links
-**Last session:** 2026-03-07T11:27:32.299Z
-**Stopped At:** Completed 14-02-PLAN.md
+Last activity: 2026-03-07 — Verified Phase 14 complete and advanced focus to the Phase 15 AgentKit adapter planning track
+**Last session:** 2026-03-07T11:44:06.000Z
+**Stopped At:** Verified Phase 14 complete
 **Resume File:** None
