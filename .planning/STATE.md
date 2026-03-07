@@ -6,8 +6,8 @@ current_phase: 14
 current_phase_name: define agent participation standard and platform guidance
 current_plan: 0
 status: planning
-stopped_at: Phase 14 context captured — next up Phase 14 planning
-last_updated: "2026-03-07T16:46:15+08:00"
+stopped_at: Phase 14 planned — next up Phase 14 execution
+last_updated: "2026-03-07T18:57:58+08:00"
 last_activity: 2026-03-07
 progress:
   total_phases: 10
@@ -33,7 +33,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 **Total Phases:** 16
 **Current Plan:** 0
 **Total Plans in Phase:** 0
-**Status:** Phase 11 is verified complete, and Phase 14 context is now captured. The next step is to turn the new participation-standard decisions into executable plans for guidance surfaces, requirements documentation, and the public setup entry point.
+**Status:** Phase 14 is now planned. The participation-standard requirements are added to the roadmap and requirements map, and two execution plans are ready: one for the canonical guide plus repo guidance alignment, and one for the public `/participate` handoff page and frontend links.
 **Last Activity:** 2026-03-07
 
 **Progress:** [███████░░░] 70%
@@ -93,6 +93,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 - [Phase 11]: Active MCP helper text now routes onboarding through `register_identity`, treats JOIN/BID as fail-closed `AGENT_STATE_FILE` / `proofPayload` flows, and points exits to `claim_refund` + `withdraw_funds`
 - [Phase 11]: `11-UAT.md` passed 6/6 checks with no gaps, closing the internal cleanup phase
 - [Phase 14]: The platform standard should center on `AgentKit + CDP Server Wallet`, with the current raw-key MCP path retained only as an advanced bridge and a new public setup-guide surface added for humans and agents
+- [Phase 14]: The execution split is now two waves — canonical participation guide + repo alignment first, then the public `/participate` handoff page and frontend guide links
 
 ### Roadmap Evolution
 
@@ -107,6 +108,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 - Phase 11 executed: removed stale internal skill artifacts and aligned live MCP helper/docs surfaces with the post-Phase-13 lifecycle
 - Phase 11 verified complete: `11-UAT.md` passed with no gaps, and focus advances to Phase 14
 - Phase 14 context captured: the supported stack policy, guidance surfaces, minimum requirements, and fallback model are now locked for planning
+- Phase 14 planned: `PART-01` through `PART-04` are now defined in requirements, roadmap metadata is filled in, and `14-01` / `14-02` are ready for execution
 
 ### Pending Todos
 
@@ -126,7 +128,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 
 ## Session Continuity
 
-Last activity: 2026-03-07 — Captured Phase 14 context for the agent participation standard and public guidance surfaces
+Last activity: 2026-03-07 — Planned Phase 14 into two execution waves for the participation standard and public setup-guide surfaces
 **Last session:** 2026-03-06T19:36:03.154Z
-**Stopped At:** Phase 14 context captured — next up Phase 14 planning
-**Resume File:** .planning/phases/14-define-agent-participation-standard-and-platform-guidance/14-CONTEXT.md
+**Stopped At:** Phase 14 planned — next up Phase 14 execution
+**Resume File:** .planning/phases/14-define-agent-participation-standard-and-platform-guidance/14-01-PLAN.md
