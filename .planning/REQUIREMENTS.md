@@ -40,6 +40,13 @@ Requirements for milestone v1.1. Each maps to roadmap phases.
 - [ ] **SKIL-02**: New auction skill documents correct ERC-8004 `register(string agentURI)` ABI and mandatory ZK flow
 - [ ] **SKIL-03**: New auction skill covers full autonomous per-auction flow (discover → bond → join(ZK) → bid(ZK) → monitor → withdraw/claim)
 
+### Participation Standard and Guidance
+
+- [ ] **PART-01**: The supported participant stack is published explicitly with `Supported` / `Advanced` / `Future` labels — `AgentKit + CDP Server Wallet` is the supported target, the current raw-key MCP flow is the advanced bridge, `Agentic Wallet` is future work, and Base Sepolia is the only supported network
+- [ ] **PART-02**: The minimum active-participant baseline is explicit — one persistent Base Sepolia owner wallet remains the ERC-8004 owner, action signer, and bond/refund wallet, with Base Sepolia ETH and USDC plus compatible ZK state requirements called out clearly
+- [ ] **PART-03**: Repo guidance surfaces (`README.md`, `docs/README.md`, `mcp-server/README.md`) align on the same participation standard, wallet checklist, and fallback policy, and point to one canonical guide
+- [ ] **PART-04**: A public, checklist-first participation/setup guide exists at a stable frontend handoff URL and is linked prominently from the landing page and auction surfaces
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
@@ -89,10 +96,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SKIL-01 | Phase 11 | Pending |
 | SKIL-02 | Phase 11 | Pending |
 | SKIL-03 | Phase 11 | Pending |
+| PART-01 | Phase 14 | Pending |
+| PART-02 | Phase 14 | Pending |
+| PART-03 | Phase 14 | Pending |
+| PART-04 | Phase 14 | Pending |
 
 **Coverage:**
-- v1.1 requirements: 18 total
-- Mapped to phases: 18
+- v1.1 requirements: 22 total
+- Mapped to phases: 22
 - Unmapped: 0
 
 ---

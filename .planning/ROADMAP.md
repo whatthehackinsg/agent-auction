@@ -182,13 +182,14 @@ Phases execute in numeric order: 7 -> 7.x -> 8 -> 8.x -> 9 -> 9.x -> 10 -> 10.x 
 
 ### Phase 14: Define agent participation standard and platform guidance
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Define and publish the minimum active-participant standard for humans and external agents, including the supported wallet stack, capability checklist, aligned repo guidance, and a public setup-guide entry point
+**Requirements**: PART-01, PART-02, PART-03, PART-04
 **Depends on:** Phase 13
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 14 to break down)
+- [ ] 14-01-PLAN.md — Canonical participation standard, wallet capability checklist, and repo guidance alignment
+- [ ] 14-02-PLAN.md — Public `/participate` setup guide and frontend handoff links
 
 ### Phase 15: Integrate AgentKit wallet adapter without breaking ZK or ERC-8004
 
