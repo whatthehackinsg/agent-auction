@@ -5,14 +5,14 @@ milestone_name: Autonomous Agent Onboarding
 current_phase: 15
 current_phase_name: Integrate AgentKit wallet adapter without breaking ZK or ERC-8004
 current_plan: 0
-status: context_captured
-stopped_at: Phase 15 context captured
-last_updated: "2026-03-07T12:23:48Z"
+status: planned
+stopped_at: Phase 15 planned
+last_updated: "2026-03-07T12:53:41Z"
 last_activity: 2026-03-07
 progress:
   total_phases: 10
   completed_phases: 9
-  total_plans: 20
+  total_plans: 24
   completed_plans: 20
   percent: 90
 ---
@@ -24,7 +24,7 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-03-05)
 
 **Core value:** Working ZK proofs that actually verify — agents prove registry membership and bid range without revealing identity, demonstrated end-to-end.
-**Current focus:** Phase 15 - Integrate the AgentKit wallet adapter without breaking ZK or ERC-8004, followed by the external agent playbook
+**Current focus:** Phase 15 - Integrate the AgentKit wallet adapter without breaking ZK or ERC-8004, then Phase 16's external agent playbook
 
 ## Current Position
 
@@ -32,8 +32,8 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 **Current Phase Name:** Integrate AgentKit wallet adapter without breaking ZK or ERC-8004
 **Total Phases:** 16
 **Current Plan:** 0
-**Total Plans in Phase:** 0
-**Status:** Context captured — ready to plan Phase 15
+**Total Plans in Phase:** 4
+**Status:** Planned — ready to execute Phase 15
 **Last Activity:** 2026-03-07
 
 **Progress:** [█████████░] 90%
@@ -121,6 +121,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 - Phase 14 wave 2 executed: the public `/participate` handoff page, shared frontend guide links, and spectator-safe setup CTAs are now live in the codebase
 - Phase 14 verified complete: `14-UAT.md` passed 7/7 checks, the public `/participate` route is accepted, and focus advances to Phase 15 planning
 - Phase 15 context captured: the supported AgentKit/CDP adapter behavior, wallet bootstrap assumptions, identity/ZK handoff rules, and fallback boundaries are now locked for planning
+- Phase 15 planned: `AKIT-01` through `AKIT-04` are mapped in requirements, roadmap metadata is filled in, and `15-01` through `15-04` are ready for execution
 
 ### Pending Todos
 
@@ -140,7 +141,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 
 ## Session Continuity
 
-Last activity: 2026-03-07 — Captured Phase 15 context for the AgentKit/CDP adapter path
-**Last session:** 2026-03-07T12:23:48Z
-**Stopped At:** Phase 15 context captured
+Last activity: 2026-03-07 — Planned Phase 15 for the AgentKit/CDP adapter path
+**Last session:** 2026-03-07T12:53:41Z
+**Stopped At:** Phase 15 planned
 **Resume File:** None
