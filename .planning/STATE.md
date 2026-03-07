@@ -6,8 +6,8 @@ current_phase: 14
 current_phase_name: define agent participation standard and platform guidance
 current_plan: 0
 status: planning
-stopped_at: Phase 11 verified complete — next up Phase 14 planning
-last_updated: "2026-03-07T08:38:00+08:00"
+stopped_at: Phase 14 context captured — next up Phase 14 planning
+last_updated: "2026-03-07T16:46:15+08:00"
 last_activity: 2026-03-07
 progress:
   total_phases: 10
@@ -33,7 +33,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 **Total Phases:** 16
 **Current Plan:** 0
 **Total Plans in Phase:** 0
-**Status:** Phase 11 is verified complete. The stale internal skill tree is removed, live MCP helper surfaces now point to the current autonomous lifecycle, and the active milestone focus moves to Phase 14 for the external participation standard and platform guidance.
+**Status:** Phase 11 is verified complete, and Phase 14 context is now captured. The next step is to turn the new participation-standard decisions into executable plans for guidance surfaces, requirements documentation, and the public setup entry point.
 **Last Activity:** 2026-03-07
 
 **Progress:** [███████░░░] 70%
@@ -92,6 +92,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 - [Phase 11]: The stale `.claude/skills/auction/*` tree is removed; `mcp-server/README.md` is now the canonical internal landing page while preserved `.planning/**` records remain untouched history
 - [Phase 11]: Active MCP helper text now routes onboarding through `register_identity`, treats JOIN/BID as fail-closed `AGENT_STATE_FILE` / `proofPayload` flows, and points exits to `claim_refund` + `withdraw_funds`
 - [Phase 11]: `11-UAT.md` passed 6/6 checks with no gaps, closing the internal cleanup phase
+- [Phase 14]: The platform standard should center on `AgentKit + CDP Server Wallet`, with the current raw-key MCP path retained only as an advanced bridge and a new public setup-guide surface added for humans and agents
 
 ### Roadmap Evolution
 
@@ -105,6 +106,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 - Phase 11 re-scoped: internal stale skill/prompt cleanup only; public AgentKit participation guidance moved to Phases 14-16
 - Phase 11 executed: removed stale internal skill artifacts and aligned live MCP helper/docs surfaces with the post-Phase-13 lifecycle
 - Phase 11 verified complete: `11-UAT.md` passed with no gaps, and focus advances to Phase 14
+- Phase 14 context captured: the supported stack policy, guidance surfaces, minimum requirements, and fallback model are now locked for planning
 
 ### Pending Todos
 
@@ -124,7 +126,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 
 ## Session Continuity
 
-Last activity: 2026-03-07 — Verified Phase 11 complete with 6/6 passing UAT checks and moved milestone focus to Phase 14
+Last activity: 2026-03-07 — Captured Phase 14 context for the agent participation standard and public guidance surfaces
 **Last session:** 2026-03-06T19:36:03.154Z
-**Stopped At:** Phase 11 verified complete — next up Phase 14 planning
-**Resume File:** .planning/phases/11-internal-skill-and-prompt-cleanup/11-UAT.md
+**Stopped At:** Phase 14 context captured — next up Phase 14 planning
+**Resume File:** .planning/phases/14-define-agent-participation-standard-and-platform-guidance/14-CONTEXT.md
