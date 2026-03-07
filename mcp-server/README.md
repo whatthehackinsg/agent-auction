@@ -29,6 +29,41 @@ Active participation requires one persistent owner wallet on Base Sepolia that r
 
 If an operator cannot satisfy that baseline, they should use read-only observation or the advanced bridge instead of treating this MCP path as a fully supported default.
 
+## Supported Write Backends
+
+`MCP_WALLET_BACKEND=auto` is the default and prefers the supported AgentKit/CDP path whenever the full CDP config is present.
+
+| Backend | Status | What it requires | Notes |
+|---|---|---|---|
+| `agentkit` | Supported | `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET`, `CDP_WALLET_ADDRESS`, `BASE_SEPOLIA_RPC` | Primary write path for active participation |
+| `raw-key` | Advanced bridge | `AGENT_PRIVATE_KEY`, `BASE_SEPOLIA_RPC` | Kept for power users and debugging |
+| `auto` | Default selector | either complete AgentKit/CDP config or raw-key config | refuses partial CDP config instead of silently downgrading |
+| none | Read-only only | `ENGINE_URL` | discovery/monitoring/check tools still work |
+
+The MCP server never silently falls back from an incomplete AgentKit/CDP setup to the raw-key bridge. If CDP envs are partially set, write tools fail closed and tell the operator to either finish the supported setup or explicitly switch to `MCP_WALLET_BACKEND=raw-key`.
+
+Current status:
+
+- The supported `agentkit` path is live-proven on Base Sepolia for the core lifecycle:
+  - `register_identity -> check_identity -> deposit_bond -> join_auction -> place_bid`
+- Explicit `attachExisting`, `claim_refund`, and `withdraw_funds` remain regression-covered in the MCP test suite.
+- One known follow-up remains: the platform allows the same `agentId` across multiple rooms, but the current MCP JOIN nonce tracker is not yet room-scoped, so repeated JOINs for different auctions may require a follow-up fix.
+
+## Entry Paths
+
+Two write-side identity entry paths are supported:
+
+- `register_identity` without `attachExisting`: platform-managed onboarding. The MCP server mints ERC-8004, registers privacy membership, saves `agent-N.json`, and checks readiness.
+- `register_identity` with `attachExisting: true`: deliberate adoption of an existing ERC-8004 identity plus a compatible local `agent-N.json`.
+
+Attach mode is explicit on purpose. The MCP server does not guess whether an existing identity should be adopted.
+
+## Fail-Closed ZK State Rules
+
+- `check_identity` confirms ERC-8004 ownership and privacy visibility, and when a local state path is configured it also reports whether compatible ZK state is present locally.
+- `join_auction` and `place_bid` still fail closed if the local `agent-N.json` is missing, mismatched, or incompatible with the on-chain privacy registration.
+- The supported AgentKit/CDP path does not weaken the current proof/nullifier contract. It only swaps the wallet backend used for typed-data signing and on-chain writes.
+
 ## Transport
 
 ```text
@@ -100,19 +135,37 @@ register_identity
 
 Read-only mode works with just the engine URL. Full autonomous participation additionally needs Base Sepolia RPC, signing configuration, and compatible ZK state.
 
+Supported attach flow:
+
+```text
+register_identity({ attachExisting: true, agentId, stateFilePath })
+  -> check_identity
+  -> deposit_bond
+  -> join_auction
+  -> place_bid
+```
+
 ## Environment
 
 | Variable | Required | Purpose |
 |---|---|---|
 | `ENGINE_URL` | no | engine base URL, default `http://localhost:8787` |
-| `AGENT_PRIVATE_KEY` | write tools | default signer for EIP-712 and on-chain writes |
-| `AGENT_ID` | most write tools | default ERC-8004 identity |
-| `AGENT_STATE_FILE` | JOIN/BID by default | local ZK state file used for proof generation |
+| `MCP_WALLET_BACKEND` | no | backend selector: `auto`, `agentkit`, or `raw-key` |
+| `CDP_API_KEY_ID` | supported writes | CDP API key ID for the supported AgentKit/CDP path |
+| `CDP_API_KEY_SECRET` | supported writes | CDP API key secret for the supported AgentKit/CDP path |
+| `CDP_WALLET_SECRET` | supported writes | Server Wallet secret used by the supported path |
+| `CDP_WALLET_ADDRESS` | supported writes | persistent Base Sepolia owner wallet address to reuse |
+| `CDP_NETWORK_ID` | supported writes | must stay `base-sepolia` |
+| `AGENT_PRIVATE_KEY` | advanced write bridge | raw-key fallback for EIP-712 and on-chain writes |
+| `AGENT_ID` | most write tools | default ERC-8004 identity for attach/join/bid/bond flows |
+| `AGENT_STATE_FILE` | JOIN/BID by default | local ZK state file used for proof generation or explicit attach |
 | `AGENT_STATE_DIR` | no | default directory for generated `agent-N.json` files |
 | `BASE_SEPOLIA_RPC` | on-chain tools | Base Sepolia RPC for identity, escrow, and registry reads |
-| `BOND_FUNDING_PRIVATE_KEY` | no | optional alternate funding signer for `deposit_bond` |
+| `BOND_FUNDING_PRIVATE_KEY` | raw-key only | optional alternate funding signer for `deposit_bond`; must still own the target agentId |
 | `ENGINE_ADMIN_KEY` | no | bypasses engine x402 discovery gates |
 | `MCP_PORT` | no | server port, default `3100` |
+
+The supported path expects the wallet to already exist. This MCP server attaches to the configured Server Wallet address; it does not create or manage CDP wallets for the operator.
 
 ## Commands
 
@@ -152,3 +205,4 @@ Example client config:
 - Write tools can target an explicit `agentId` per call without mutating env vars.
 - `deposit_bond` is the primary path. `post_bond` is only the manual fallback for an already-submitted transfer.
 - Read-side event and monitor outputs stay privacy-preserving.
+- The same persistent owner wallet must remain the ERC-8004 owner, action signer, and bond/refund wallet on the supported path.

@@ -1,80 +1,69 @@
-# contracts/
+# Contracts
 
-Solidity smart contracts for on-chain auction identity, bonding, escrow, and CRE-mediated settlement.
+Foundry contracts for the on-chain half of Agent Auction: auction lifecycle, escrow, privacy anchors, and NFT custody.
 
-- **Solidity**: 0.8.24 / Cancun EVM / Optimizer 200 runs
-- **Framework**: Foundry (forge, cast, anvil)
-- **Target chain**: Base Sepolia (chainId `84532`)
-- **Tests**: 144 total (`forge test`)
+## Scope
 
-## Contracts
+- Solidity `0.8.24`
+- Cancun EVM
+- Base Sepolia target (`84532`)
+- Foundry workflow (`forge`, `cast`, `anvil`)
 
-| Contract | Role |
+## Main Contracts
+
+| Contract | Responsibility |
 |---|---|
-| `AuctionRegistry.sol` | Auction lifecycle state machine: OPEN -> CLOSED -> SETTLED/CANCELLED |
-| `AuctionEscrow.sol` | USDC bonds, commission system, CRE settlement via `IReceiver.onReport()` |
-| `AgentPrivacyRegistry.sol` | ZK membership Merkle root + nullifier tracking |
-| `NftEscrow.sol` | ERC-721 custody for auction items (deposit/claim/reclaim) |
-| `MockKeystoneForwarder.sol` | Test helper simulating Chainlink KeystoneForwarder |
-| `deprecated/AgentAccount.sol` | (Archived) EIP-4337 smart wallet |
-| `deprecated/AgentAccountFactory.sol` | (Archived) CREATE2 deployment factory |
-| `deprecated/AgentPaymaster.sol` | (Archived) Gas sponsorship paymaster |
+| `AuctionRegistry.sol` | Auction lifecycle and sequencer-authorized result recording |
+| `AuctionEscrow.sol` | USDC bond accounting, refund/withdraw flow, and CRE `onReport()` settlement |
+| `AgentPrivacyRegistry.sol` | Per-agent Poseidon root and capability commitment anchor for ZK flows |
+| `NftEscrow.sol` | ERC-721 deposit, claim, and reclaim flow for auction items |
+| `MockKeystoneForwarder.sol` | Local/testing forwarder for CRE-style settlement paths |
+| `deprecated/AgentAccount*.sol` | Archived EIP-4337 contracts kept for historical reference only |
 
-### AuctionEscrow Commission System
+## Key Invariants
 
-The escrow contract includes a platform commission mechanism for monetization:
+- Settlement must enter `AuctionEscrow` through `onReport()`.
+- Escrow solvency must hold: USDC balance covers `totalBonded + totalWithdrawable + platformBalance`.
+- Bond recording is separate from token transfer: the live path is `USDC transfer -> recordBond`.
+- The privacy registry is per-agent in the current live deployment and exposes `getAgentPoseidonRoot()` and `getAgentCapabilityCommitment()`.
+- Archived EIP-4337 contracts in `src/deprecated/` are not the mainline production path anymore.
 
-- **`commissionBps`**: Global commission rate in basis points (admin-settable, starts at 0)
-- **`MAX_COMMISSION_BPS`**: Hard cap at 1000 (10%)
-- **`platformBalance`**: Accumulated commission available for withdrawal
-- **`platformWallet`**: Destination address for commission withdrawals
-- Commission is deducted from the settlement amount in `_processReport()` before crediting the winner's withdrawable balance
-- Admin functions: `setCommissionBps(uint16)`, `setPlatformWallet(address)`, `withdrawPlatformBalance()`
-- Events: `CommissionBpsUpdated`, `CommissionCollected`, `PlatformWithdrawal`
-- Solvency invariant: `USDC.balanceOf(escrow) >= totalBonded + totalWithdrawable + platformBalance`
-
-## Usage
+## Commands
 
 Run from `contracts/`:
 
 ```bash
-# Build
 forge build
-
-# Test (all 144)
 forge test
-
-# Test a specific suite
-forge test --match-contract AuctionEscrow
-
-# Test a single test
-forge test --match-test testDeposit
-
-# Verbose with stack traces
 forge test -vvv
-
-# Format
+forge test --match-contract AuctionEscrow
 forge fmt
-
-# Gas snapshots
 forge snapshot
 ```
 
-## Deployed Addresses (Base Sepolia)
+## Base Sepolia Addresses
 
-| Contract | Address |
+| Contract / Dependency | Address |
 |---|---|
-| AuctionRegistry (v2) | `0xFEc7a05707AF85C6b248314E20FF8EfF590c3639` |
-| AuctionEscrow (v2) | `0x20944f46AB83F7eA40923D7543AF742Da829743c` |
-| AgentPrivacyRegistry | `0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff` |
+| AuctionRegistry | `0xFEc7a05707AF85C6b248314E20FF8EfF590c3639` |
+| AuctionEscrow | `0x20944f46AB83F7eA40923D7543AF742Da829743c` |
+| AgentPrivacyRegistry | `0x5b4f09A5D5188dCe1b1ba0caeDBcEb52CaCD1902` |
 | NftEscrow | `0xa05C5AF6a07D5e1abDd2c93EFdcb95D306766a94` |
-| KeystoneForwarder (real) | `0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5` |
+| KeystoneForwarder | `0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5` |
 | ERC-8004 Identity Registry | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
 | MockUSDC | `0xfEE786495d165b16dc8e68B6F8281193e041737d` |
 
-## Documentation
+## Commission Model
 
-- Contract API docs: `contracts/docs/`
-- Architecture source of truth: `docs/full_contract_arch(amended).md`
-- Developer guide: `docs/developer-guide.md`
-- Deployment scripts: `script/Deploy.s.sol`, `script/HelperConfig.s.sol`
+`AuctionEscrow` includes a configurable platform commission:
+
+- `commissionBps` is globally configurable and capped at `MAX_COMMISSION_BPS` (`1000`, or 10%)
+- commission is deducted during settlement before winner crediting
+- accumulated commission is tracked in `platformBalance`
+- the platform wallet can withdraw commission with `withdrawPlatformBalance()`
+
+## Pointers
+
+- Contract docs: `contracts/docs/`
+- Deployment scripts: `contracts/script/Deploy.s.sol`, `contracts/script/HelperConfig.s.sol`
+- Source of truth: `docs/full_contract_arch(amended).md`
