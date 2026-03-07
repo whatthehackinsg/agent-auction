@@ -37,7 +37,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 - [x] **Phase 12: Debug live Phase 10 registration and proof failures** - Fix onboarding truthfulness and privacy-registry deployment issues; hand off the remaining Worker blocker (completed 2026-03-06)
 - [x] **Phase 13: Worker Proof Runtime Compatibility** - Re-scoped from the old registry placeholder; completed 2026-03-07 with local + deployed fresh-agent JOIN success
 - [x] **Phase 14: Define agent participation standard and platform guidance** - Specify the minimum supported participant stack, wallet requirements, and repo/website guidance for human and agent operators (completed 2026-03-07)
-- [ ] **Phase 15: Integrate AgentKit wallet adapter without breaking ZK or ERC-8004** - Replace raw private-key assumptions with an AgentKit-compatible wallet abstraction while preserving identity, proof, and bond invariants
+- [x] **Phase 15: Integrate AgentKit wallet adapter without breaking ZK or ERC-8004** - Replace raw private-key assumptions with an AgentKit-compatible wallet abstraction while preserving identity, proof, and bond invariants (completed 2026-03-08)
 - [ ] **Phase 16: Write agent auction skill and autonomous participation playbook** - Teach external agents the auction rules, required packages/config, and minimal-human-participation flow
 
 ## Phase Details
@@ -177,7 +177,7 @@ Phases execute in numeric order: 7 -> 7.x -> 8 -> 8.x -> 9 -> 9.x -> 10 -> 10.x 
 | 12. Debug live Phase 10 registration and proof failures | v1.1 | 3/3 | Complete with blocker handoff | 2026-03-06 |
 | 13. Worker Proof Runtime Compatibility | v1.1 | 3/3 | Complete | 2026-03-07 |
 | 14. Define agent participation standard and platform guidance | v1.1 | 2/2 | Complete | 2026-03-07 |
-| 15. Integrate AgentKit wallet adapter without breaking ZK or ERC-8004 | v1.1 | 0/0 | Not started | - |
+| 15. Integrate AgentKit wallet adapter without breaking ZK or ERC-8004 | v1.1 | 4/4 | Complete | 2026-03-08 |
 | 16. Write agent auction skill and autonomous participation playbook | v1.1 | 0/0 | Not started | - |
 
 ### Phase 14: Define agent participation standard and platform guidance
@@ -196,13 +196,19 @@ Plans:
 **Goal:** Replace raw private-key assumptions with a supported AgentKit/CDP wallet backend while preserving the existing MCP tool surface, ERC-8004 owner model, fail-closed ZK path, and advanced raw-key bridge
 **Requirements**: AKIT-01, AKIT-02, AKIT-03, AKIT-04
 **Depends on:** Phase 14
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 
 Plans:
-- [ ] 15-01-PLAN.md — Supported backend/config foundation and wallet-target abstraction
-- [ ] 15-02-PLAN.md — On-chain identity, attach, bond, and exit flows through the supported wallet backend
-- [ ] 15-03-PLAN.md — EIP-712 action signing and JOIN/BID/REVEAL integration through the supported backend
-- [ ] 15-04-PLAN.md — Supported-path docs/env alignment and Base Sepolia sign-off evidence
+- [x] 15-01-PLAN.md — Supported backend/config foundation and wallet-target abstraction
+- [x] 15-02-PLAN.md — On-chain identity, attach, bond, and exit flows through the supported wallet backend
+- [x] 15-03-PLAN.md — EIP-712 action signing and JOIN/BID/REVEAL integration through the supported backend
+- [x] 15-04-PLAN.md — Supported-path docs/env alignment and Base Sepolia sign-off evidence
+
+Notes:
+- Phase 15 is closed on truthful supported-path live evidence:
+  - `register_identity -> check_identity -> deposit_bond -> join_auction -> place_bid`
+- Residual follow-up:
+  - same-agent multi-room participation works at the engine/contract level, but MCP JOIN nonce tracking is not yet room-scoped.
 
 ### Phase 16: Write agent auction skill and autonomous participation playbook
 
@@ -213,3 +219,13 @@ Plans:
 
 Plans:
 - [ ] TBD (run /gsd:plan-phase 16 to break down)
+
+### Phase 17: use real base sepolia
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 16
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 17 to break down)

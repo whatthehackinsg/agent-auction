@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Autonomous Agent Onboarding
-current_phase: 15
-current_phase_name: Integrate AgentKit wallet adapter without breaking ZK or ERC-8004
+current_phase: 16
+current_phase_name: Write agent auction skill and autonomous participation playbook
 current_plan: 0
-status: planned
-stopped_at: Phase 15 planned
-last_updated: "2026-03-07T12:53:41Z"
-last_activity: 2026-03-07
+status: ready_to_plan
+stopped_at: Phase 15 complete
+last_updated: "2026-03-08T03:44:38+08:00"
+last_activity: 2026-03-08
 progress:
   total_phases: 10
   completed_phases: 9
   total_plans: 24
-  completed_plans: 20
+  completed_plans: 24
   percent: 90
 ---
 
@@ -24,17 +24,17 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-03-05)
 
 **Core value:** Working ZK proofs that actually verify — agents prove registry membership and bid range without revealing identity, demonstrated end-to-end.
-**Current focus:** Phase 15 - Integrate the AgentKit wallet adapter without breaking ZK or ERC-8004, then Phase 16's external agent playbook
+**Current focus:** Phase 16 - write the external agent auction skill and autonomous participation playbook on top of the verified AgentKit/CDP path
 
 ## Current Position
 
-**Current Phase:** 15
-**Current Phase Name:** Integrate AgentKit wallet adapter without breaking ZK or ERC-8004
+**Current Phase:** 16
+**Current Phase Name:** Write agent auction skill and autonomous participation playbook
 **Total Phases:** 16
 **Current Plan:** 0
-**Total Plans in Phase:** 4
-**Status:** Planned — ready to execute Phase 15
-**Last Activity:** 2026-03-07
+**Total Plans in Phase:** 0
+**Status:** Ready to plan Phase 16 after Phase 15 live sign-off
+**Last Activity:** 2026-03-08
 
 **Progress:** [█████████░] 90%
 
@@ -101,6 +101,9 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 - [Phase 14]: The stable public handoff URL is the static /participate route, with all frontend surfaces importing the same shared constant instead of scattering links.
 - [Phase 14]: The public guide mirrors `docs/participation-guide.md` with a checklist-first Supported / Advanced / Future matrix and deep links to repo docs rather than duplicating every implementation detail.
 - [Phase 14]: Auction entry points may promote setup guidance, but they must stay spectator-first and avoid exposing identities, wallets, or per-agent bid history.
+- [Phase 15]: The supported `AgentKit + CDP Server Wallet` MCP path is now proven live on Base Sepolia for `register_identity -> check_identity -> deposit_bond -> join_auction -> place_bid` without changing the current ZK proof or ERC-8004 ownership contract.
+- [Phase 15]: Supported-path onboarding now tolerates transient post-mint estimator lag by retrying privacy registration instead of failing on the first cross-node visibility race.
+- [Phase 15]: The platform allows the same `agentId` across multiple auction rooms, but MCP JOIN nonce tracking is still keyed too broadly and should be scoped per room as a follow-up bug.
 
 ### Roadmap Evolution
 
@@ -122,6 +125,10 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 - Phase 14 verified complete: `14-UAT.md` passed 7/7 checks, the public `/participate` route is accepted, and focus advances to Phase 15 planning
 - Phase 15 context captured: the supported AgentKit/CDP adapter behavior, wallet bootstrap assumptions, identity/ZK handoff rules, and fallback boundaries are now locked for planning
 - Phase 15 planned: `AKIT-01` through `AKIT-04` are mapped in requirements, roadmap metadata is filled in, and `15-01` through `15-04` are ready for execution
+- Phase 15 executed: backend/config, on-chain identity/bond/exits, and EIP-712 signing all landed with summary files `15-01` through `15-03`
+- Phase 15 closed on truthful live Base Sepolia evidence: AgentKit/CDP completed `register_identity -> check_identity -> deposit_bond -> join_auction -> place_bid` for agent `1605`
+- Phase 15 UAT recorded one non-blocking follow-up: same-agent multi-room participation works at the platform layer, but MCP JOIN nonce tracking is not yet room-scoped
+- Phase 17 added: use real base sepolia
 
 ### Pending Todos
 
@@ -132,6 +139,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 
 - 1 pre-existing failing test (`bond-watcher.test.ts`, predates v1.0)
 - Dead `expectedRegistryRoot` code block in `engine/src/lib/crypto.ts` (tech debt from v1.0)
+- MCP JOIN nonce tracking is still keyed as `JOIN:<agentId>` instead of per room, so the standard runtime can reject a second-room JOIN for the same agent even though the platform itself supports it
 
 ### Fixes Applied (2026-03-05)
 
@@ -141,7 +149,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-05)
 
 ## Session Continuity
 
-Last activity: 2026-03-07 — Planned Phase 15 for the AgentKit/CDP adapter path
-**Last session:** 2026-03-07T12:53:41Z
-**Stopped At:** Phase 15 planned
+Last activity: 2026-03-08 — Closed Phase 15 on live AgentKit/CDP sign-off and moved focus to Phase 16
+**Last session:** 2026-03-08T03:44:38+08:00
+**Stopped At:** Phase 15 complete
 **Resume File:** None
