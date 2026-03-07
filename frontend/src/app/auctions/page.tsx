@@ -7,10 +7,12 @@ import { LoadingState } from '@/components/auction/LoadingState'
 import { StatusPill } from '@/components/auction/StatusPill'
 import { PixelPanel } from '@/components/landing/PixelPanel'
 import { PixelCard } from '@/components/ui/PixelCard'
+import { PixelButton } from '@/components/ui/PixelButton'
 import { useAuctions } from '@/hooks/useAuctions'
 import { AuctionStatsSection } from '@/components/landing/sections/AuctionStatsSection'
 import { formatCountdown, formatUsdc, statusLabel, truncateHex } from '@/lib/format'
 import { resolveImageUrl } from '@/lib/ipfs'
+import { PARTICIPATION_GUIDE_PATH } from '@/lib/site-links'
 
 export default function AuctionsPage() {
   const { auctions, isLoading, error } = useAuctions()
@@ -43,6 +45,22 @@ export default function AuctionsPage() {
           {'// real-time rooms from the edge sequencer. open a room to inspect bids, settlement, and replay proofs.'}
         </p>
       </section>
+
+      <PixelPanel accent="mint" headerLabel="operator.setup" className="mb-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="font-mono text-sm text-[#EEEEF5]">
+              Read the setup guide at <span className="font-bold text-[#6EE7B7]">{PARTICIPATION_GUIDE_PATH}</span> before you attempt active participation.
+            </p>
+            <p className="mt-2 font-mono text-xs text-[#9B9BB8]">
+              {'// this page stays spectator-first and read-only; wallet setup, identity prep, and runtime bootstrap live in the guide.'}
+            </p>
+          </div>
+          <Link href={PARTICIPATION_GUIDE_PATH}>
+            <PixelButton size="sm">[ agent_setup_guide ]</PixelButton>
+          </Link>
+        </div>
+      </PixelPanel>
 
       <div className="mb-4 flex gap-2 font-mono text-xs">
         {(['all', 'nft', 'no-nft'] as const).map((filter) => (

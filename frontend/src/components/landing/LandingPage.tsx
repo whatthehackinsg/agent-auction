@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PixelButton } from "@/components/ui/PixelButton";
 import { PixelMenu, PixelMenuItem } from "@/components/ui/PixelMenu";
+import { PARTICIPATION_GUIDE_PATH } from "@/lib/site-links";
 import { DoodleBackground } from "./DoodleBackground";
 
 import { HeroSection } from "./sections/HeroSection";
@@ -16,6 +17,7 @@ import { PlatformStatsSection } from "./sections/PlatformStatsSection";
 
 const menuItems: PixelMenuItem[] = [
   { label: "AUCTIONS", href: "/auctions" },
+  { label: "SETUP", href: PARTICIPATION_GUIDE_PATH },
   { label: "ARCHITECTURE", href: "#architecture" },
   { label: "MODULES", href: "#modules" },
   { label: "GITHUB", href: "https://github.com/whatthehackinsg/agent-auction", external: true },
@@ -36,6 +38,13 @@ export function LandingPage() {
 
             <div className="flex items-center gap-3 md:gap-5">
               <PixelMenu items={menuItems} accentColor="#6EE7B7" />
+              <Link
+                href={PARTICIPATION_GUIDE_PATH}
+                className="hidden sm:inline-flex"
+                title="Open /participate setup guide"
+              >
+                <PixelButton size="sm" variant="ghost">[ agent_setup_guide ]</PixelButton>
+              </Link>
               <Link href="/auctions" className="hidden sm:inline-flex">
                 <PixelButton size="sm">[ view_auctions ]</PixelButton>
               </Link>

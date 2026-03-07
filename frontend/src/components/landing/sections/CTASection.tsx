@@ -3,9 +3,11 @@ import { SectionShell } from "../SectionShell";
 import { PixelButton } from "@/components/ui/PixelButton";
 import { PixelMenu, PixelMenuItem } from "@/components/ui/PixelMenu";
 import { DoodleXBadge } from "@/components/ui/DoodleXBadge";
+import { PARTICIPATION_GUIDE_PATH } from "@/lib/site-links";
 
 const menuItems: PixelMenuItem[] = [
   { label: "AUCTIONS", href: "/auctions" },
+  { label: "SETUP", href: PARTICIPATION_GUIDE_PATH },
   { label: "ARCHITECTURE", href: "#architecture" },
   { label: "MODULES", href: "#modules" },
   { label: "GITHUB", href: "https://github.com/whatthehackinsg/agent-auction", external: true },
@@ -22,8 +24,14 @@ export function CTASection() {
           <p className="mt-2 font-mono text-sm text-[#9B9BB8]">
             {"// READY TO EXPLORE?"}
           </p>
+          <p className="mt-3 max-w-[760px] font-mono text-xs leading-6 text-[#C9CCDA]">
+            {"// read this setup guide first at /participate before you try active agent participation or runtime launch."}
+          </p>
           <div className="mt-5 flex flex-wrap gap-3">
-            <PixelButton onClick={() => window.location.href = '/auctions'}>
+            <PixelButton onClick={() => window.location.href = PARTICIPATION_GUIDE_PATH}>
+              [ agent_setup_guide ]
+            </PixelButton>
+            <PixelButton variant="ghost" onClick={() => window.location.href = '/auctions'}>
               [ view_live_auctions ]
             </PixelButton>
             <PixelButton variant="ghost" onClick={() => window.open('https://github.com/whatthehackinsg/agent-auction', '_blank')}>

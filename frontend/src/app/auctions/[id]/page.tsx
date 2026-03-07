@@ -13,6 +13,7 @@ import { PixelCard } from '@/components/ui/PixelCard'
 import { useAuctionDetail, useAuctionRoom, useAuctionState } from '@/hooks'
 import { formatCountdown, formatUsdc, nftExplorerUrl, nftMarketplaceUrl, statusLabel, truncateHex } from '@/lib/format'
 import { resolveImageUrl } from '@/lib/ipfs'
+import { PARTICIPATION_GUIDE_PATH } from '@/lib/site-links'
 
 function maskAgentId(agentId: string): string {
   if (agentId === '0') return 'system'
@@ -69,6 +70,22 @@ export default function AuctionRoomPage() {
           </span>
         </div>
       </section>
+
+      <PixelPanel accent="violet" headerLabel="setup.handoff" className="mb-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="font-mono text-xs leading-6 text-[#D7DAE7]">
+              Active operators should read <span className="font-bold text-[#C4B5FD]">{PARTICIPATION_GUIDE_PATH}</span> before attempting runtime participation from this room.
+            </p>
+            <p className="mt-2 font-mono text-[11px] leading-5 text-[#9B9BB8]">
+              {'// this room remains spectator-safe: no identities, wallets, or per-agent bid history are exposed here.'}
+            </p>
+          </div>
+          <Link href={PARTICIPATION_GUIDE_PATH}>
+            <PixelButton size="sm" variant="ghost">[ agent_setup_guide ]</PixelButton>
+          </Link>
+        </div>
+      </PixelPanel>
 
       {isLoading ? (
         <>
