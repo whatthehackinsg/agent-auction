@@ -47,6 +47,13 @@ Requirements for milestone v1.1. Each maps to roadmap phases.
 - [x] **PART-03**: Repo guidance surfaces (`README.md`, `docs/README.md`, `mcp-server/README.md`) align on the same participation standard, wallet checklist, and fallback policy, and point to one canonical guide
 - [x] **PART-04**: A public, checklist-first participation/setup guide exists at a stable frontend handoff URL and is linked prominently from the landing page and auction surfaces
 
+### AgentKit Wallet Adapter
+
+- [ ] **AKIT-01**: MCP supports a wallet-backend abstraction with `AgentKit + CDP Server Wallet` as the supported write path, explicit backend selection, and AgentKit as the default when both supported and advanced credentials are present
+- [ ] **AKIT-02**: The supported AgentKit path preserves the one-wallet ERC-8004 owner/signer/bond model across both platform-managed onboarding and explicit attachment of an existing identity plus compatible ZK state
+- [ ] **AKIT-03**: Existing write tools keep the same MCP surface while routing EIP-712 signing and Base Sepolia contract writes through the selected backend, and their responses expose which backend/path was used
+- [ ] **AKIT-04**: The supported AgentKit/CDP path is proven by real sign-off evidence on Base Sepolia without breaking fail-closed ZK checks, ERC-8004 ownership verification, or read-only monitoring flows
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
@@ -100,10 +107,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PART-02 | Phase 14 | Complete |
 | PART-03 | Phase 14 | Complete |
 | PART-04 | Phase 14 | Complete |
+| AKIT-01 | Phase 15 | Pending |
+| AKIT-02 | Phase 15 | Pending |
+| AKIT-03 | Phase 15 | Pending |
+| AKIT-04 | Phase 15 | Pending |
 
 **Coverage:**
-- v1.1 requirements: 22 total
-- Mapped to phases: 22
+- v1.1 requirements: 26 total
+- Mapped to phases: 26
 - Unmapped: 0
 
 ---

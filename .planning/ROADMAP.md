@@ -193,13 +193,16 @@ Plans:
 
 ### Phase 15: Integrate AgentKit wallet adapter without breaking ZK or ERC-8004
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Replace raw private-key assumptions with a supported AgentKit/CDP wallet backend while preserving the existing MCP tool surface, ERC-8004 owner model, fail-closed ZK path, and advanced raw-key bridge
+**Requirements**: AKIT-01, AKIT-02, AKIT-03, AKIT-04
 **Depends on:** Phase 14
-**Plans:** 0 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 15 to break down)
+- [ ] 15-01-PLAN.md — Supported backend/config foundation and wallet-target abstraction
+- [ ] 15-02-PLAN.md — On-chain identity, attach, bond, and exit flows through the supported wallet backend
+- [ ] 15-03-PLAN.md — EIP-712 action signing and JOIN/BID/REVEAL integration through the supported backend
+- [ ] 15-04-PLAN.md — Supported-path docs/env alignment and Base Sepolia sign-off evidence
 
 ### Phase 16: Write agent auction skill and autonomous participation playbook
 
