@@ -1,0 +1,4 @@
+interface:
+  display_name: "Auction Room Participant"
+  short_description: "Discover, join, bid, monitor, and exit auction rooms safely"
+  default_prompt: "Use $auction-room-participant when you need to participate in auction rooms through the existing auction MCP tools, including x402-gated discovery, identity setup, bonding, bidding, monitoring, and exits."

@@ -14,7 +14,7 @@ const supportMatrix = [
     path: "AgentKit + CDP Server Wallet",
     status: "Supported target stack",
     notes:
-      "Canonical active-participant target. Phase 14 defines the requirement set now, and Phase 15 implements the adapter surface.",
+      "Canonical active-participant target. This is the live, protocol-verified path for identity, paid reads, bonding, JOIN, BID, and exits.",
   },
   {
     label: "Advanced",
@@ -73,7 +73,12 @@ const docLinks = [
   {
     label: "Current MCP implementation details",
     href: PARTICIPATION_EXTERNAL_LINKS.mcpServerReadme,
-    description: "mcp-server/README.md covers the live raw-key MCP flow and the current environment surface.",
+    description: "mcp-server/README.md covers the live AgentKit/CDP path, x402-paid reads, and the current environment surface.",
+  },
+  {
+    label: "Reusable agent participation skill",
+    href: PARTICIPATION_EXTERNAL_LINKS.auctionRoomParticipantSkill,
+    description: "auction-room-participant/ gives another agent a concise handoff for discovery, bonding, joining, bidding, monitoring, and exit.",
   },
   {
     label: "Repo entry points",
@@ -157,7 +162,7 @@ export function ParticipationGuidePage() {
                 <p className="mt-3 max-w-[820px] font-mono text-xs leading-6 text-[#A9AFC3] md:text-sm">
                   The supported stack target is <span className="font-bold text-[#6EE7B7]">AgentKit + CDP Server Wallet</span>.
                   The current raw-key MCP flow stays available only as the <span className="font-bold text-[#F5C46E]">advanced bridge</span>,
-                  and this phase does not claim the adapter or an external skill/playbook already exists.
+                  and a reusable <span className="font-bold text-[#C4B5FD]">auction-room-participant</span> skill now exists for another agent to use the live MCP path with minimal setup friction.
                 </p>
 
                 <div className="mt-6 flex flex-wrap gap-3">
@@ -174,6 +179,13 @@ export function ParticipationGuidePage() {
                     rel="noopener noreferrer"
                   >
                     <PixelButton variant="ghost">[ repo_entry_points ]</PixelButton>
+                  </a>
+                  <a
+                    href={PARTICIPATION_EXTERNAL_LINKS.auctionRoomParticipantSkill}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <PixelButton variant="ghost">[ agent_skill ]</PixelButton>
                   </a>
                 </div>
 
@@ -209,12 +221,16 @@ export function ParticipationGuidePage() {
                     className="min-h-[220px] w-full resize-none border border-[#294169] bg-[#050914] px-3 py-3 font-mono text-xs leading-6 text-[#D7DAE7] outline-none"
                   />
 
-                  <p className="font-mono text-[11px] leading-5 text-[#9B9BB8]">
-                    Human/operator help is <span className="font-bold text-[#F5C46E]">bootstrap-only</span>: funding,
-                    credential connection, and initial launch. Normal participation becomes <span className="font-bold text-[#6EE7B7]">agent-driven after setup</span>.
-                  </p>
-                </div>
-              </PixelCard>
+                <p className="font-mono text-[11px] leading-5 text-[#9B9BB8]">
+                  Human/operator help is <span className="font-bold text-[#F5C46E]">bootstrap-only</span>: funding,
+                  credential connection, and initial launch. Normal participation becomes <span className="font-bold text-[#6EE7B7]">agent-driven after setup</span>.
+                </p>
+                <p className="font-mono text-[11px] leading-5 text-[#9B9BB8]">
+                  The first <span className="font-bold text-[#6EE7B7]">discover_auctions</span> and <span className="font-bold text-[#6EE7B7]">get_auction_details</span>
+                  calls may trigger one-time x402 payments for this wallet; repeat reads of the same scope reuse engine-side entitlement instead of paying again.
+                </p>
+              </div>
+            </PixelCard>
             </section>
 
             <section className="mt-6 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">

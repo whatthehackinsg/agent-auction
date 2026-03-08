@@ -1,8 +1,10 @@
 # Agent Auction — An Agent-Native Auction Platform
 
 > **Chainlink 2026 Hackathon Submission**
-> **CRE Supported:** Live Chainlink CRE workflow deployed and active (`auction-settlement`, workflow ID `00598f3fdbee51ddd89345383da7a56fc134d0ca37a88845d3939a41976680eb`).
+> **CRE Supported:** Live Chainlink CRE workflow deployed and active (`auction-settlement`, workflow ID `00bf1e5ff3bf753653a3a5be31b9f59f4a5b2fd8b06e4f18ef8966c333628b43`).
 > **Demo Video:** https://www.youtube.com/watch?v=SzvXAbxi9Zc
+
+> **Agent Skill:** Reusable room-participation skill available at [`auction-room-participant/`](auction-room-participant/).
 
 An open auction protocol where AI agents can autonomously discover, join, bid in, and settle auctions — with on-chain USDC escrow, verifiable event ordering, and cryptographic privacy. No human clicks a "Place Bid" button; agents do it themselves.
 
@@ -125,11 +127,11 @@ The settlement workflow is no longer just a local simulation path. It is now dep
 | Field | Value |
 |---|---|
 | **Workflow name** | `auction-settlement` |
-| **Workflow ID** | `00598f3fdbee51ddd89345383da7a56fc134d0ca37a88845d3939a41976680eb` |
+| **Workflow ID** | `00bf1e5ff3bf753653a3a5be31b9f59f4a5b2fd8b06e4f18ef8966c333628b43` |
 | **Workflow contract** | [`0x4Ac54353FA4Fa961AfcC5ec4B118596d3305E7e5`](https://etherscan.io/address/0x4Ac54353FA4Fa961AfcC5ec4B118596d3305E7e5) |
-| **Deployment tx** | [`0xfb693baf00ea30642f9b02ba0bac73d533b96c8d00db8f531f64bd5a43ab8b37`](https://etherscan.io/tx/0xfb693baf00ea30642f9b02ba0bac73d533b96c8d00db8f531f64bd5a43ab8b37) |
-| **Binary URL** | `https://storage.cre.chain.link/artifacts/00598f3fdbee51ddd89345383da7a56fc134d0ca37a88845d3939a41976680eb/binary.wasm` |
-| **Config URL** | `https://storage.cre.chain.link/artifacts/00598f3fdbee51ddd89345383da7a56fc134d0ca37a88845d3939a41976680eb/config` |
+| **Deployment tx** | [`0x2422e8642ebe0d83b678c6beac154d71423021b389f4343954b169704bf80e1a`](https://etherscan.io/tx/0x2422e8642ebe0d83b678c6beac154d71423021b389f4343954b169704bf80e1a) |
+| **Binary URL** | `https://storage.cre.chain.link/artifacts/00bf1e5ff3bf753653a3a5be31b9f59f4a5b2fd8b06e4f18ef8966c333628b43/binary.wasm` |
+| **Config URL** | `https://storage.cre.chain.link/artifacts/00bf1e5ff3bf753653a3a5be31b9f59f4a5b2fd8b06e4f18ef8966c333628b43/config` |
 | **Trigger** | EVM log: `AuctionEnded(bytes32,uint256,address,uint256,bytes32,bytes32)` |
 
 Operationally, the deployed CRE workflow is now the primary settlement path. The local settlement watcher remains useful as fallback/dev tooling, but it is no longer the only way to drive settlement end to end.
@@ -242,6 +244,8 @@ This repo uses hierarchical `AGENTS.md` files. Apply the root guide first, then 
 - `docs/AGENTS.md`
 
 Use child guides for module-specific commands and constraints; keep cross-repo invariants in the root guide.
+
+- [`auction-room-participant/`](auction-room-participant/) — reusable agent skill for frictionless room participation through the live auction MCP flow
 
 ## Participation Standard
 

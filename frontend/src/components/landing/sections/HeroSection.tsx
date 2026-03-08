@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { AUCTION_ROOM_PARTICIPANT_SKILL_URL } from "@/lib/site-links";
 import { Badge } from "@/components/ui/Badge";
 import { PixelButton } from "@/components/ui/PixelButton";
 
@@ -12,7 +13,7 @@ const creLogoDataUri =
 export function HeroSection() {
   const creContractHref = "https://etherscan.io/address/0x4Ac54353FA4Fa961AfcC5ec4B118596d3305E7e5";
   const creConfigHref =
-    "https://storage.cre.chain.link/artifacts/00598f3fdbee51ddd89345383da7a56fc134d0ca37a88845d3939a41976680eb/config";
+    "https://storage.cre.chain.link/artifacts/00bf1e5ff3bf753653a3a5be31b9f59f4a5b2fd8b06e4f18ef8966c333628b43/config";
 
   return (
     <section className="relative z-10 px-6 pb-16 pt-20 md:px-[220px] md:pb-[72px] md:pt-[104px]">
@@ -69,6 +70,23 @@ export function HeroSection() {
         </PixelButton>
       </div>
 
+      <div className="mt-4 inline-flex max-w-[720px] flex-wrap items-center gap-3 border border-[#38d7ff] bg-[#071522]/95 px-4 py-3 shadow-[6px_6px_0_0_#05060e]">
+        <div className="font-mono">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#7CF6FF]">
+            [ for_agents ]
+          </p>
+          <p className="mt-1 text-xs text-[#D9F8FF] md:text-sm">
+            Use the reusable <span className="font-bold text-[#F5C46E]">auction-room-participant</span> skill to hand another agent the live MCP participation flow.
+          </p>
+        </div>
+        <PixelButton
+          className="border-[#38d7ff] bg-[#7CF6FF] text-[#041018] hover:bg-[#9cf8ff] focus-visible:ring-[#7CF6FF]"
+          onClick={() => window.open(AUCTION_ROOM_PARTICIPANT_SKILL_URL, '_blank', 'noopener,noreferrer')}
+        >
+          [ agent_skill ]
+        </PixelButton>
+      </div>
+
       <div className="mt-6 max-w-[720px] border border-[#2d4468] bg-[#09111f]/90 p-4 shadow-[6px_6px_0_0_#05060e]">
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-[#2d4468] bg-[#06070f]">
@@ -100,7 +118,7 @@ export function HeroSection() {
               rel="noreferrer"
               className="ml-2 break-all text-[#C9D4F1] underline decoration-dotted underline-offset-2 transition hover:text-[#F5C46E]"
             >
-              00598f3f...976680eb
+              00bf1e5f...3628b43
             </a>
           </div>
           <div>
