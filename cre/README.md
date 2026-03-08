@@ -1,14 +1,14 @@
 # CRE Settlement Workflow
 
-Chainlink CRE workflow for auction settlement. It watches `AuctionEnded`, cross-checks the winning state, optionally verifies replay-bundle availability, and settles `AuctionEscrow` through `onReport()`.
+Chainlink CRE workflow for auction settlement. It watches `AuctionEnded`, cross-checks the winning state, verifies the replay bundle and `replayContentHash`, and settles `AuctionEscrow` through `onReport()`.
 
 ## Flow
 
 ```text
-AuctionEnded (AuctionRegistry, finalized)
+AuctionEnded (AuctionRegistry)
   -> verify auction is CLOSED
   -> read getWinner() and cross-check agentId, wallet, amount
-  -> fetch replay bundle from the engine (presence check)
+  -> fetch replay bundle from the engine and verify replayContentHash
   -> sign DON report
   -> writeReport -> KeystoneForwarder -> AuctionEscrow.onReport()
 ```
@@ -65,13 +65,13 @@ Two workflow configs live in `workflows/settlement/`:
 | File | Purpose | `useFinalized` |
 |---|---|---|
 | `config.json` | local simulation and watcher-driven demo flow | `false` |
-| `config.production.json` | deployed CRE workflow | `true` |
+| `config.production.json` | deployed CRE workflow | `false` |
 
 Important fields:
 
 | Field | Meaning |
 |---|---|
-| `useFinalized` | finalized reads for deployed CRE, latest reads for local simulation |
+| `useFinalized` | current Base Sepolia setting for on-chain reads; both shipped configs currently use `false` to avoid finalized-state lag on testnet |
 | `skipReplayVerification` | skip or enforce the replay-bundle fetch step |
 | `replayBundleBaseUrl` | engine base URL used for `${baseUrl}/auctions/${auctionId}/replay` |
 | `isTestnet` | testnet/mainnet mode for network helpers |
@@ -93,19 +93,19 @@ cast send $ESCROW "configureCRE(bytes32,bytes10,address)" \
 
 | Contract | Address |
 |---|---|
-| AuctionRegistry | `0xFEc7a05707AF85C6b248314E20FF8EfF590c3639` |
-| AuctionEscrow | `0x20944f46AB83F7eA40923D7543AF742Da829743c` |
+| AuctionRegistry | `0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F` |
+| AuctionEscrow | `0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2` |
 | KeystoneForwarder | `0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5` |
 
 ## Confirmed Result
 
-CRE settlement has already been confirmed on Base Sepolia through `cre workflow simulate --broadcast`:
+CRE settlement has been confirmed on the current Base Sepolia v3 stack through `cre workflow simulate --broadcast`:
 
-- settlement tx: `0x0b8e9ede940fcfe3f82365bc5bb0c174635e4f0e979ffdb67fbfabd10a98ce69`
-- trigger tx: `0xccffa3a456a96fdfdd75b6ff3e1ad08fbf251703d2d218c8c6de101719672033`
+- settlement tx: `0x8deb5f79d9588a785fe89abb6b46ba89f9363d4647d743dc7520f5a135e50b9a`
+- trigger tx: `0xc0e8f96010b009b3c726dbed677b4bf096e5605d834a8ed86774b3dd78632403`
 
 ## Notes
 
-- Replay verification is still a presence check in the current hackathon scope.
+- Replay verification now checks `replayContentHash` against the fetched replay bundle bytes.
 - Identity verification does not happen inside CRE; it is enforced by the contracts, engine, and MCP layers.
 - For demos without a deployed workflow, keep the settlement watcher running.

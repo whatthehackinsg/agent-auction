@@ -82,7 +82,7 @@ A full-stack auction system designed from the ground up for AI agents, powered b
 | **ERC-8004 agent identity** | On-chain registry gives every agent a verifiable, recoverable identity. Runtime keys rotate without losing the agent's reputation. |
 | **Mandatory ZK proofs** | JOIN and BID require Groth16 membership proofs — agents prove registry membership without revealing identity. Worker-safe verification runs in Cloudflare Workers. |
 | **Platform commission** | Global configurable commission (basis points, capped at 10%) deducted at CRE settlement. Primary revenue stream — trustless, on-chain, can't bypass. |
-| **x402 for HTTP micropayments** | Optional pay-per-call on discovery routes (`/auctions`, `/auctions/:id`). Toggle via `ENGINE_X402_DISCOVERY` env var. Secondary revenue stream. |
+| **x402 for HTTP micropayments** | Wallet-paid reads on discovery routes (`/auctions`, `/auctions/:id`) with permanent engine-side entitlements. MCP pays the first challenge, then reuses access for the same wallet/resource. |
 | **Append-only Sequencer** | Every bid gets a monotonic `seq` number. Any third party can replay the log and independently verify the winner. |
 | **Three-tier privacy** | Public observers see masked identities; participants see zkNullifier pseudonyms; agents self-recognize by locally computed nullifier. |
 
@@ -94,15 +94,15 @@ The core Chainlink integration: a **CRE (Chainlink Runtime Environment) workflow
 
 ```
 Trigger: EVM Log — AuctionEnded(auctionId, winnerAgentId, winnerWallet, amount, finalLogHash, replayContentHash)
-    │         Confidence: FINALIZED (wait for block finality — settlement is irreversible)
+    │         Current Base Sepolia config: latest reads (`useFinalized=false`) to reduce testnet lag
     ▼
-Phase A: State Check — verify auction is CLOSED on-chain (finalized read)
+Phase A: State Check — verify auction is CLOSED on-chain
     │
     ▼
 Phase B: Winner Cross-Verification — read getWinner(), compare agentId + wallet + finalPrice against event
     │
     ▼
-Phase C: Replay Bundle — fetch replay bundle from platform API, verify non-empty (presence check; full replay is P1)
+Phase C: Replay Bundle — fetch replay bundle from platform API, verify `replayContentHash`, and cross-check the replayed room hash chain
     │
     ▼
 Phase D: DON signs settlement report
@@ -153,7 +153,7 @@ The platform supports three tiers of tasks:
 | **Settlement** | Chainlink CRE Workflow |
 | **Identity** | ERC-8004, secp256k1 runtime keys (EIP-712 on-chain verifiable via ecrecover) |
 | **Privacy** | Groth16 ZK proofs (Circom 2.2.3, BN254), Worker-safe verification |
-| **Payments** | USDC escrow (on-chain), x402 (HTTP micropayments) |
+| **Payments** | USDC escrow (on-chain), x402 (wallet-paid discovery/detail reads) |
 | **Auction Engine** | Cloudflare Workers + Durable Objects + D1 |
 | **Agent Interface** | MCP Streamable HTTP (15 tools), REST API |
 | **Frontend** | Next.js 16 / React 19 (spectator UI) |
@@ -179,13 +179,13 @@ agent-auction/
 ├── engine/                              # Cloudflare Workers + Durable Objects auction engine
 │   ├── src/                             #   Hono API, Durable Object sequencer, D1 persistence
 │   ├── test/                            #   222 tests (Vitest + Miniflare)
-│   └── wrangler.jsonc                   #   Cloudflare Workers config
+│   └── wrangler.toml                    #   Cloudflare Workers config
 ├── mcp-server/                          # Streamable HTTP MCP server — 15 agent tools
 │   ├── src/tools/                       #   Tool implementations (identity, bond, join, bid, exits, etc.)
-│   ├── src/lib/                         #   Engine client, on-chain helpers, agent state, ZK proof gen
+│   ├── src/lib/                         #   Engine client, x402 paid-read auth, on-chain helpers, agent state, ZK proof gen
 │   └── README.md                        #   Tool reference + prompt templates
 ├── frontend/                            # Next.js 16 spectator UI (read-only auction state, replay)
-├── agent-client/                        # TypeScript agent demo client (x402 auto-payment)
+├── agent-client/                        # Legacy/direct-integration demo client (not the primary participation path)
 ├── packages/crypto/                     # Shared crypto primitives (Poseidon, EIP-712, snarkjs, onboarding)
 │   ├── src/                             #   Core library (poseidon, eip712, onboarding, proof-generator)
 │   ├── scripts/                         #   CLI tools (onboard-agent.ts)
@@ -339,21 +339,21 @@ The MCP server exposes the full autonomous lifecycle via Streamable HTTP transpo
 | **Bonding & participation** | `get_bond_status`, `deposit_bond`, `post_bond`, `join_auction`, `place_bid`, `reveal_bid` |
 | **Exits** | `claim_refund`, `withdraw_funds` |
 
-An agent can complete the entire lifecycle — from identity registration to fund withdrawal — without human intervention.
+An agent can complete the entire lifecycle — from identity registration to fund withdrawal — without human intervention. `discover_auctions` and `get_auction_details` now go through the same MCP server and pay x402 on first access when discovery gating is enabled.
 
 ### Deployed Addresses (Base Sepolia — chainId 84532)
 All contracts verified on [Basescan](https://sepolia.basescan.org).
 
-> **Deployment status note:** The addresses below are the currently active V2 deployment set. If contract source code changes after this deployment, those changes are **not live on-chain** until a new deployment is executed and this section is updated.
+> **Deployment status note:** The addresses below are the currently active v3 deployment set aligned with the 8-field settlement packet (`replayContentHash`) and the current CRE settlement flow.
 
 #### Active Contracts
 | Contract | Address |
 |---|---|
 | ERC-8004 Identity Registry | [`0x8004A818BFB912233c491871b3d84c89A494BD9e`](https://sepolia.basescan.org/address/0x8004A818BFB912233c491871b3d84c89A494BD9e) |
-| AuctionRegistry (v2) | [`0xFEc7a05707AF85C6b248314E20FF8EfF590c3639`](https://sepolia.basescan.org/address/0xFEc7a05707AF85C6b248314E20FF8EfF590c3639) |
-| AuctionEscrow (v2) | [`0x20944f46AB83F7eA40923D7543AF742Da829743c`](https://sepolia.basescan.org/address/0x20944f46AB83F7eA40923D7543AF742Da829743c) |
+| AuctionRegistry (v3) | [`0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F`](https://sepolia.basescan.org/address/0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F) |
+| AuctionEscrow (v3) | [`0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2`](https://sepolia.basescan.org/address/0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2) |
 | AgentPrivacyRegistry | [`0x5b4f09A5D5188dCe1b1ba0caeDBcEb52CaCD1902`](https://sepolia.basescan.org/address/0x5b4f09A5D5188dCe1b1ba0caeDBcEb52CaCD1902) |
-| NftEscrow | [`0xa05C5AF6a07D5e1abDd2c93EFdcb95D306766a94`](https://sepolia.basescan.org/address/0xa05C5AF6a07D5e1abDd2c93EFdcb95D306766a94) |
+| NftEscrow (v3) | [`0x110fA3cc158621a85BfCcCA7F7B093356FCea020`](https://sepolia.basescan.org/address/0x110fA3cc158621a85BfCcCA7F7B093356FCea020) |
 | KeystoneForwarder (real Chainlink) | [`0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5`](https://sepolia.basescan.org/address/0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5) |
 | MockUSDC | [`0xfEE786495d165b16dc8e68B6F8281193e041737d`](https://sepolia.basescan.org/address/0xfEE786495d165b16dc8e68B6F8281193e041737d) |
 
@@ -396,7 +396,7 @@ npm run dev
 
 # Start the MCP server
 cd ../mcp-server
-npm start
+npm run dev
 
 # Start the frontend
 cd ../frontend
@@ -428,7 +428,7 @@ npm run deploy                 # Deploy to Cloudflare
 # ── MCP Server ───────────────────────────────────
 cd mcp-server
 npx tsc --noEmit               # TypeScript type check
-npm start                      # Start MCP server (Streamable HTTP, port 3100)
+npm run dev                    # Start MCP server (Streamable HTTP, port 3100)
 
 # ── CRE Workflow ─────────────────────────────────
 cd cre
@@ -460,7 +460,7 @@ npm test                       # Run 57 tests
 - Added `nonReentrant` guard on `AuctionEscrow.onReport()`.
 - Fixed `AuctionRegistry` settlement packet/event semantics by using explicit `replayContentHash`.
 - Added CRE Phase B `finalPrice` cross-verification against on-chain `getWinner()`.
-- Switched CRE on-chain read policy to `LAST_FINALIZED_BLOCK_NUMBER` for settlement-critical checks.
+- Current Base Sepolia CRE configs use latest reads (`useFinalized=false`) to avoid testnet finalized-state lag during settlement.
 - Worker-safe Groth16 verifier avoids Node-only snarkjs paths in Cloudflare Workers runtime.
 - `PROOF_RUNTIME_UNAVAILABLE` contract surfaces verifier outages across engine and MCP.
 
@@ -481,12 +481,12 @@ npm test                       # Run 57 tests
 - [x] Monetization: commission system (CRE-enforced) + optional x402 on discovery routes
 - [x] Privacy: masked bidder identities, aggregate stats, three-tier WebSocket (public/participant/self)
 - [x] MCP server: 15 tools for full autonomous agent lifecycle (identity → bond → join → bid → settle → withdraw)
-- [x] Contracts deployed to Base Sepolia (v2 with real KeystoneForwarder) — 144 tests
+- [x] Contracts deployed to Base Sepolia (v3 settlement-aligned stack with real KeystoneForwarder) — 144 tests
 - [x] ZK registry membership proofs mandatory on JOIN/BID — Worker-safe Groth16 verification deployed
 - [x] On-chain identity verification mandatory — `ENGINE_VERIFY_WALLET=true` by default
 - [x] Autonomous onboarding: `register_identity` → `check_identity` → `deposit_bond` → `join_auction` confirmed on Base Sepolia
 - [ ] Replay verifier tool (serialization primitives exist in `packages/crypto`; standalone tool not built yet)
-- [ ] External agent participation standard and AgentKit wallet integration (Phases 14–16)
+- [x] External agent participation standard and AgentKit/CDP wallet integration for the supported path
 
 ## Developer Guide
 

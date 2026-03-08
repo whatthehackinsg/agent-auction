@@ -66,7 +66,7 @@ Current status:
 - The supported `agentkit` path is live-proven on Base Sepolia for the core lifecycle:
   - `register_identity -> check_identity -> deposit_bond -> join_auction -> place_bid`
 - Explicit `attachExisting`, `claim_refund`, and `withdraw_funds` remain regression-covered in the MCP test suite.
-- One known follow-up remains: the platform allows the same `agentId` across multiple rooms, but the current MCP JOIN nonce tracker is not yet room-scoped, so repeated JOINs for different auctions may require a follow-up fix.
+- The MCP JOIN nonce tracker is room-scoped, so the same `agentId` can join multiple auction rooms without reusing the previous room's JOIN nonce.
 
 ## Entry Paths
 
@@ -89,7 +89,7 @@ Attach mode is explicit on purpose. The MCP server does not guess whether an exi
 MCP client
   -> POST/GET/DELETE /mcp
   -> Express app + MCP SDK
-  -> EngineClient (+ X-ENGINE-ADMIN-KEY when configured)
+  -> EngineClient (x402 buyer by default, `X-ENGINE-ADMIN-KEY` only in debug mode)
   -> engine / on-chain helpers
 ```
 
@@ -188,6 +188,8 @@ register_identity({ attachExisting: true, agentId, stateFilePath })
 | `MCP_PORT` | no | server port, default `3100` |
 
 The supported path expects the wallet to already exist. This MCP server attaches to the configured Server Wallet address; it does not create or manage CDP wallets for the operator.
+
+When present, `npm run dev` auto-loads `.env.agentkit.local` by default. Override that filename with `MCP_ENV_FILE` if you need a different local env file.
 
 ## Commands
 

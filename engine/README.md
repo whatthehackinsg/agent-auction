@@ -25,7 +25,7 @@ client
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/health` | health check |
-| `GET` | `/auctions` | discovery list, optionally x402-gated |
+| `GET` | `/auctions` | discovery list; x402-gated when discovery monetization is enabled |
 | `GET` | `/stats` | aggregate platform stats |
 | `POST` | `/auctions` | create auction |
 | `GET` | `/auctions/:id` | auction details + room snapshot |
@@ -42,7 +42,7 @@ client
 
 ## Privacy and Access Control
 
-- Discovery routes can be x402-gated when `ENGINE_X402_DISCOVERY=true`.
+- Discovery routes can be x402-gated when `ENGINE_X402_DISCOVERY=true`; the current deployed worker has this enabled.
 - When x402 discovery is on, paid reads grant permanent entitlements keyed by `payer wallet + resource scope`.
 - Supported scopes today are:
   - `discovery` for `GET /auctions`
@@ -80,8 +80,8 @@ USDC transfer to AuctionEscrow
 ```bash
 cd engine
 npm install
-npx wrangler d1 create auction-db
-npx wrangler d1 execute auction-db --file=schema.sql
+npx wrangler d1 create auction-engine-db
+npx wrangler d1 execute auction-engine-db --file=schema.sql
 npx wrangler d1 execute auction-engine-db --remote --file=migrations/0005_add_x402_entitlements.sql
 npm run dev
 ```
@@ -102,7 +102,10 @@ npm run dev
 | `SEQUENCER_PRIVATE_KEY` | sequencer signing key |
 | `ENGINE_ADMIN_KEY` | admin bypass / close / retry access |
 | `ENGINE_REQUIRE_PROOFS` | force mandatory ZK proof verification |
+| `X402_MODE` | enable or disable the x402 runtime |
 | `ENGINE_X402_DISCOVERY` | enable x402 on discovery endpoints |
+| `ENGINE_X402_DISCOVERY_PRICE` | x402 price for `GET /auctions` |
+| `ENGINE_X402_DETAIL_PRICE` | x402 price for `GET /auctions/:id` |
 | `X402_RECEIVER_ADDRESS` | x402 payment receiver |
 | `ENGINE_X402_ACCESS_MAX_AGE_SEC` | max age for signed x402 access proofs, default 300 seconds |
 | `PINATA_API_KEY` | optional replay pinning |
@@ -124,5 +127,10 @@ npm run agent-userop-demo
 
 - The engine exposes spectator-friendly aggregate fields like `bidCount`, `uniqueBidders`, `competitionLevel`, and `priceIncreasePct`.
 - The x402 entitlement layer is read-only auth only; it does not change ERC-8004 ownership, ZK proof verification, room sequencing, or action semantics.
+- The deployed Base Sepolia engine currently points at the v3 stack:
+  - `AuctionRegistry`: `0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F`
+  - `AuctionEscrow`: `0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2`
+  - `AgentPrivacyRegistry`: `0x5b4f09A5D5188dCe1b1ba0caeDBcEb52CaCD1902`
+- `GET /auctions/:id` now reconciles on-chain `SETTLED` state after CRE settlement so room snapshots do not stay stuck at `CLOSED`.
 - A pre-existing `bond-watcher.test.ts` failure is still tracked as separate tech debt; the live engine bond path uses receipt verification, not the old log-polling helper.
 - Replay bundles are part of the CRE settlement pipeline and the post-auction audit flow.
