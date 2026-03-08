@@ -12,6 +12,7 @@ import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { useAuctionDetail, useAuctionRoom, useAuctionState } from '@/hooks'
 import { formatCountdown, formatUsdc, nftExplorerUrl, nftMarketplaceUrl, statusLabel, truncateHex } from '@/lib/format'
+import { AuctionSceneView } from '@/components/auction-scene'
 import { resolveImageUrl } from '@/lib/ipfs'
 import { PARTICIPATION_GUIDE_PATH } from '@/lib/site-links'
 
@@ -86,6 +87,21 @@ export default function AuctionRoomPage() {
           </Link>
         </div>
       </PixelPanel>
+
+      {/* Animated auction scene */}
+      {!isLoading && !error && auctionId ? (
+        <section className="mb-6">
+          <AuctionSceneView
+            auctionId={auctionId}
+            events={events}
+            isConnected={isConnected}
+            highestBidEvent={highestBidEvent}
+            participantCount={detail?.snapshot.participantCount ?? 0}
+            deadline={deadline}
+            status={status}
+          />
+        </section>
+      ) : null}
 
       {isLoading ? (
         <>
