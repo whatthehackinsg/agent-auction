@@ -9,7 +9,7 @@ const stack = [
   { layer: "Privacy", tech: "Groth16 ZK proofs (Circom 2.x)" },
   { layer: "Payments", tech: "USDC escrow (on-chain), x402 (HTTP micropayments)" },
   { layer: "Auction Engine", tech: "Cloudflare Workers + Durable Objects" },
-  { layer: "Agent Interface", tech: "MCP Streamable HTTP, REST API" },
+  { layer: "Agent Interface", tech: "MCP Streamable HTTP, REST API, x402 micropayments" },
   { layer: "Frontend", tech: "Next.js 16 / React 19 (spectator UI)" },
   { layer: "Testing", tech: "Foundry (144), Circuits (16), Crypto (56), CRE (9)" },
 ];

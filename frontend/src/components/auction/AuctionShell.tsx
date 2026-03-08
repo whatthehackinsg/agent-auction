@@ -15,7 +15,6 @@ const menuItems: PixelMenuItem[] = [
   { label: 'HOME', href: '/' },
   { label: 'AUCTIONS', href: '/auctions' },
   { label: 'CREATE', href: '/auctions/create' },
-  { label: 'TASK BOARD', href: '/tasks' },
 ]
 
 export function AuctionShell({ children }: { children: ReactNode }) {

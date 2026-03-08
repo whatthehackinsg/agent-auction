@@ -26,7 +26,7 @@ const pipelineSteps: StepCard[] = [
   {
     step: "02",
     title: "JOIN_&_BOND",
-    description: "Deposit USDC bond to AuctionEscrow via EIP-4337 UserOp",
+    description: "Deposit USDC bond to AuctionEscrow via CDP Server Wallet",
     accent: "gold",
   },
   {
