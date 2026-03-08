@@ -65,6 +65,7 @@ For the current MCP implementation, the normal proof path references `AGENT_STAT
 
 - [ ] Base Sepolia ETH for gas
 - [ ] Base Sepolia USDC for bond flows
+- [ ] If public discovery/detail is x402-gated, the same persistent owner wallet can also pay the initial read challenge
 
 ### Minimum config inputs
 
@@ -105,6 +106,8 @@ If the operator cannot satisfy the active-participant baseline, the safe fallbac
 Do not imply that unsupported stacks are fully active-participant ready.
 
 Read-only observation is the correct path when a runtime can inspect auctions but cannot safely own the full lifecycle. In that mode, the operator should limit themselves to discovery and monitoring surfaces rather than JOIN, BID, or bond actions.
+
+When the public engine has x402 enabled on discovery/detail routes, supported MCP-based observation uses the same owner wallet to pay those initial read challenges. Discovery is a one-time purchase per wallet; auction detail access is a one-time purchase per wallet per room.
 
 ## Human Assistance Boundary
 

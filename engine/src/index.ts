@@ -12,14 +12,22 @@ import { ADDRESSES } from './lib/addresses'
 import { resolveNftMetadata } from './lib/nft-metadata'
 import { getNftEscrowStatus } from './lib/nft-escrow'
 import {
+  extractPayerWalletFromPaymentHeader,
   getPaymentSignatureHeader,
+  hasX402Entitlement,
   hasX402Receipt,
+  resolveX402EntitlementScope,
   resolveX402RuntimeConfig,
   validateAuctionX402Policy,
   sha256Hex,
+  storeX402Entitlement,
   storeX402Receipt,
   type AuctionX402Policy,
 } from './lib/x402-policy'
+import {
+  DEFAULT_X402_ACCESS_MAX_AGE_SEC,
+  verifyX402AccessHeaders,
+} from './lib/x402-access'
 
 export interface Env {
   AUCTION_DB: D1Database
@@ -35,6 +43,7 @@ export interface Env {
   ENGINE_X402_DISCOVERY?: string    // 'true' to enable x402 on discovery routes (default: off)
   ENGINE_X402_DISCOVERY_PRICE?: string  // price for /auctions list (default $0.001)
   ENGINE_X402_DETAIL_PRICE?: string     // price for /auctions/:id detail (default $0.001)
+  ENGINE_X402_ACCESS_MAX_AGE_SEC?: string
 }
 
 const app = new Hono<{ Bindings: Env }>()
@@ -95,6 +104,32 @@ async function applyX402DiscoveryGate(c: Context<{ Bindings: Env }>, next: Next)
   const platformConfig = resolveX402RuntimeConfig(c.env)
   if (!platformConfig.enabled) return next()
 
+  const scope = resolveX402EntitlementScope(c.req.path)
+  const accessProof = scope
+    ? await verifyX402AccessHeaders({
+      headers: c.req.raw.headers,
+      scope,
+      engineOrigin: c.req.url,
+      maxAgeSec: parsePositiveInt(c.env.ENGINE_X402_ACCESS_MAX_AGE_SEC) ?? DEFAULT_X402_ACCESS_MAX_AGE_SEC,
+    })
+    : null
+  if (scope && accessProof) {
+    const hasEntitlement = await hasX402Entitlement(c.env.AUCTION_DB, accessProof.payerWallet, scope)
+    if (hasEntitlement) {
+      logX402('entitlement_accepted', {
+        path: c.req.path,
+        scope,
+        payerWallet: accessProof.payerWallet,
+      })
+      return next()
+    }
+    logX402('entitlement_missing', {
+      path: c.req.path,
+      scope,
+      payerWallet: accessProof.payerWallet,
+    })
+  }
+
   // Receipt dedup
   const paymentHeader = getPaymentSignatureHeader(c.req.raw)
   let receiptHash: string | null = null
@@ -132,14 +167,35 @@ async function applyX402DiscoveryGate(c: Context<{ Bindings: Env }>, next: Next)
 
   if (paymentHeader && receiptHash && response.status < 400) {
     await storeX402Receipt(c.env.AUCTION_DB, receiptHash, Math.floor(Date.now() / 1000))
+    const payerWallet = extractPayerWalletFromPaymentHeader(paymentHeader)
+    if (payerWallet && scope) {
+      await storeX402Entitlement(
+        c.env.AUCTION_DB,
+        payerWallet,
+        scope,
+        Math.floor(Date.now() / 1000),
+        receiptHash,
+      )
+    }
     logX402('payment_accepted', {
       path: c.req.path,
       receiptHash,
+      scope,
+      payerWallet,
       status: response.status,
     })
   }
 
   return response
+}
+
+function parsePositiveInt(value: string | undefined): number | null {
+  if (!value || !/^\d+$/.test(value)) {
+    return null
+  }
+
+  const parsed = Number.parseInt(value, 10)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
 }
 
 for (const route of X402_DISCOVERY_ROUTES) {

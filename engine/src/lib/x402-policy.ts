@@ -1,3 +1,5 @@
+import { getAddress } from 'viem'
+
 export type X402RuntimeConfig =
   | { enabled: false; error?: string }
   | {
@@ -10,6 +12,8 @@ const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
 const DEFAULT_FACILITATOR_URL = 'https://www.x402.org/facilitator'
 const DEFAULT_PRICE_MANIFEST = '$0.001'
 const DEFAULT_PRICE_EVENTS = '$0.0001'
+
+export type X402EntitlementScope = 'discovery' | `auction:${string}`
 
 type X402EnvConfig = {
   X402_MODE?: string
@@ -171,4 +175,88 @@ export async function storeX402Receipt(db: D1Database, receiptHash: string, used
     .prepare('INSERT OR IGNORE INTO x402_receipts (receipt_hash, used_at) VALUES (?, ?)')
     .bind(receiptHash, usedAt)
     .run()
+}
+
+export function resolveX402EntitlementScope(path: string): X402EntitlementScope | null {
+  if (path === '/auctions') {
+    return 'discovery'
+  }
+
+  const detailMatch = path.match(/^\/auctions\/([^/]+)$/)
+  if (!detailMatch) {
+    return null
+  }
+
+  return `auction:${detailMatch[1]}`
+}
+
+export async function hasX402Entitlement(
+  db: D1Database,
+  payerWallet: string,
+  scope: X402EntitlementScope | string,
+): Promise<boolean> {
+  const normalizedWallet = getAddress(payerWallet)
+  const row = await db
+    .prepare('SELECT payer_wallet FROM x402_entitlements WHERE payer_wallet = ? AND resource_scope = ?')
+    .bind(normalizedWallet, scope)
+    .first<{ payer_wallet: string }>()
+  return !!row
+}
+
+export async function storeX402Entitlement(
+  db: D1Database,
+  payerWallet: string,
+  scope: X402EntitlementScope | string,
+  grantedAt: number,
+  receiptHash?: string | null,
+): Promise<void> {
+  const normalizedWallet = getAddress(payerWallet)
+  await db
+    .prepare(`
+      INSERT INTO x402_entitlements (payer_wallet, resource_scope, granted_at, receipt_hash)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(payer_wallet, resource_scope)
+      DO UPDATE SET receipt_hash = excluded.receipt_hash
+    `)
+    .bind(normalizedWallet, scope, grantedAt, receiptHash ?? null)
+    .run()
+}
+
+export function extractPayerWalletFromPaymentHeader(paymentHeader: string): string | null {
+  try {
+    const decoded = decodeBase64Utf8(paymentHeader)
+    const parsed = JSON.parse(decoded) as { payload?: Record<string, unknown> }
+    const payload = parsed.payload
+    if (!payload) {
+      return null
+    }
+
+    const permit2Auth = payload.permit2Authorization
+    if (isRecord(permit2Auth) && typeof permit2Auth.from === 'string') {
+      return getAddress(permit2Auth.from)
+    }
+
+    const authorization = payload.authorization
+    if (isRecord(authorization) && typeof authorization.from === 'string') {
+      return getAddress(authorization.from)
+    }
+
+    return null
+  } catch {
+    return null
+  }
+}
+
+function decodeBase64Utf8(value: string): string {
+  if (typeof globalThis.atob === 'function') {
+    const binary = globalThis.atob(value)
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+    return new TextDecoder().decode(bytes)
+  }
+
+  return Buffer.from(value, 'base64').toString('utf8')
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
 }

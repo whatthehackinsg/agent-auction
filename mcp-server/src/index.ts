@@ -18,7 +18,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
 import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js'
 
-import { loadConfig } from './lib/config.js'
+import { loadConfig, loadDefaultEnvFileForStartup } from './lib/config.js'
 import { EngineClient } from './lib/engine.js'
 import { registerDiscoverTool } from './tools/discover.js'
 import { registerDetailsTool } from './tools/details.js'
@@ -37,8 +37,9 @@ import { describeWriteBackend } from './lib/wallet-backend.js'
 
 // ── Configuration ────────────────────────────────────────────────────
 
+const loadedEnvFile = loadDefaultEnvFileForStartup()
 const config = loadConfig()
-const engine = new EngineClient(config.engineUrl, config.engineAdminKey)
+const engine = new EngineClient(config)
 const writeBackend = describeWriteBackend(config)
 
 /** Per-action-type nonce tracker: "JOIN:<agentId>" | "BID:<agentId>" → next nonce */
@@ -165,6 +166,9 @@ app.get('/health', (_req, res) => {
 
 app.listen(config.port, () => {
   console.log(`Auction MCP server listening on http://127.0.0.1:${config.port}/mcp`)
+  if (loadedEnvFile) {
+    console.log(`Loaded env file: ${loadedEnvFile}`)
+  }
   console.log(`Engine URL: ${config.engineUrl}`)
   console.log(`Write backend: ${writeBackend.path}`)
   console.log(`Agent configured: ${writeBackend.configured}`)

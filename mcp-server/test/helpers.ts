@@ -140,6 +140,7 @@ export function makeConfig(overrides?: Partial<ServerConfig>): ServerConfig {
     },
     agentId: TEST_AGENT_ID,
     port: 3100,
+    engineReadMode: 'x402-buyer',
     engineAdminKey: null,
     bondFundingPrivateKey: null,
     agentStateFile: null,

@@ -7,6 +7,7 @@ This README is the canonical internal landing page for the current MCP lifecycle
 ## Current Scope
 
 - ERC-8004 identity registration
+- x402-paid discovery and auction-detail reads with permanent engine-side entitlements
 - ZK state bootstrap and proof generation from `agent-N.json`
 - autonomous USDC bond deposit
 - JOIN / BID / REVEAL action submission
@@ -41,6 +42,24 @@ If an operator cannot satisfy that baseline, they should use read-only observati
 | none | Read-only only | `ENGINE_URL` | discovery/monitoring/check tools still work |
 
 The MCP server never silently falls back from an incomplete AgentKit/CDP setup to the raw-key bridge. If CDP envs are partially set, write tools fail closed and tell the operator to either finish the supported setup or explicitly switch to `MCP_WALLET_BACKEND=raw-key`.
+
+## x402 Read Modes
+
+Public engine discovery/detail routes are now expected to be x402-gated. The MCP server supports two read modes:
+
+| Mode | Default | Behavior |
+|---|---|---|
+| `x402-buyer` | yes | The MCP server signs a short-lived access proof with the same owner wallet, pays the x402 challenge on first access, and then relies on engine-side permanent entitlements for repeat reads. |
+| `admin-bypass` | no | Developer/debug mode only. The MCP server sends `X-ENGINE-ADMIN-KEY` and skips x402 payment entirely. |
+
+Permanent entitlement semantics:
+
+- `discover_auctions` pays once per wallet for the shared `discovery` scope
+- `get_auction_details` pays once per wallet per room for `auction:<auctionId>`
+- the engine is the source of truth for those entitlements
+- the MCP server does not maintain an authoritative local "paid rooms" cache
+
+This read-side x402 flow is intentionally isolated from identity, proofs, nullifiers, and bond logic. It does not change the current ERC-8004 or ZK participation contract.
 
 Current status:
 
@@ -133,7 +152,9 @@ register_identity
   -> claim_refund / withdraw_funds
 ```
 
-Read-only mode works with just the engine URL. Full autonomous participation additionally needs Base Sepolia RPC, signing configuration, and compatible ZK state.
+Non-paywalled monitoring/check routes can still work with just the engine URL. Full autonomous participation additionally needs Base Sepolia RPC, signing configuration, and compatible ZK state.
+
+When the deployed engine has x402 discovery/detail gating enabled, `discover_auctions` and `get_auction_details` need a wallet-capable MCP setup in `x402-buyer` mode so the server can pay the initial challenge and then reuse the engine-side entitlement.
 
 Supported attach flow:
 
@@ -151,6 +172,7 @@ register_identity({ attachExisting: true, agentId, stateFilePath })
 |---|---|---|
 | `ENGINE_URL` | no | engine base URL, default `http://localhost:8787` |
 | `MCP_WALLET_BACKEND` | no | backend selector: `auto`, `agentkit`, or `raw-key` |
+| `MCP_ENGINE_READ_MODE` | no | `x402-buyer` by default; set `admin-bypass` only for developer/debug use |
 | `CDP_API_KEY_ID` | supported writes | CDP API key ID for the supported AgentKit/CDP path |
 | `CDP_API_KEY_SECRET` | supported writes | CDP API key secret for the supported AgentKit/CDP path |
 | `CDP_WALLET_SECRET` | supported writes | Server Wallet secret used by the supported path |
@@ -160,9 +182,9 @@ register_identity({ attachExisting: true, agentId, stateFilePath })
 | `AGENT_ID` | most write tools | default ERC-8004 identity for attach/join/bid/bond flows |
 | `AGENT_STATE_FILE` | JOIN/BID by default | local ZK state file used for proof generation or explicit attach |
 | `AGENT_STATE_DIR` | no | default directory for generated `agent-N.json` files |
-| `BASE_SEPOLIA_RPC` | on-chain tools | Base Sepolia RPC for identity, escrow, and registry reads |
+| `BASE_SEPOLIA_RPC` | on-chain tools and x402 buyer mode | Base Sepolia RPC for identity, escrow, registry reads, and public x402 payments |
 | `BOND_FUNDING_PRIVATE_KEY` | raw-key only | optional alternate funding signer for `deposit_bond`; must still own the target agentId |
-| `ENGINE_ADMIN_KEY` | no | bypasses engine x402 discovery gates |
+| `ENGINE_ADMIN_KEY` | debug only | bypasses engine x402 discovery/detail gates when `MCP_ENGINE_READ_MODE=admin-bypass` |
 | `MCP_PORT` | no | server port, default `3100` |
 
 The supported path expects the wallet to already exist. This MCP server attaches to the configured Server Wallet address; it does not create or manage CDP wallets for the operator.
@@ -201,6 +223,7 @@ Example client config:
 
 ## Notes
 
+- Public discovery/detail reads now default to wallet-paid x402 instead of admin bypass. Keep `admin-bypass` reserved for developer debugging.
 - JOIN and BID are fail-closed proof paths. The normal path loads `AGENT_STATE_FILE` and auto-generates proofs; advanced callers can pass `proofPayload` instead.
 - Write tools can target an explicit `agentId` per call without mutating env vars.
 - `deposit_bond` is the primary path. `post_bond` is only the manual fallback for an already-submitted transfer.

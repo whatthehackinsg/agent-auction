@@ -16,7 +16,7 @@ Cloudflare Worker auction engine for Agent Auction. It sequences actions, mainta
 ```text
 client
   -> Hono router
-     -> D1 (auctions, events, bond_observations, x402_receipts)
+     -> D1 (auctions, events, bond_observations, x402_receipts, x402_entitlements)
      -> AuctionRoom Durable Object (ordering, snapshots, broadcast)
 ```
 
@@ -43,6 +43,11 @@ client
 ## Privacy and Access Control
 
 - Discovery routes can be x402-gated when `ENGINE_X402_DISCOVERY=true`.
+- When x402 discovery is on, paid reads grant permanent entitlements keyed by `payer wallet + resource scope`.
+- Supported scopes today are:
+  - `discovery` for `GET /auctions`
+  - `auction:<auctionId>` for `GET /auctions/:id`
+- Repeat reads can present a short-lived signed access proof instead of paying again; the engine verifies that signature and checks D1 entitlements before allowing access.
 - `X-ENGINE-ADMIN-KEY` bypasses discovery x402 and unlocks admin-only routes.
 - `/auctions/:id/events` requires either admin access or a valid `participantToken`.
 - Public WebSocket clients see masked identities.
@@ -77,6 +82,7 @@ cd engine
 npm install
 npx wrangler d1 create auction-db
 npx wrangler d1 execute auction-db --file=schema.sql
+npx wrangler d1 execute auction-engine-db --remote --file=migrations/0005_add_x402_entitlements.sql
 npm run dev
 ```
 
@@ -98,6 +104,7 @@ npm run dev
 | `ENGINE_REQUIRE_PROOFS` | force mandatory ZK proof verification |
 | `ENGINE_X402_DISCOVERY` | enable x402 on discovery endpoints |
 | `X402_RECEIVER_ADDRESS` | x402 payment receiver |
+| `ENGINE_X402_ACCESS_MAX_AGE_SEC` | max age for signed x402 access proofs, default 300 seconds |
 | `PINATA_API_KEY` | optional replay pinning |
 | `BASE_SEPOLIA_RPC`, `PIMLICO_API_KEY` | demo script dependencies |
 
@@ -116,5 +123,6 @@ npm run agent-userop-demo
 ## Notes
 
 - The engine exposes spectator-friendly aggregate fields like `bidCount`, `uniqueBidders`, `competitionLevel`, and `priceIncreasePct`.
+- The x402 entitlement layer is read-only auth only; it does not change ERC-8004 ownership, ZK proof verification, room sequencing, or action semantics.
 - A pre-existing `bond-watcher.test.ts` failure is still tracked as separate tech debt; the live engine bond path uses receipt verification, not the old log-polling helper.
 - Replay bundles are part of the CRE settlement pipeline and the post-auction audit flow.
