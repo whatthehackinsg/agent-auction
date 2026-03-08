@@ -15,10 +15,10 @@ import {
   parseAbiParameters,
   decodeAbiParameters,
   keccak256,
+  sha256,
   toHex,
   type Hex,
 } from "viem";
-import { createHash } from "node:crypto";
 
 export const AUCTION_ENDED_SIGNATURE = keccak256(
   toHex("AuctionEnded(bytes32,uint256,address,uint256,bytes32,bytes32)")
@@ -74,14 +74,57 @@ function decodeReplayBody(body: string | Uint8Array): Uint8Array {
   }
   if (typeof body === "string") {
     if (body.length === 0) return new Uint8Array();
-    return Uint8Array.from(Buffer.from(body, "base64"));
+    return decodeBase64(body);
   }
   throw new Error("Replay bundle response body is missing or invalid");
 }
 
 function sha256Hex(bytes: Uint8Array): Hex {
-  const digest = createHash("sha256").update(Buffer.from(bytes)).digest("hex");
-  return (`0x${digest}`) as Hex;
+  return sha256(bytes);
+}
+
+function decodeBase64(input: string): Uint8Array {
+  const clean = input.replace(/\s+/g, "");
+  if (clean.length % 4 !== 0) {
+    throw new Error("Invalid base64 replay bundle");
+  }
+
+  const padding =
+    clean.endsWith("==") ? 2 :
+    clean.endsWith("=") ? 1 :
+    0;
+  const output = new Uint8Array((clean.length / 4) * 3 - padding);
+
+  let out = 0;
+  for (let i = 0; i < clean.length; i += 4) {
+    const c0 = decodeBase64Char(clean[i]);
+    const c1 = decodeBase64Char(clean[i + 1]);
+    const c2 = clean[i + 2] === "=" ? 0 : decodeBase64Char(clean[i + 2]);
+    const c3 = clean[i + 3] === "=" ? 0 : decodeBase64Char(clean[i + 3]);
+    const chunk = (c0 << 18) | (c1 << 12) | (c2 << 6) | c3;
+
+    output[out++] = (chunk >> 16) & 0xff;
+    if (clean[i + 2] !== "=") {
+      output[out++] = (chunk >> 8) & 0xff;
+    }
+    if (clean[i + 3] !== "=") {
+      output[out++] = chunk & 0xff;
+    }
+  }
+
+  return output;
+}
+
+function decodeBase64Char(char: string): number {
+  const code = char.charCodeAt(0);
+
+  if (code >= 65 && code <= 90) return code - 65;
+  if (code >= 97 && code <= 122) return code - 71;
+  if (code >= 48 && code <= 57) return code + 4;
+  if (char === "+") return 62;
+  if (char === "/") return 63;
+
+  throw new Error(`Invalid base64 character in replay bundle: ${char}`);
 }
 
 export function decodeAuctionEndedLog(log: AuctionEndedLogInput): {

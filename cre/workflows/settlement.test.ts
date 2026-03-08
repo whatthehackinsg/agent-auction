@@ -12,10 +12,10 @@ import {
   hexToBytes,
   keccak256,
   parseAbiParameters,
+  sha256,
   toHex,
   type Hex,
 } from "viem";
-import { createHash } from "node:crypto";
 import {
   decodeAuctionEndedLog,
   encodeSettlementReport,
@@ -31,9 +31,9 @@ const MOCK_WINNER_WALLET =
   "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" as Hex;
 const MOCK_FINAL_PRICE = 1_000_000n;
 const MOCK_FINAL_LOG_HASH = (`0x${"cd".repeat(32)}`) as Hex;
-const MOCK_REPLAY_BUNDLE = Buffer.from("mock-replay-bundle", "utf8");
-const MOCK_REPLAY_BUNDLE_B64 = MOCK_REPLAY_BUNDLE.toString("base64");
-const MOCK_REPLAY_HASH = (`0x${createHash("sha256").update(MOCK_REPLAY_BUNDLE).digest("hex")}`) as Hex;
+const MOCK_REPLAY_BUNDLE = new TextEncoder().encode("mock-replay-bundle");
+const MOCK_REPLAY_BUNDLE_B64 = hexToBase64(bytesToHex(MOCK_REPLAY_BUNDLE));
+const MOCK_REPLAY_HASH = sha256(MOCK_REPLAY_BUNDLE);
 const MOCK_TX_HASH = (`0x${"11".repeat(32)}`) as Hex;
 
 const GET_AUCTION_STATE_SELECTOR = keccak256(
@@ -47,8 +47,8 @@ const AUCTION_ENDED_SIGNATURE = keccak256(
 
 const BASE_CONFIG = {
   chainSelectorName: CHAIN_SELECTOR_NAME,
-  auctionRegistryAddress: "0xFEc7a05707AF85C6b248314E20FF8EfF590c3639",
-  auctionEscrowAddress: "0x20944f46AB83F7eA40923D7543AF742Da829743c",
+  auctionRegistryAddress: "0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F",
+  auctionEscrowAddress: "0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2",
   replayBundleBaseUrl: "https://replay.auction-platform.io",
   gasLimit: "500000",
 };
