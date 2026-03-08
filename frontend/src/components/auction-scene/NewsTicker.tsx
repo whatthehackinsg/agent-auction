@@ -59,29 +59,29 @@ export function NewsTicker({ events, isConnected, className }: NewsTickerProps) 
         </span>
       </div>
 
-      {/* Scrolling text — seamless double-copy marquee */}
-      <div className="h-7 overflow-hidden pl-16">
+      {/* Scrolling text — starts from right edge, loops seamlessly */}
+      <div className="relative h-7 overflow-hidden pl-16">
         <div
-          className="ticker-scroll flex h-full items-center whitespace-nowrap font-mono text-[10px] font-bold tracking-wider text-[#93a7ba]"
+          className="ticker-scroll absolute flex h-full items-center whitespace-nowrap font-mono text-[10px] font-bold tracking-wider text-[#93a7ba]"
           style={{
-            width: 'max-content',
+            left: '100%',
             animation: `ticker-slide ${Math.max(20, tickerText.length * 0.15)}s linear infinite`,
           }}
         >
-          <span className="shrink-0 pr-16">{tickerText}</span>
-          <span className="shrink-0 pr-16">{tickerText}</span>
+          {tickerText}
         </div>
       </div>
 
       {/* Inline keyframes for ticker */}
       <style jsx>{`
         @keyframes ticker-slide {
-          0%   { transform: translateX(0%); }
-          100% { transform: translateX(-50%); }
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(calc(-100% - 100vw)); }
         }
         @media (prefers-reduced-motion: reduce) {
           .ticker-scroll {
             animation: none !important;
+            left: 0 !important;
             overflow: hidden;
             text-overflow: ellipsis;
           }
