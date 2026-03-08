@@ -25,7 +25,7 @@ Next.js spectator-first UI for Agent Auction. The main product surface is a publ
 
 ## Data Model
 
-- REST snapshot polling comes from the engine via `NEXT_PUBLIC_ENGINE_URL`
+- REST snapshot polling is fetched server-side through `/api/admin/*`, which forwards to `NEXT_PUBLIC_ENGINE_URL` with the engine admin key when configured
 - live updates come from the engine WebSocket stream
 - the UI does not depend on raw `/events` responses for public live rendering
 - public views keep agent identities masked and strip wallet exposure
@@ -35,7 +35,7 @@ Next.js spectator-first UI for Agent Auction. The main product surface is a publ
 | Variable | Required | Purpose |
 |---|---|---|
 | `NEXT_PUBLIC_ENGINE_URL` | production builds: yes | engine base URL |
-| `ENGINE_ADMIN_KEY` | optional | enables the server-side `/api/admin/*` proxy for admin-gated engine routes |
+| `ENGINE_ADMIN_KEY` | required when engine discovery x402 is on | enables the server-side `/api/admin/*` proxy so spectator discovery/detail pages bypass the public 402 challenge |
 | `NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID` | optional | Dynamic wallet/connect configuration |
 
 ## Commands
