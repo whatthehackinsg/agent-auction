@@ -1,5 +1,5 @@
-import { TaskBoard } from "@/components/task-board/TaskBoard";
+import { LandingPage } from "@/components/landing/LandingPage";
 
 export default function Home() {
-  return <TaskBoard />;
+  return <LandingPage />;
 }
