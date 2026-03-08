@@ -18,7 +18,7 @@ export const ADDRESSES = {
   identityRegistry: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
   /** @deprecated Use identityRegistry (ERC-8004) instead */
   mockIdentityRegistry: '0x68E06c33D4957102362ACffC2BFF9E6b38199318',
-  agentPrivacyRegistry: '0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff',
+  agentPrivacyRegistry: '0x5b4f09A5D5188dCe1b1ba0caeDBcEb52CaCD1902',
   auctionRegistry: '0xFEc7a05707AF85C6b248314E20FF8EfF590c3639',
   auctionEscrow: '0x20944f46AB83F7eA40923D7543AF742Da829743c',
 } as const satisfies Record<string, Address>

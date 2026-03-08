@@ -16,7 +16,7 @@ const contracts = [
   { name: "RealKeystoneForwarder", address: "0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5" },
   { name: "AgentPaymaster", address: "0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d" },
   { name: "AgentAccountFactory", address: "0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD" },
-  { name: "AgentPrivacyRegistry", address: "0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff" },
+  { name: "AgentPrivacyRegistry", address: "0x5b4f09A5D5188dCe1b1ba0caeDBcEb52CaCD1902" },
   { name: "MockIdentityRegistry", address: "0x68E06c33D4957102362ACffC2BFF9E6b38199318" },
   { name: "MockUSDC", address: "0xfEE786495d165b16dc8e68B6F8281193e041737d" },
   { name: "MockKeystoneForwarder (dev)", address: "0x846ae85403D1BBd3B343F1b214D297969b39Ce23" },
