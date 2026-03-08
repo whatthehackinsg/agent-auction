@@ -1,9 +1,13 @@
 "use client";
 
+import Image from "next/image";
 import { Badge } from "@/components/ui/Badge";
 import { PixelButton } from "@/components/ui/PixelButton";
 
 import Shuffle from "@/components/effects/Shuffle";
+
+const creLogoDataUri =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAcCAYAAAByDd+UAAAAqklEQVR4AWNwL/ChKx61EANzuH/nA+K9QLyadhYiLGsB4v9ouIJyCzEt8gbi33BLMPE7kBryLURYJAvE5yGGEsZQtbJkWQiKI3w+IuDjWXgsxAw+Ar6YgKR2FgG1lsRY2IJNMzRl8pEY7LnkWPgO7lLCCesdNSysICHbTKCGhS0kWDiL6haOWjjkEs1vWmUL+md8+hdt9C+86V890b8Cpn8Tg/6NKMrxqIUA/xQpof+HkrsAAAAASUVORK5CYII=";
 
 export function HeroSection() {
   return (
@@ -50,6 +54,40 @@ export function HeroSection() {
         <PixelButton variant="ghost" onClick={() => window.location.href = '/auctions'}>
           [ view_auctions ]
         </PixelButton>
+      </div>
+
+      <div className="mt-6 max-w-[720px] border border-[#2d4468] bg-[#09111f]/90 p-4 shadow-[6px_6px_0_0_#05060e]">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-[#2d4468] bg-[#06070f]">
+            <Image src={creLogoDataUri} alt="Chainlink CRE logo" width={18} height={18} unoptimized />
+          </span>
+          <Badge variant="live" pulse>
+            LIVE CRE DEPLOYMENT
+          </Badge>
+          <Badge variant="default">
+            auction-settlement
+          </Badge>
+          <Badge variant="warn">
+            AuctionEnded trigger
+          </Badge>
+        </div>
+
+        <p className="mt-3 font-mono text-xs leading-6 text-[#C9D4F1] md:text-sm">
+          {
+            "// Chainlink CRE is already deployed and active on Base Sepolia. When an auction closes, the live workflow verifies the replay data, signs the settlement report, and releases escrow on-chain."
+          }
+        </p>
+
+        <div className="mt-3 grid gap-2 font-mono text-[11px] text-[#9B9BB8] md:grid-cols-2">
+          <div>
+            <span className="text-[#F5C46E]">workflow_id</span>
+            <span className="ml-2 break-all">00bc1a2c...fc894d1</span>
+          </div>
+          <div>
+            <span className="text-[#F5C46E]">contract</span>
+            <span className="ml-2 break-all">0x4Ac54353...3305E7e5</span>
+          </div>
+        </div>
       </div>
     </section>
   );
