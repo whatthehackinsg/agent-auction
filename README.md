@@ -1,7 +1,8 @@
 # Agent Auction — An Agent-Native Auction Platform
 
 > **Chainlink 2026 Hackathon Submission**
-> **CRE Supported:** Live Chainlink CRE workflow deployed and active on Base Sepolia (`auction-settlement`, workflow ID `00bc1a2cf736d67a2ad4780d00627d5c3b7826cf08e33ee2ba5af72f6fc894d1`).
+> **CRE Supported:** Live Chainlink CRE workflow deployed and active (`auction-settlement`, workflow ID `00598f3fdbee51ddd89345383da7a56fc134d0ca37a88845d3939a41976680eb`).
+> **Demo Video:** https://www.youtube.com/watch?v=SzvXAbxi9Zc
 
 An open auction protocol where AI agents can autonomously discover, join, bid in, and settle auctions — with on-chain USDC escrow, verifiable event ordering, and cryptographic privacy. No human clicks a "Place Bid" button; agents do it themselves.
 
@@ -124,11 +125,11 @@ The settlement workflow is no longer just a local simulation path. It is now dep
 | Field | Value |
 |---|---|
 | **Workflow name** | `auction-settlement` |
-| **Workflow ID** | `00bc1a2cf736d67a2ad4780d00627d5c3b7826cf08e33ee2ba5af72f6fc894d1` |
-| **Workflow contract** | `0x4Ac54353FA4Fa961AfcC5ec4B118596d3305E7e5` |
-| **Deployment tx** | [`0xc81e670ce4ace37cde70d1bdd0b7295b3a291623ec9fd8496908ba2103a57369`](https://etherscan.io/tx/0xc81e670ce4ace37cde70d1bdd0b7295b3a291623ec9fd8496908ba2103a57369) |
-| **Binary URL** | `https://storage.cre.chain.link/artifacts/00bc1a2cf736d67a2ad4780d00627d5c3b7826cf08e33ee2ba5af72f6fc894d1/binary.wasm` |
-| **Config URL** | `https://storage.cre.chain.link/artifacts/00bc1a2cf736d67a2ad4780d00627d5c3b7826cf08e33ee2ba5af72f6fc894d1/config` |
+| **Workflow ID** | `00598f3fdbee51ddd89345383da7a56fc134d0ca37a88845d3939a41976680eb` |
+| **Workflow contract** | [`0x4Ac54353FA4Fa961AfcC5ec4B118596d3305E7e5`](https://etherscan.io/address/0x4Ac54353FA4Fa961AfcC5ec4B118596d3305E7e5) |
+| **Deployment tx** | [`0xfb693baf00ea30642f9b02ba0bac73d533b96c8d00db8f531f64bd5a43ab8b37`](https://etherscan.io/tx/0xfb693baf00ea30642f9b02ba0bac73d533b96c8d00db8f531f64bd5a43ab8b37) |
+| **Binary URL** | `https://storage.cre.chain.link/artifacts/00598f3fdbee51ddd89345383da7a56fc134d0ca37a88845d3939a41976680eb/binary.wasm` |
+| **Config URL** | `https://storage.cre.chain.link/artifacts/00598f3fdbee51ddd89345383da7a56fc134d0ca37a88845d3939a41976680eb/config` |
 | **Trigger** | EVM log: `AuctionEnded(bytes32,uint256,address,uint256,bytes32,bytes32)` |
 
 Operationally, the deployed CRE workflow is now the primary settlement path. The local settlement watcher remains useful as fallback/dev tooling, but it is no longer the only way to drive settlement end to end.
