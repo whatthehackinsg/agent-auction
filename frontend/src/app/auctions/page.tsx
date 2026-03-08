@@ -16,7 +16,6 @@ import { PARTICIPATION_GUIDE_PATH } from '@/lib/site-links'
 
 export default function AuctionsPage() {
   const { auctions, isLoading, error } = useAuctions()
-  const [nftFilter, setNftFilter] = useState<'all' | 'nft' | 'no-nft'>('all')
   const [, setTick] = useState(0)
 
   useEffect(() => {
@@ -25,13 +24,6 @@ export default function AuctionsPage() {
     }, 1000)
     return () => clearInterval(id)
   }, [])
-
-  const filteredAuctions = nftFilter === 'all'
-    ? auctions
-    : auctions.filter((a) => {
-        const hasNft = !!(a.nft_contract && a.nft_token_id)
-        return nftFilter === 'nft' ? hasNft : !hasNft
-      })
 
   return (
     <AuctionShell>
@@ -62,22 +54,6 @@ export default function AuctionsPage() {
         </div>
       </PixelPanel>
 
-      <div className="mb-4 flex gap-2 font-mono text-xs">
-        {(['all', 'nft', 'no-nft'] as const).map((filter) => (
-          <button
-            key={filter}
-            onClick={() => setNftFilter(filter)}
-            className={`rounded border px-3 py-1 transition-colors ${
-              nftFilter === filter
-                ? 'border-[#6EE7B7] bg-[#6EE7B7]/10 text-[#6EE7B7]'
-                : 'border-[#2b3a56] text-[#5E5E7A] hover:border-[#6EE7B7]/50'
-            }`}
-          >
-            {filter === 'all' ? 'All' : filter === 'nft' ? 'NFT Only' : 'No NFT'}
-          </button>
-        ))}
-      </div>
-
       {isLoading ? (
         <>
           <LoadingState label="LOADING_AUCTIONS();" />
@@ -105,22 +81,20 @@ export default function AuctionsPage() {
         </PixelPanel>
       ) : null}
 
-      {!isLoading && !error && filteredAuctions.length === 0 ? (
+      {!isLoading && !error && auctions.length === 0 ? (
         <PixelPanel accent="violet" headerLabel="auctions.empty" className="min-h-[140px]">
           <p className="font-mono text-sm text-[#EEEEF5]">
-            {nftFilter !== 'all' ? `No ${nftFilter === 'nft' ? 'NFT' : 'non-NFT'} auctions found.` : 'No auctions yet.'}
+            No tasks yet.
           </p>
           <p className="mt-2 font-mono text-xs text-[#9B9BB8]">
-            {nftFilter !== 'all'
-              ? '// try changing the filter above'
-              : '// create one via agent-client or POST /auctions on the engine'}
+            {'// create one via agent-client or POST /auctions on the engine'}
           </p>
         </PixelPanel>
       ) : null}
 
-      {!isLoading && !error && filteredAuctions.length > 0 ? (
+      {!isLoading && !error && auctions.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredAuctions.map((auction) => {
+          {auctions.map((auction) => {
             const state = statusLabel(auction.status)
             return (
               <Link key={auction.auction_id} href={`/auctions/${auction.auction_id}`} className="group">
@@ -134,20 +108,18 @@ export default function AuctionsPage() {
                       <div className="relative -mx-4 -mt-4 mb-3">
                         <img
                           src={imgUrl}
-                          alt={auction.title ?? 'Auction item'}
+                          alt={auction.title ?? 'Task item'}
                           className="h-32 w-full rounded-t object-cover"
                         />
-                        {auction.nft_contract ? (
-                          <span className="absolute right-2 top-2 rounded bg-[#F5C46E]/90 px-2 py-0.5 font-mono text-[10px] font-bold text-[#0a0f1a]">
-                            NFT
-                          </span>
-                        ) : null}
+                        <span className="absolute right-2 top-2 rounded bg-[#6EE7B7]/90 px-2 py-0.5 font-mono text-[10px] font-bold text-[#0a0f1a]">
+                          TASK
+                        </span>
                       </div>
                     ) : null
                   })()}
-                  {auction.nft_name ? (
-                    <p className="mb-1 truncate font-mono text-[10px] font-bold uppercase tracking-wider text-[#F5C46E]">
-                      {auction.nft_name}
+                  {(auction.title || auction.nft_name) ? (
+                    <p className="mb-1 truncate font-mono text-[10px] font-bold uppercase tracking-wider text-[#6EE7B7]">
+                      {auction.title || auction.nft_name}
                     </p>
                   ) : null}
                   <div className="flex flex-col gap-3 font-mono text-xs text-[#9B9BB8]">
