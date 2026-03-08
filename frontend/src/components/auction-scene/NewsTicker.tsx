@@ -59,7 +59,7 @@ export function NewsTicker({ events, isConnected, className }: NewsTickerProps) 
         </span>
       </div>
 
-      {/* Scrolling text — classic double-copy marquee */}
+      {/* Scrolling text — seamless double-copy marquee */}
       <div className="h-7 overflow-hidden pl-16">
         <div
           className="ticker-scroll flex h-full items-center whitespace-nowrap font-mono text-[10px] font-bold tracking-wider text-[#93a7ba]"
@@ -68,15 +68,15 @@ export function NewsTicker({ events, isConnected, className }: NewsTickerProps) 
             animation: `ticker-slide ${Math.max(20, tickerText.length * 0.15)}s linear infinite`,
           }}
         >
-          <span>{tickerText}</span>
-          <span className="pl-[100vw]">{tickerText}</span>
+          <span className="shrink-0 pr-16">{tickerText}</span>
+          <span className="shrink-0 pr-16">{tickerText}</span>
         </div>
       </div>
 
       {/* Inline keyframes for ticker */}
       <style jsx>{`
         @keyframes ticker-slide {
-          0%   { transform: translateX(100vw); }
+          0%   { transform: translateX(0%); }
           100% { transform: translateX(-50%); }
         }
         @media (prefers-reduced-motion: reduce) {
