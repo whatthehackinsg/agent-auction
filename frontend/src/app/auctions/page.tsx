@@ -26,12 +26,20 @@ export default function AuctionsPage() {
     return () => clearInterval(id)
   }, [])
 
-  const filteredAuctions = nftFilter === 'all'
+  const statusOrder: Record<string, number> = { OPEN: 0, CLOSED: 1, SETTLED: 2, CANCELLED: 3, NONE: 4 }
+
+  const filteredAuctions = (nftFilter === 'all'
     ? auctions
     : auctions.filter((a) => {
         const hasNft = !!(a.nft_contract && a.nft_token_id)
         return nftFilter === 'nft' ? hasNft : !hasNft
       })
+  ).toSorted((a, b) => {
+    const sa = statusOrder[statusLabel(a.status)] ?? 9
+    const sb = statusOrder[statusLabel(b.status)] ?? 9
+    if (sa !== sb) return sa - sb
+    return (b.deadline ?? 0) - (a.deadline ?? 0)
+  })
 
   return (
     <AuctionShell>

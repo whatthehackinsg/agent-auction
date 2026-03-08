@@ -34,7 +34,7 @@ export function FlipBoard({ value, isFlashing, isChaosMode }: FlipBoardProps) {
       {/* Board frame */}
       <div
         className={cn(
-          'relative border-2 px-3 py-2',
+          'relative border-2 px-6 py-4',
           isFlashing ? 'border-[#F5C46E]' : 'border-[#2a3548]'
         )}
         style={{
@@ -54,16 +54,16 @@ export function FlipBoard({ value, isFlashing, isChaosMode }: FlipBoardProps) {
         />
 
         {/* HIGHEST BID label */}
-        <div className="mb-1 text-center font-mono text-[7px] font-bold uppercase tracking-[0.2em] text-[#5e4a2a]">
+        <div className="mb-2 text-center font-mono text-xs font-bold uppercase tracking-[0.2em] text-[#5e4a2a]">
           highest bid
         </div>
 
         {/* Digit cells */}
-        <div className="flex items-center gap-[2px]">
+        <div className="flex items-center gap-1">
           {displayValue.split('').map((char, idx) => (
             <FlipDigit key={`digit-${idx}`} value={char} index={idx} reduced={reduced} isChaosMode={isChaosMode} />
           ))}
-          <span className="ml-1.5 font-mono text-[10px] font-bold text-[#8B6914]">USDC</span>
+          <span className="ml-3 font-mono text-lg font-bold text-[#8B6914]">USDC</span>
         </div>
 
         {/* Bidding war label */}
@@ -103,7 +103,7 @@ function FlipDigit({
 
   if (isSeparator) {
     return (
-      <span className="font-mono text-lg font-bold text-[#F5C46E] opacity-60">
+      <span className="font-mono text-4xl font-bold text-[#F5C46E] opacity-60">
         {value}
       </span>
     )
@@ -113,8 +113,8 @@ function FlipDigit({
     <div
       className="relative overflow-hidden border border-[#1a2a3d]"
       style={{
-        width: isDigit ? '20px' : '14px',
-        height: '28px',
+        width: isDigit ? '36px' : '22px',
+        height: '52px',
         background: 'linear-gradient(180deg, #0c1220 0%, #060a14 49%, #0a0e1c 50%, #080c18 100%)',
       }}
     >
@@ -125,7 +125,7 @@ function FlipDigit({
         <motion.span
           key={`${index}-${value}`}
           className={cn(
-            'absolute inset-0 flex items-center justify-center font-mono text-lg font-black',
+            'absolute inset-0 flex items-center justify-center font-mono text-4xl font-black',
             isDigit ? 'text-[#F5C46E]' : 'text-[#8B6914]'
           )}
           style={{

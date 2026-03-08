@@ -93,8 +93,11 @@ export function AuctionSceneView(props: AuctionSceneViewProps) {
             {status}
           </span>
           {/* Countdown */}
-          <span className="font-mono text-[10px] font-bold tabular-nums text-[#6EE7B7]">
-            {deadline > 0 ? formatCountdown(deadline) : '--:--:--'}
+          <span className={cn(
+            'font-mono text-[10px] font-bold tabular-nums',
+            status === 'OPEN' ? 'text-[#6EE7B7]' : 'text-[#5e5e7a]'
+          )}>
+            {status !== 'OPEN' ? 'ENDED' : deadline > 0 ? formatCountdown(deadline) : '--:--:--'}
           </span>
           {/* Participants */}
           <span className="font-mono text-[9px] text-[#5e5e7a]">
@@ -118,7 +121,7 @@ export function AuctionSceneView(props: AuctionSceneViewProps) {
       </div>
 
       {/* Main scene */}
-      <RoomFloor isChaosMode={isChaosMode} className="min-h-[360px] md:min-h-[480px]">
+      <RoomFloor isChaosMode={isChaosMode} className={cn('min-h-[280px] md:min-h-[380px]', (status === 'CANCELLED') && 'opacity-40 grayscale')}>
         {/* Host / Auctioneer */}
         <HostAuctioneer isSlamming={isSlamming} isChaosMode={isChaosMode} />
 
@@ -172,12 +175,28 @@ export function AuctionSceneView(props: AuctionSceneViewProps) {
           isSettled={isSettled}
         />
 
-        {/* "No agents yet" placeholder */}
-        {agents.length === 0 && (
+        {/* Status-dependent placeholder */}
+        {agents.length === 0 && status === 'OPEN' && (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
               <p className="font-mono text-xs text-[#5e5e7a]">{'// waiting for agents to join...'}</p>
               <p className="mt-1 font-mono text-[8px] text-[#3a3a58]">the pixel pit is empty</p>
+            </div>
+          </div>
+        )}
+        {agents.length === 0 && status === 'CANCELLED' && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center">
+              <p className="font-mono text-sm font-bold text-[#FDA4AF]">CANCELLED</p>
+              <p className="mt-1 font-mono text-[10px] text-[#5e5e7a]">{'// this auction was called off'}</p>
+            </div>
+          </div>
+        )}
+        {agents.length === 0 && (status === 'CLOSED' || status === 'SETTLED') && !isSettled && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center">
+              <p className="font-mono text-sm font-bold text-[#F5C46E]">AUCTION ENDED</p>
+              <p className="mt-1 font-mono text-[10px] text-[#5e5e7a]">{'// awaiting settlement...'}</p>
             </div>
           </div>
         )}

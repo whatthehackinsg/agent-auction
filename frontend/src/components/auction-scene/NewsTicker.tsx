@@ -60,23 +60,23 @@ export function NewsTicker({ events, isConnected, className }: NewsTickerProps) 
       </div>
 
       {/* Scrolling text */}
-      <div className="flex h-7 items-center pl-16">
+      <div className="flex h-7 items-center overflow-hidden pl-16">
         <div
-          className="ticker-scroll whitespace-nowrap font-mono text-[10px] font-bold tracking-wider text-[#93a7ba]"
+          className="ticker-scroll flex whitespace-nowrap font-mono text-[10px] font-bold tracking-wider text-[#93a7ba]"
           style={{
-            animation: `ticker-scroll ${Math.max(20, tickerText.length * 0.15)}s linear infinite`,
+            animation: `ticker-slide ${Math.max(20, tickerText.length * 0.15)}s linear infinite`,
           }}
         >
-          <span className="inline-block">{tickerText}</span>
-          <span className="inline-block pl-[100vw]">{tickerText}</span>
+          <span className="shrink-0">{tickerText}</span>
+          <span className="shrink-0 pl-24">{tickerText}</span>
         </div>
       </div>
 
       {/* Inline keyframes for ticker */}
       <style jsx>{`
-        @keyframes ticker-scroll {
+        @keyframes ticker-slide {
           0%   { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
+          100% { transform: translateX(calc(-50% - 48px)); }
         }
         @media (prefers-reduced-motion: reduce) {
           .ticker-scroll {

@@ -37,23 +37,26 @@ export function agentHeadShape(agentId: string): typeof HEAD_SHAPES[number] {
   return HEAD_SHAPES[(h >> 4) % HEAD_SHAPES.length]
 }
 
-/** Seat positions (x%, y%) within the room scene for up to 8 agents. */
+/** Seat positions (x%, y%) within the room scene for up to 8 agents.
+ *  Y values must be high enough to land on the visible perspective-transformed floor
+ *  (the checkered tiles appear roughly in the bottom 25% of the scene).
+ */
 export const SEAT_POSITIONS: Array<{ x: number; y: number }> = [
-  { x: 30, y: 62 },
-  { x: 45, y: 58 },
-  { x: 60, y: 62 },
-  { x: 75, y: 58 },
-  { x: 25, y: 74 },
-  { x: 40, y: 70 },
-  { x: 55, y: 74 },
-  { x: 70, y: 70 },
+  { x: 30, y: 86 },
+  { x: 48, y: 84 },
+  { x: 62, y: 86 },
+  { x: 78, y: 84 },
+  { x: 25, y: 95 },
+  { x: 42, y: 92 },
+  { x: 58, y: 95 },
+  { x: 72, y: 92 },
 ]
 
-/** The price board position in the scene. */
-export const BOARD_POSITION = { x: 50, y: 18 }
+/** The price board position in the scene — centered on the back wall. */
+export const BOARD_POSITION = { x: 50, y: 28 }
 
-/** The host/podium position. */
-export const HOST_POSITION = { x: 12, y: 50 }
+/** The host/podium position — elevated above the floor line, on the stage/wall side. */
+export const HOST_POSITION = { x: 14, y: 68 }
 
 /** Check if prefers-reduced-motion is active. */
 export function prefersReducedMotion(): boolean {

@@ -67,8 +67,8 @@ export function ArchitectureSection() {
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="border border-[#56407f] bg-[#17132d] p-3 text-center">
-                  <p className="font-mono text-sm font-bold text-[#A78BFA]">Account Abstraction</p>
-                  <p className="mt-1 font-mono text-xs text-[#9B9BB8]">EIP-4337 AgentAccount + AgentPaymaster</p>
+                  <p className="font-mono text-sm font-bold text-[#A78BFA]">Agent Wallets</p>
+                  <p className="mt-1 font-mono text-xs text-[#9B9BB8]">CDP Server Wallet + AgentKit</p>
                 </div>
                 <div className="border border-[#56407f] bg-[#17132d] p-3 text-center">
                   <p className="font-mono text-sm font-bold text-[#A78BFA]">Settlement</p>

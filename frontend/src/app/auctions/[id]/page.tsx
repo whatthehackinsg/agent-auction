@@ -60,8 +60,11 @@ export default function AuctionRoomPage() {
             [ :: AUCTION_ROOM :: ]
           </p>
           <h1 className="font-mono text-xl font-bold text-[#EEEEF5] md:text-3xl">
-            {auctionId ? truncateHex(auctionId, 14, 10) : 'unknown-auction'}
+            {detail?.auction.title ?? (auctionId ? truncateHex(auctionId, 14, 10) : 'unknown-auction')}
           </h1>
+          {detail?.auction.title ? (
+            <p className="mt-1 font-mono text-[10px] text-[#5E5E7A]">{truncateHex(auctionId ?? '', 14, 10)}</p>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-2">
@@ -192,6 +195,38 @@ export default function AuctionRoomPage() {
         </PixelPanel>
       ) : null}
 
+      {!isLoading && !error && status === 'CANCELLED' ? (
+        <PixelPanel accent="rose" headerLabel="auction.cancelled" className="mb-4">
+          <p className="font-mono text-sm text-[#FCA5A5]">This auction has been cancelled.</p>
+          <p className="mt-1 font-mono text-xs text-[#9B9BB8]">{'// no settlement will occur. bonded agents can claim refunds.'}</p>
+        </PixelPanel>
+      ) : null}
+
+      {!isLoading && !error && (status === 'SETTLED') ? (
+        <PixelPanel accent="mint" headerLabel="auction.settled" className="mb-4">
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-lg font-bold text-[#6EE7B7]">SOLD</span>
+            {detail?.snapshot.highestBid && detail.snapshot.highestBid !== '0' ? (
+              <span className="font-mono text-lg font-bold text-[#F5C46E]">{formatUsdc(detail.snapshot.highestBid)}</span>
+            ) : null}
+          </div>
+          <p className="mt-1 font-mono text-xs text-[#9B9BB8]">{'// settlement confirmed via CRE. escrow released to winner.'}</p>
+        </PixelPanel>
+      ) : null}
+
+      {!isLoading && !error && status === 'CLOSED' ? (
+        <PixelPanel accent="gold" headerLabel="auction.closed" className="mb-4">
+          <p className="font-mono text-sm text-[#F5C46E]">Auction ended — awaiting CRE settlement.</p>
+          {detail?.snapshot.highestBid && detail.snapshot.highestBid !== '0' ? (
+            <p className="mt-1 font-mono text-xs text-[#9B9BB8]">
+              {'// winning bid: '}{formatUsdc(detail.snapshot.highestBid)}{' — settlement workflow will verify and release escrow.'}
+            </p>
+          ) : (
+            <p className="mt-1 font-mono text-xs text-[#9B9BB8]">{'// no bids received. auction may be cancelled.'}</p>
+          )}
+        </PixelPanel>
+      ) : null}
+
       {!isLoading && !error ? (
         <div className="grid gap-4 lg:grid-cols-[1.3fr_0.9fr]">
           <div className="space-y-4">
@@ -247,16 +282,18 @@ export default function AuctionRoomPage() {
               </div>
             </PixelPanel>
 
-            <div className="flex flex-wrap gap-2">
-              <Link href={`/auctions/${auctionId}/settlement`}>
-                <PixelButton size="sm">[ settlement ]</PixelButton>
-              </Link>
-              <Link href={`/auctions/${auctionId}/replay`}>
-                <PixelButton size="sm" variant="ghost">
-                  [ replay ]
-                </PixelButton>
-              </Link>
-            </div>
+            {status !== 'OPEN' ? (
+              <div className="flex flex-wrap gap-2">
+                <Link href={`/auctions/${auctionId}/settlement`}>
+                  <PixelButton size="sm">[ settlement ]</PixelButton>
+                </Link>
+                <Link href={`/auctions/${auctionId}/replay`}>
+                  <PixelButton size="sm" variant="ghost">
+                    [ replay ]
+                  </PixelButton>
+                </Link>
+              </div>
+            ) : null}
           </div>
 
           <div className="space-y-4">
@@ -284,19 +321,20 @@ export default function AuctionRoomPage() {
               )}
             </PixelPanel>
 
-            <PixelPanel accent="mint" headerLabel="room.status">
-              <p className="font-mono text-xs text-[#9B9BB8]">countdown</p>
-              <p className="mt-1 font-mono text-xl font-bold text-[#6EE7B7]">
-                {deadline > 0 ? formatCountdown(deadline) : '--:--:--'}
-              </p>
+            <PixelPanel accent={status === 'OPEN' ? 'mint' : 'rose'} headerLabel="room.status">
+              <p className="font-mono text-xs text-[#9B9BB8]">{status === 'OPEN' ? 'countdown' : 'status'}</p>
+              {status === 'OPEN' ? (
+                <p className="mt-1 font-mono text-xl font-bold text-[#6EE7B7]">
+                  {deadline > 0 ? formatCountdown(deadline) : '--:--:--'}
+                </p>
+              ) : (
+                <p className="mt-1 font-mono text-xl font-bold text-[#FDA4AF]">
+                  {status}
+                </p>
+              )}
               <p className="mt-2 font-mono text-xs text-[#5E5E7A]">
                 participants: {detail?.snapshot.participantCount ?? 0}
               </p>
-              {headHash ? (
-                <p className="mt-2 font-mono text-[10px] text-[#6c7ca0]">
-                  head: {truncateHex(headHash, 10, 8)}
-                </p>
-              ) : null}
             </PixelPanel>
 
             <PixelPanel accent="violet" headerLabel="auction.stats">

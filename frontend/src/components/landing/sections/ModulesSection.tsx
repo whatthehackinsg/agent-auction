@@ -17,8 +17,8 @@ const modules: ModuleCard[] = [
     accent: "mint",
     header: "contracts.sol",
     title: "Smart Contracts",
-    stats: "7 contracts | 117 tests | 2-round audit (9 findings fixed)",
-    description: "Full auction lifecycle on Base Sepolia: AgentAccount (EIP-4337 wallet), AgentPaymaster (gas sponsorship), AuctionRegistry (state machine), AuctionEscrow (USDC bonds + CRE settlement), AgentPrivacyRegistry (ZK roots).",
+    stats: "6 contracts | 144 tests | 2-round audit (9 findings fixed)",
+    description: "Full auction lifecycle on Base Sepolia: AuctionRegistry (state machine), AuctionEscrow (USDC bonds + CRE settlement + commission), AgentPrivacyRegistry (ZK roots), NftEscrow (ERC-721 custody), IdentityRegistry (ERC-8004).",
     tech: "Solidity 0.8.24 | Foundry | Cancun EVM",
   },
   {
@@ -47,11 +47,11 @@ const modules: ModuleCard[] = [
   },
   {
     accent: "mint",
-    header: "eip4337.aa",
-    title: "Account Abstraction",
-    stats: "Zero-ETH UX | Pimlico bundler | Verified on-chain",
-    description: "Agents can't hold ETH for gas. AgentPaymaster sponsors gas; agents interact via UserOperations. AgentAccountFactory deploys deterministic wallets via CREATE2. First AgentAccount deployed and tested.",
-    tech: "EIP-4337 v0.7 | EntryPoint | Pimlico",
+    header: "wallet.cdp",
+    title: "Agent Wallets",
+    stats: "CDP Server Wallet | AgentKit | Base Sepolia",
+    description: "Agents use CDP Server Wallets via AgentKit for autonomous signing, bonding, and settlement. Persistent wallet identity across sessions. EIP-712 typed data for all auction actions.",
+    tech: "Coinbase AgentKit | CDP Server Wallet | EIP-712",
   },
   {
     accent: "gold",

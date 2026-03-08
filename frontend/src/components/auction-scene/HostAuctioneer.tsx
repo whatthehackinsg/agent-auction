@@ -35,8 +35,8 @@ export function HostAuctioneer({ isSlamming, isChaosMode }: HostAuctioneerProps)
         <div
           className="absolute left-1/2 top-[80%] -translate-x-1/2 -translate-y-1/2"
           style={{
-            width: '80px',
-            height: '30px',
+            width: '100px',
+            height: '40px',
             borderRadius: '50%',
             border: '2px solid #F5C46E40',
             animation: 'shockwave-expand 0.5s ease-out forwards',
@@ -45,8 +45,8 @@ export function HostAuctioneer({ isSlamming, isChaosMode }: HostAuctioneerProps)
       )}
 
       <svg
-        width="52"
-        height="68"
+        width="72"
+        height="94"
         viewBox="0 0 52 68"
         className={cn(
           'relative',

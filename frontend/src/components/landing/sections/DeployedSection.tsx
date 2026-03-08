@@ -6,21 +6,19 @@ const explorerBaseUrl = "https://sepolia.basescan.org";
 const deployment = {
   chainId: 84532,
   network: "Base Sepolia",
-  deployedAt: "2026-02-22",
+  deployedAt: "2026-03-08",
   deployer: "0x633ec0e633AA4d8BbCCEa280331A935747416737",
 } as const;
 
 const contracts = [
-  { name: "AuctionRegistry (v2)", address: "0xFEc7a05707AF85C6b248314E20FF8EfF590c3639" },
-  { name: "AuctionEscrow (v2)", address: "0x20944f46AB83F7eA40923D7543AF742Da829743c" },
-  { name: "RealKeystoneForwarder", address: "0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5" },
-  { name: "AgentPaymaster", address: "0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d" },
-  { name: "AgentAccountFactory", address: "0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD" },
-  { name: "AgentPrivacyRegistry", address: "0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff" },
-  { name: "MockIdentityRegistry", address: "0x68E06c33D4957102362ACffC2BFF9E6b38199318" },
+  { name: "AuctionRegistry (v3)", address: "0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F" },
+  { name: "AuctionEscrow (v3)", address: "0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2" },
+  { name: "NftEscrow (v3)", address: "0x110fA3cc158621a85BfCcCA7F7B093356FCea020" },
+  { name: "IdentityRegistry (ERC-8004)", address: "0x8004A818BFB912233c491871b3d84c89A494BD9e" },
+  { name: "AgentPrivacyRegistry", address: "0x5b4f09A5D5188dCe1b1ba0caeDBcEb52CaCD1902" },
+  { name: "KeystoneForwarder", address: "0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5" },
   { name: "MockUSDC", address: "0xfEE786495d165b16dc8e68B6F8281193e041737d" },
   { name: "MockKeystoneForwarder (dev)", address: "0x846ae85403D1BBd3B343F1b214D297969b39Ce23" },
-  { name: "AgentAccount (demo)", address: "0x04c505a1543965e2BB29c56EE26Eb6F2c907c6C7" },
 ];
 
 export function DeployedSection() {

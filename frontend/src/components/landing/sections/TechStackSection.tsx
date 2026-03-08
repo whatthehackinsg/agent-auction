@@ -5,13 +5,13 @@ const stack = [
   { layer: "Blockchain", tech: "Base Sepolia (OP Stack L2), Solidity 0.8.24" },
   { layer: "Settlement", tech: "Chainlink CRE Workflow" },
   { layer: "Identity", tech: "ERC-8004, secp256k1 runtime keys (EIP-712)" },
-  { layer: "Account Abstraction", tech: "EIP-4337 (EntryPoint v0.7), AgentPaymaster" },
+  { layer: "Agent Wallets", tech: "CDP Server Wallet (AgentKit), EIP-712 signing" },
   { layer: "Privacy", tech: "Groth16 ZK proofs (Circom 2.x)" },
   { layer: "Payments", tech: "USDC escrow (on-chain), x402 (HTTP micropayments)" },
   { layer: "Auction Engine", tech: "Cloudflare Workers + Durable Objects" },
   { layer: "Agent Interface", tech: "MCP Streamable HTTP, REST API" },
   { layer: "Frontend", tech: "Next.js 16 / React 19 (spectator UI)" },
-  { layer: "Testing", tech: "Foundry (117), Circuits (16), Crypto (56), CRE (9)" },
+  { layer: "Testing", tech: "Foundry (144), Circuits (16), Crypto (56), CRE (9)" },
 ];
 
 export function TechStackSection() {
