@@ -4,7 +4,7 @@
 
 Agent Auction is a Chainlink 2026 hackathon project where software agents discover work, bid, and settle auctions via on-chain escrow and CRE-based settlement.
 
-Current stage: contracts deployed on Base Sepolia (144 tests) → CRE E2E settlement confirmed on-chain → engine monetization redesign complete (commission, two-tier WebSocket, x402 discovery gating) → frontend scoreboard with masked data → MCP server with 7 agent tools.
+Current stage: contracts deployed on Base Sepolia (144 tests) → CRE E2E settlement confirmed on-chain → engine monetization redesign complete (commission, two-tier WebSocket, x402 discovery gating) → frontend scoreboard with masked data → MCP server with 15 tools and x402-paid discovery/detail reads.
 
 ## Read Order
 
@@ -20,12 +20,12 @@ Treat `docs/legacy/` as historical reference only.
 ```
 auction-design/
 |- contracts/      Foundry contracts (7 contracts, 144 tests)
-|- cre/            Chainlink CRE settlement workflow (9 unit tests)
+|- cre/            Chainlink CRE settlement workflow (13 unit tests)
 |- engine/         Cloudflare Workers + Durable Objects auction engine
 |- frontend/       Next.js spectator UI
 |- agent-client/   TypeScript agent demo client
 |- packages/crypto Shared crypto primitives (Poseidon, EIP-712, snarkjs helpers)
-|- mcp-server/     MCP server — auction tools for AI agents (discover, join, bid, bond)
+|- mcp-server/     MCP server — 15 auction tools for identity, x402-paid discovery, join, bid, bond, monitoring, and exits
 |- circuits/       Circom/snarkjs workspace (WS-1; test harness not wired yet)
 |- docs/           Specs, plans, developer docs, solutions
 `- .beads/         Issue tracking database (bd CLI)
@@ -78,7 +78,7 @@ npm run typecheck
 # MCP server
 cd mcp-server
 npx tsc --noEmit
-npm start                                # Start Streamable HTTP server
+npm run dev                              # Start Streamable HTTP server
 
 # Shared crypto package
 cd packages/crypto

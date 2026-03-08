@@ -4,7 +4,7 @@ Apply root `AGENTS.md` first, then this file.
 
 ## Scope
 
-This directory is the TypeScript demo agent client for end-to-end flows.
+This directory is the TypeScript demo / direct-integration client for end-to-end flows. It is not the primary supported participation path.
 
 ## Commands
 
@@ -18,7 +18,7 @@ npm run demo
 
 ## Local Rules
 
-- Keep this package as a demo/integration client, not a production SDK.
+- Keep this package as a demo/integration client, not a production SDK or the canonical AgentKit/CDP path.
 - Keep addresses/ABIs synchronized with `deployments/base-sepolia.json`.
 - If crypto package APIs change, update this package and run typecheck before merge.
 - Prefer explicit error output for on-chain step failures to aid debugging.
@@ -35,4 +35,4 @@ npm run demo
 - Wallet adapter: `agent-client/src/wallet-adapter.ts`
 - Identity helpers: `agent-client/src/identity.ts`
 - Privacy/ZK helpers: `agent-client/src/privacy.ts`
-- x402 auto-payment and utilities: `agent-client/src/utils.ts`
+- Legacy x402/payment helpers and utilities: `agent-client/src/utils.ts`
