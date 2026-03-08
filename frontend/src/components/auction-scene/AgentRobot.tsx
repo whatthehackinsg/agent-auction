@@ -20,15 +20,13 @@ export function AgentRobot({ agent }: AgentRobotProps) {
   const reduced = prefersReducedMotion()
 
   return (
-    <div
+    <motion.div
       className="absolute z-10"
       style={{
         left: `${seat.x}%`,
         top: `${seat.y}%`,
         transform: 'translate(-50%, -100%)',
       }}
-    >
-    <motion.div
       initial={{ opacity: 0, scale: 0, y: 20 }}
       animate={{
         opacity: 1,
@@ -132,7 +130,6 @@ export function AgentRobot({ agent }: AgentRobotProps) {
         </motion.div>
       )}
     </motion.div>
-    </div>
   )
 }
 
