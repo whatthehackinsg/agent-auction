@@ -62,13 +62,13 @@ export function NewsTicker({ events, isConnected, className }: NewsTickerProps) 
       {/* Scrolling text */}
       <div className="flex h-7 items-center overflow-hidden pl-16">
         <div
-          className="ticker-scroll flex whitespace-nowrap font-mono text-[10px] font-bold tracking-wider text-[#93a7ba]"
+          className="ticker-scroll inline-block whitespace-nowrap font-mono text-[10px] font-bold tracking-wider text-[#93a7ba]"
           style={{
+            paddingLeft: '100%',
             animation: `ticker-slide ${Math.max(20, tickerText.length * 0.15)}s linear infinite`,
           }}
         >
-          <span className="shrink-0">{tickerText}</span>
-          <span className="shrink-0 pl-24">{tickerText}</span>
+          {tickerText}{'   ●   '}{tickerText}
         </div>
       </div>
 
@@ -76,11 +76,12 @@ export function NewsTicker({ events, isConnected, className }: NewsTickerProps) 
       <style jsx>{`
         @keyframes ticker-slide {
           0%   { transform: translateX(0); }
-          100% { transform: translateX(calc(-50% - 48px)); }
+          100% { transform: translateX(-50%); }
         }
         @media (prefers-reduced-motion: reduce) {
           .ticker-scroll {
             animation: none !important;
+            padding-left: 0 !important;
             overflow: hidden;
             text-overflow: ellipsis;
           }
