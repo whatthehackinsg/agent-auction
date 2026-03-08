@@ -69,8 +69,8 @@ export function AgentRobot({ agent }: AgentRobotProps) {
 
       {/* Robot body */}
       <svg
-        width="48"
-        height="58"
+        width="72"
+        height="88"
         viewBox="0 0 36 44"
         className={cn('relative z-10', !reduced && 'animate-pixel-float')}
         style={{
