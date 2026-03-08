@@ -244,8 +244,6 @@ export function registerExitTools(
         )
       }
 
-      const withdrawableAfter = await safeReadWithdrawable(clients, target.agentId)
-
       return toolSuccess({
         agentId: target.agentId,
         walletBackend: target.backend.path,
@@ -253,7 +251,9 @@ export function registerExitTools(
         txHash: withdrawResult.txHash,
         amount: withdrawableBefore.toString(),
         destinationWallet: designatedWalletBefore,
-        remainingWithdrawable: withdrawableAfter.toString(),
+        // withdraw() zeroes withdrawable[agentId] atomically or reverts.
+        // Returning 0 avoids a stale immediate post-tx RPC read.
+        remainingWithdrawable: '0',
       })
     },
   )

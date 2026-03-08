@@ -394,4 +394,39 @@ describe('withdraw_funds', () => {
     expect(withdrawCall.functionName).toBe('withdraw')
     expect(withdrawCall.args).toEqual([5n])
   })
+
+  it('reports zero remainingWithdrawable after a successful withdraw even if the next read is stale', async () => {
+    const txHash = makeFakeTxHash('99')
+    const { clients } = makeExitClients({
+      withdrawableBefore: 10000n,
+      withdrawableAfter: 10000n,
+      designatedWalletBefore: TEST_WALLET,
+      designatedWalletAfter: '0x0000000000000000000000000000000000000000',
+      txHash,
+    })
+    const { mockServer, getHandler } = makeCapturingMcpServerMulti()
+
+    registerExitTools(
+      mockServer,
+      makeExitEngine(),
+      makeConfig({
+        ...agentKitConfig,
+        agentId: '5',
+      }),
+      {
+        createClients: async () => withSupportedBackend(clients),
+      } as any,
+    )
+
+    const handler = getHandler('withdraw_funds')
+    const result = await handler({
+      agentId: '5',
+    })
+    const body = parseToolResponse(result)
+
+    expect(body.success).toBe(true)
+    expect(body.withdrawalStatus).toBe('WITHDRAWN')
+    expect(body.amount).toBe('10000')
+    expect(body.remainingWithdrawable).toBe('0')
+  })
 })
