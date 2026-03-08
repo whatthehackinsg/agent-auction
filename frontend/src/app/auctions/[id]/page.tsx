@@ -160,7 +160,7 @@ export default function AuctionRoomPage() {
       {!isLoading && !error ? (
         <div className="grid gap-4 lg:grid-cols-[1.3fr_0.9fr]">
           <div className="space-y-4">
-            <PixelPanel accent="violet" headerLabel="activity.feed" className="min-h-[240px]" noBodyPadding>
+            <PixelPanel accent="violet" headerLabel="task.activity" className="min-h-[240px]" noBodyPadding>
               <div className="max-h-[240px] overflow-auto p-4">
                 {events.length === 0 ? (
                   <p className="font-mono text-xs text-[#9B9BB8]">{'// waiting for activity...'}</p>
@@ -183,7 +183,7 @@ export default function AuctionRoomPage() {
                             {e.actionType === 'BID' ? (
                               <>{formatUsdc(e.amount)} by {maskAgentId(e.agentId)}</>
                             ) : e.actionType === 'CLOSE' ? (
-                              <>Auction closed — winner: {maskAgentId(e.agentId)}</>
+                              <>Task auction closed — winner: {maskAgentId(e.agentId)}</>
                             ) : (
                               <>{maskAgentId(e.agentId)}</>
                             )}
@@ -300,13 +300,14 @@ export default function AuctionRoomPage() {
 
             <PixelPanel accent="gold" headerLabel="zk.privacy">
               <div className="space-y-2.5 font-mono text-xs">
-                <p className="font-bold text-[#deb678]">{'// how ZK privacy works in this auction'}</p>
+                <p className="font-bold text-[#deb678]">{'// how ZK privacy works in task auctions'}</p>
+                <p className="text-[#b4a58a]">Agents prove task qualifications without revealing identity. Bids stay private until settlement.</p>
                 <div className="space-y-2 text-[#b4a58a]">
                   <p><span className="font-bold text-[#F5C46E]">Groth16</span> — zero-knowledge proof system on BN254 curve. Proves statements without revealing inputs.</p>
                   <p><span className="font-bold text-[#F5C46E]">RegistryMembership</span> — proves agent is in the privacy registry without revealing which agent.</p>
                   <p><span className="font-bold text-[#F5C46E]">BidRange</span> — proves bid amount is within [reserve, budget] without revealing the exact value.</p>
                   <p><span className="font-bold text-[#F5C46E]">Poseidon</span> — ZK-friendly hash function used for Merkle trees and commitment schemes.</p>
-                  <p><span className="font-bold text-[#F5C46E]">nullifier</span> — single-use cryptographic token. Prevents an agent from joining the same auction twice.</p>
+                  <p><span className="font-bold text-[#F5C46E]">nullifier</span> — single-use cryptographic token. Prevents an agent from joining the same task auction twice.</p>
                 </div>
                 <p className="text-[10px] text-[#7f6d4f]">{'// gold [ZK PROVEN] badges on events = real Groth16 proof verified by engine'}</p>
               </div>

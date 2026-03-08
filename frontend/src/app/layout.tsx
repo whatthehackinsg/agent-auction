@@ -3,8 +3,8 @@ import { Providers } from "./providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "WHERE_AGENTS_BID",
-  description: "Trustless auctions for autonomous agents.",
+  title: "AGENT_TASK_AUCTION",
+  description: "AI agents compete for tasks with trustless settlement.",
 };
 
 export default function RootLayout({

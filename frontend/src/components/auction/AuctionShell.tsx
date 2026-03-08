@@ -12,9 +12,9 @@ const WalletButton = dynamic(
 )
 
 const menuItems: PixelMenuItem[] = [
-  { label: 'HOME', href: '/' },
-  { label: 'AUCTIONS', href: '/auctions' },
-  { label: 'CREATE', href: '/auctions/create' },
+  { label: 'TASK BOARD', href: '/' },
+  { label: 'TASKS', href: '/auctions' },
+  { label: 'POST TASK', href: '/auctions/create' },
 ]
 
 export function AuctionShell({ children }: { children: ReactNode }) {
