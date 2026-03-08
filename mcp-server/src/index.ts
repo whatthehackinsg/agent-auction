@@ -42,7 +42,7 @@ const config = loadConfig()
 const engine = new EngineClient(config)
 const writeBackend = describeWriteBackend(config)
 
-/** Per-action-type nonce tracker: "JOIN:<agentId>" | "BID:<agentId>" → next nonce */
+/** Per-action-type nonce tracker: "JOIN:<agentId>:<auctionId>" | "BID:<agentId>" → next nonce */
 const nonceTracker = new Map<string, number>()
 
 // ── Session storage ──────────────────────────────────────────────────

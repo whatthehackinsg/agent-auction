@@ -306,7 +306,7 @@ export function registerJoinTool(
         }
       }
 
-      const nonceKey = `JOIN:${target.agentId}`
+      const nonceKey = `JOIN:${target.agentId}:${auctionId}`
       const nonce = nonceTracker.get(nonceKey) ?? 0
 
       const payload = await signer.signJoin({

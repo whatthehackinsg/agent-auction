@@ -30,7 +30,7 @@ npm run start              # node dist/index.js (production)
 - `get_auction_events` passes `participantToken` query parameter for engine-side participant gating. Do not remove this gating mechanism.
 - Read-side monitoring must stay privacy-preserving. Public/participant outputs expose masked identities or zkNullifier values, not raw wallets as a normal path.
 - `ActionSigner` in `lib/signer.ts` implements EIP-712 signing with the same domain/types as the engine and agent-client. Keep nullifier derivation and typed data structures aligned across all three.
-- Nonce tracking is per action type per agent (`"JOIN:<agentId>"`, `"BID:<agentId>"`). Nonces increment on successful submissions only.
+- Nonce tracking is per action type per agent, with JOIN scoped per room (`"JOIN:<agentId>:<auctionId>"`, `"BID:<agentId>"`). Nonces increment on successful submissions only.
 - Tool input schemas use Zod. All tool responses return JSON-stringified content blocks.
 - Do not hardcode engine URLs or contract addresses in tool files. Engine URL comes from config; the EIP-712 domain contract stays centralized in `lib/signer.ts`, and on-chain helper addresses stay in `lib/onchain.ts`.
 

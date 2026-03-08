@@ -396,6 +396,36 @@ describe('join_auction proof pass-through to engine', () => {
     expect(payload.agentId).toBe('9')
     expect(proofGenerator.generateMembershipProofForAgent).toHaveBeenCalledOnce()
   })
+
+  it('starts JOIN nonce at 0 for each auction room even when the same agent joins multiple rooms', async () => {
+    const { mockServer, getHandler } = makeCapturingMcpServer()
+    const { mockEngine, capturedPayloads } = makeCapturingEngine()
+    const config = makeConfig()
+    const nonceTracker = new Map<string, number>()
+
+    registerJoinTool(mockServer, mockEngine, config, nonceTracker)
+    const handler = getHandler()
+
+    const secondAuctionId = ('0x' + '00'.repeat(31) + '02') as `0x${string}`
+
+    await handler({
+      auctionId: TEST_AUCTION_ID,
+      bondAmount: '50000000',
+      proofPayload: membershipFixture,
+    })
+
+    await handler({
+      auctionId: secondAuctionId,
+      bondAmount: '50000000',
+      proofPayload: membershipFixture,
+    })
+
+    expect(capturedPayloads).toHaveLength(2)
+    const firstPayload = capturedPayloads[0] as Record<string, unknown>
+    const secondPayload = capturedPayloads[1] as Record<string, unknown>
+    expect(firstPayload.nonce).toBe(0)
+    expect(secondPayload.nonce).toBe(0)
+  })
 })
 
 // ── Tests: join_auction structured errors ─────────────────────────────────────
