@@ -1,4 +1,20 @@
-import { concat, keccak256, numberToHex, toBytes } from 'viem'
+import { poseidon3 } from 'poseidon-lite'
+
+// BN254 scalar field modulus — must match engine + packages/crypto
+const F_MODULUS = BigInt('21888242871839275222246405745257275088548364400416034343698204186575808495617')
+
+function toFr(x: bigint): bigint {
+  const r = ((x % F_MODULUS) + F_MODULUS) % F_MODULUS
+  return r
+}
+
+function hexToFr(hex: `0x${string}`): bigint {
+  return toFr(BigInt(hex))
+}
+
+function frToHex(val: bigint): `0x${string}` {
+  return `0x${val.toString(16).padStart(64, '0')}` as `0x${string}`
+}
 
 export interface ReplayEvent {
   seq: number
@@ -69,7 +85,6 @@ export function computeReplayEventHash(
   prevHash: `0x${string}`,
   payloadHash: `0x${string}`,
 ): `0x${string}` {
-  const seqBytes = toBytes(numberToHex(BigInt(seq), { size: 32 }))
-  const data = concat([seqBytes, toBytes(prevHash), toBytes(payloadHash)])
-  return keccak256(data)
+  const hash = poseidon3([toFr(BigInt(seq)), hexToFr(prevHash), hexToFr(payloadHash)])
+  return frToHex(hash)
 }

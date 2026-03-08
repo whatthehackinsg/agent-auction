@@ -19,6 +19,7 @@
     "gsap": "^3.14.2",
     "lucide-react": "^0.575.0",
     "next": "16.1.6",
+    "poseidon-lite": "^0.3.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "swr": "^2.4.0",
