@@ -22,6 +22,10 @@ export interface AuctionSummary {
   nft_description?: string | null
   nft_image_url?: string | null
   nft_token_uri?: string | null
+  // Task metadata (display aliases for task auction rebrand)
+  task_category?: string | null
+  task_deadline?: string | null
+  task_bounty?: string | null
 }
 
 export function useAuctions() {

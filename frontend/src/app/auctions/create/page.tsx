@@ -30,7 +30,7 @@ export default function CreateAuctionPage() {
   const [maxExtensions, setMaxExtensions] = useState('5')
   const [showAdvanced, setShowAdvanced] = useState(false)
 
-  // NFT fields
+  // Task fields
   const [nftContract, setNftContract] = useState('')
   const [nftTokenId, setNftTokenId] = useState('')
   const [nftChainId, setNftChainId] = useState('84532')
@@ -75,19 +75,19 @@ export default function CreateAuctionPage() {
       return
     }
 
-    // Validate NFT fields if any are provided
+    // Validate task fields if any are provided
     const hasNft = nftContract.trim() || nftTokenId.trim()
     if (hasNft) {
       if (!nftContract.trim() || !nftTokenId.trim()) {
-        setError('Both NFT contract and token ID are required')
+        setError('Both task contract and token ID are required')
         return
       }
       if (!/^0x[0-9a-fA-F]{40}$/.test(nftContract.trim())) {
-        setError('NFT contract must be a valid address (0x + 40 hex chars)')
+        setError('Task contract must be a valid address (0x + 40 hex chars)')
         return
       }
       if (!/^\d+$/.test(nftTokenId.trim())) {
-        setError('NFT token ID must be a positive integer')
+        setError('Task token ID must be a positive integer')
         return
       }
     }
@@ -155,7 +155,7 @@ export default function CreateAuctionPage() {
       <AuctionShell>
         <div className="flex flex-col items-center justify-center gap-6 py-20">
           <p className="font-mono text-sm text-[#5E5E7A]">
-            {'>'} wallet required to create auctions
+            {'>'} wallet required to post task auctions
           </p>
           <WalletButton />
         </div>
@@ -166,7 +166,7 @@ export default function CreateAuctionPage() {
   return (
     <AuctionShell>
       <div className="mx-auto max-w-2xl">
-        <PixelCard title="create_auction.sh">
+        <PixelCard title="post_task_auction.sh">
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             {/* Title */}
             <label className="flex flex-col gap-1.5">
@@ -177,7 +177,7 @@ export default function CreateAuctionPage() {
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Rare NFT Auction #42"
+                placeholder="Task Auction #42"
                 className="border border-[#1E1E32] bg-[#0C0C1D] px-3 py-2 font-mono text-sm text-[#EEEEF5] placeholder:text-[#3A3A58] focus:border-[#6EE7B7] focus:outline-none"
               />
             </label>
@@ -254,10 +254,10 @@ export default function CreateAuctionPage() {
               </label>
             </div>
 
-            {/* Item Image Upload */}
+            {/* Task Image Upload */}
             <div className="flex flex-col gap-1.5">
               <span className="font-mono text-[10px] uppercase tracking-widest text-[#5E5E7A]">
-                {'>'} item image
+                {'>'} task image
               </span>
               <div className="flex items-center gap-3">
                 <button
@@ -293,17 +293,17 @@ export default function CreateAuctionPage() {
               )}
             </div>
 
-            {/* NFT Metadata */}
+            {/* Task Metadata */}
             <div className="flex flex-col gap-1.5">
               <span className="font-mono text-[10px] uppercase tracking-widest text-[#5E5E7A]">
-                {'>'} nft metadata (optional)
+                {'>'} task contract (optional)
               </span>
               <div className="grid grid-cols-1 gap-3 border-l-2 border-[#1E1E32] pl-4">
                 <input
                   type="text"
                   value={nftContract}
                   onChange={(e) => setNftContract(e.target.value)}
-                  placeholder="0x... (ERC-721 contract address)"
+                  placeholder="0x... (task contract address)"
                   className="border border-[#1E1E32] bg-[#0C0C1D] px-3 py-2 font-mono text-sm text-[#EEEEF5] placeholder:text-[#3A3A58] focus:border-[#6EE7B7] focus:outline-none"
                 />
                 <div className="grid grid-cols-2 gap-3">
@@ -311,7 +311,7 @@ export default function CreateAuctionPage() {
                     type="text"
                     value={nftTokenId}
                     onChange={(e) => setNftTokenId(e.target.value)}
-                    placeholder="Token ID"
+                    placeholder="Task Token ID"
                     className="border border-[#1E1E32] bg-[#0C0C1D] px-3 py-2 font-mono text-sm text-[#EEEEF5] placeholder:text-[#3A3A58] focus:border-[#6EE7B7] focus:outline-none"
                   />
                   <select
@@ -401,7 +401,7 @@ export default function CreateAuctionPage() {
             )}
 
             <PixelButton type="submit" disabled={submitting} className="mt-2">
-              {submitting ? '[ creating... ]' : '[ create_auction ]'}
+              {submitting ? '[ posting... ]' : '[ post_task_auction ]'}
             </PixelButton>
           </form>
         </PixelCard>

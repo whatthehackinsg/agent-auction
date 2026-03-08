@@ -27,7 +27,7 @@ import { AGENT_STATE_DIR } from './config.js'
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /** Deployed AgentPrivacyRegistry address on Base Sepolia */
-const AGENT_PRIVACY_REGISTRY = '0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff'
+const AGENT_PRIVACY_REGISTRY = '0x5b4f09A5D5188dCe1b1ba0caeDBcEb52CaCD1902'
 
 /** Registry root TTL: 5 minutes */
 const ROOT_CACHE_TTL_MS = 5 * 60 * 1000

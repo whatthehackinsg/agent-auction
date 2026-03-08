@@ -11,9 +11,8 @@ import { Badge } from '@/components/ui/Badge'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { useAuctionDetail, useAuctionRoom, useAuctionState } from '@/hooks'
-import { formatCountdown, formatUsdc, nftExplorerUrl, nftMarketplaceUrl, statusLabel, truncateHex } from '@/lib/format'
+import { formatCountdown, formatUsdc, statusLabel, truncateHex } from '@/lib/format'
 import { AuctionSceneView } from '@/components/auction-scene'
-import { resolveImageUrl } from '@/lib/ipfs'
 import { PARTICIPATION_GUIDE_PATH } from '@/lib/site-links'
 
 function maskAgentId(agentId: string): string {
@@ -124,74 +123,40 @@ export default function AuctionRoomPage() {
         </PixelPanel>
       ) : null}
 
-      {!isLoading && !error && (detail?.auction.item_image_cid || detail?.auction.nft_image_url || detail?.auction.nft_contract) ? (
-        <PixelPanel accent="gold" headerLabel="item.details" className="mb-4">
-          {(() => {
-            const imgUrl = resolveImageUrl(detail.auction.item_image_cid) ?? detail.auction.nft_image_url ?? null
-            const explorerUrl = nftExplorerUrl(
-              detail.auction.nft_chain_id,
-              detail.auction.nft_contract,
-              detail.auction.nft_token_id,
-            )
-            return (
-              <>
-                {imgUrl ? (
-                  <img
-                    src={imgUrl}
-                    alt={detail.auction.title ?? 'Auction item'}
-                    className="h-64 w-full rounded object-contain"
-                  />
-                ) : null}
-                {detail.auction.title ? (
-                  <p className="mt-3 font-mono text-lg font-bold text-[#EEEEF5]">{detail.auction.title}</p>
-                ) : null}
-                {!detail.auction.title && detail.auction.nft_name ? (
-                  <p className="mt-3 font-mono text-lg font-bold text-[#EEEEF5]">{detail.auction.nft_name}</p>
-                ) : null}
-                {detail.auction.title && detail.auction.nft_name && detail.auction.title !== detail.auction.nft_name ? (
-                  <p className="mt-1 font-mono text-xs text-[#F5C46E]">{detail.auction.nft_name}</p>
-                ) : null}
-                {detail.auction.description ? (
-                  <p className="mt-1 font-mono text-xs text-[#9B9BB8]">{detail.auction.description}</p>
-                ) : null}
-                {!detail.auction.description && detail.auction.nft_description ? (
-                  <p className="mt-1 font-mono text-xs text-[#9B9BB8]">{detail.auction.nft_description}</p>
-                ) : null}
-                {explorerUrl ? (
-                  <a
-                    href={explorerUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-3 inline-block font-mono text-xs text-[#A78BFA] hover:underline"
-                  >
-                    {truncateHex(detail.auction.nft_contract!, 10, 6)} / #{detail.auction.nft_token_id}
-                  </a>
-                ) : null}
-                {(() => {
-                  const marketplaceUrl = nftMarketplaceUrl(
-                    detail.auction.nft_chain_id,
-                    detail.auction.nft_contract,
-                    detail.auction.nft_token_id,
-                  )
-                  return marketplaceUrl ? (
-                    <a
-                      href={marketplaceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ml-4 inline-block font-mono text-xs text-[#F5C46E] hover:underline"
-                    >
-                      View on OpenSea
-                    </a>
-                  ) : null
-                })()}
-                {detail.nftEscrowState === 'DEPOSITED' ? (
-                  <span className="mt-3 inline-block rounded bg-[#6EE7B7]/90 px-2 py-1 font-mono text-[10px] font-bold text-[#0a0f1a]">
-                    NFT DEPOSITED
+      {/* ── Task Brief ── */}
+      {!isLoading && !error && detail ? (
+        <PixelPanel accent="gold" headerLabel="task.brief" className="mb-4">
+          <div className="space-y-3">
+            <h3 className="text-lg font-bold text-[#EEEEF5]">
+              {detail?.auction.title || detail?.auction.nft_name || 'Untitled Task'}
+            </h3>
+            <p className="text-sm text-[#9B9BB8]">
+              {detail?.auction.description || detail?.auction.nft_description || 'No description available.'}
+            </p>
+            {detail?.auction.reserve_price && (
+              <div className="flex items-center justify-between border-t border-[#28283e] pt-3">
+                <div>
+                  <span className="text-xs text-[#5E5E7A] block">Reserve Price</span>
+                  <span className="text-sm font-mono text-[#F5C46E]">
+                    {(Number(detail.auction.reserve_price) / 1e6).toLocaleString()} USDC
                   </span>
-                ) : null}
-              </>
-            )
-          })()}
+                </div>
+                {detail.auction.deposit_amount && (
+                  <div>
+                    <span className="text-xs text-[#5E5E7A] block">Required Bond</span>
+                    <span className="text-sm font-mono text-[#EEEEF5]">
+                      {(Number(detail.auction.deposit_amount) / 1e6).toLocaleString()} USDC
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+            {detail?.nftEscrowState && (
+              <span className="inline-block rounded border border-[#6EE7B7]/30 bg-[#6EE7B7]/10 px-2 py-0.5 text-xs font-mono text-[#6EE7B7]">
+                TASK POSTED
+              </span>
+            )}
+          </div>
         </PixelPanel>
       ) : null}
 
@@ -230,7 +195,7 @@ export default function AuctionRoomPage() {
       {!isLoading && !error ? (
         <div className="grid gap-4 lg:grid-cols-[1.3fr_0.9fr]">
           <div className="space-y-4">
-            <PixelPanel accent="violet" headerLabel="activity.feed" className="min-h-[240px]" noBodyPadding>
+            <PixelPanel accent="violet" headerLabel="task.activity" className="min-h-[240px]" noBodyPadding>
               <div className="max-h-[240px] overflow-auto p-4">
                 {events.length === 0 ? (
                   <p className="font-mono text-xs text-[#9B9BB8]">{'// waiting for activity...'}</p>
@@ -253,7 +218,7 @@ export default function AuctionRoomPage() {
                             {e.actionType === 'BID' ? (
                               <>{formatUsdc(e.amount)} by {maskAgentId(e.agentId)}</>
                             ) : e.actionType === 'CLOSE' ? (
-                              <>Auction closed — winner: {maskAgentId(e.agentId)}</>
+                              <>Task auction closed — winner: {maskAgentId(e.agentId)}</>
                             ) : (
                               <>{maskAgentId(e.agentId)}</>
                             )}
@@ -373,13 +338,14 @@ export default function AuctionRoomPage() {
 
             <PixelPanel accent="gold" headerLabel="zk.privacy">
               <div className="space-y-2.5 font-mono text-xs">
-                <p className="font-bold text-[#deb678]">{'// how ZK privacy works in this auction'}</p>
+                <p className="font-bold text-[#deb678]">{'// how ZK privacy works in task auctions'}</p>
+                <p className="text-[#b4a58a]">Agents prove task qualifications without revealing identity. Bids stay private until settlement.</p>
                 <div className="space-y-2 text-[#b4a58a]">
                   <p><span className="font-bold text-[#F5C46E]">Groth16</span> — zero-knowledge proof system on BN254 curve. Proves statements without revealing inputs.</p>
                   <p><span className="font-bold text-[#F5C46E]">RegistryMembership</span> — proves agent is in the privacy registry without revealing which agent.</p>
                   <p><span className="font-bold text-[#F5C46E]">BidRange</span> — proves bid amount is within [reserve, budget] without revealing the exact value.</p>
                   <p><span className="font-bold text-[#F5C46E]">Poseidon</span> — ZK-friendly hash function used for Merkle trees and commitment schemes.</p>
-                  <p><span className="font-bold text-[#F5C46E]">nullifier</span> — single-use cryptographic token. Prevents an agent from joining the same auction twice.</p>
+                  <p><span className="font-bold text-[#F5C46E]">nullifier</span> — single-use cryptographic token. Prevents an agent from joining the same task auction twice.</p>
                 </div>
                 <p className="text-[10px] text-[#7f6d4f]">{'// gold [ZK PROVEN] badges on events = real Groth16 proof verified by engine'}</p>
               </div>
