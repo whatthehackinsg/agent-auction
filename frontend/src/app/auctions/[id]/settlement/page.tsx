@@ -11,7 +11,7 @@ import { useAuctionState } from '@/hooks'
 import { formatUsdc, truncateHex } from '@/lib/format'
 
 const BASESCAN = 'https://sepolia.basescan.org'
-const AUCTION_ESCROW = '0x20944f46AB83F7eA40923D7543AF742Da829743c'
+const AUCTION_ESCROW = '0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2'
 
 export default function SettlementPage() {
   const params = useParams<{ id: string }>()

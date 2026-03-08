@@ -21,7 +21,7 @@ import { getEvmWalletProvider, resolveWriteBackend, type ResolvedWriteBackend } 
 export const BASE_SEPOLIA_CONTRACTS = {
   identityRegistry: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
   agentPrivacyRegistry: '0x5b4f09A5D5188dCe1b1ba0caeDBcEb52CaCD1902',
-  auctionEscrow: '0x20944f46AB83F7eA40923D7543AF742Da829743c',
+  auctionEscrow: '0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2',
   mockUsdc: '0xfEE786495d165b16dc8e68B6F8281193e041737d',
 } as const satisfies Record<string, Address>
 

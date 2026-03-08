@@ -8,7 +8,7 @@ import {NftEscrow} from "../src/NftEscrow.sol";
 /// @notice Single constructor arg: address(registry).
 ///
 /// Usage:
-///   REGISTRY=0xFEc7a05707AF85C6b248314E20FF8EfF590c3639 \
+///   REGISTRY=0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F \
 ///   forge script script/DeployNftEscrow.s.sol \
 ///     --rpc-url $BASE_SEPOLIA_RPC --broadcast --verify \
 ///     --etherscan-api-key $BASESCAN_API_KEY

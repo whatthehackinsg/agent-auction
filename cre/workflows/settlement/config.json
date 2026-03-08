@@ -1,10 +1,10 @@
 {
   "chainSelectorName": "ethereum-testnet-sepolia-base-1",
-  "auctionRegistryAddress": "0xFEc7a05707AF85C6b248314E20FF8EfF590c3639",
-  "auctionEscrowAddress": "0x20944f46AB83F7eA40923D7543AF742Da829743c",
+  "auctionRegistryAddress": "0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F",
+  "auctionEscrowAddress": "0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2",
   "replayBundleBaseUrl": "https://auction-engine.zengyuzhi2002-efc.workers.dev",
   "gasLimit": "500000",
-  "skipReplayVerification": "true",
+  "skipReplayVerification": "false",
   "isTestnet": "true",
-  "useFinalized": "false"
+  "useFinalized": "true"
 }

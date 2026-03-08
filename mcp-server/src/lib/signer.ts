@@ -22,7 +22,7 @@ export interface ActionSigningAccount {
 
 // ── Constants ────────────────────────────────────────────────────────────
 
-const AUCTION_REGISTRY = '0xFEc7a05707AF85C6b248314E20FF8EfF590c3639' as const
+const AUCTION_REGISTRY = '0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F' as const
 
 const EIP712_DOMAIN = {
   name: 'AgentAuction' as const,

@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "check:settlement-compat": "tsx scripts/check-settlement-compat.ts",
     "permissionless-demo": "tsx scripts/permissionless-userop-demo.ts",
     "agent-userop-demo": "tsx scripts/agent-userop-demo.ts"
   },

@@ -21,8 +21,8 @@ import {AuctionEscrow} from "../src/AuctionEscrow.sol";
 ///   WORKFLOW_OWNER       — address that deployed the CRE workflow
 ///   USE_MOCK             — If "true", use simulator default mock values
 contract ConfigureCRE is Script {
-    // Deployed AuctionEscrow on Base Sepolia
-    address constant ESCROW = 0x20944f46AB83F7eA40923D7543AF742Da829743c;
+    // Default deployed AuctionEscrow on Base Sepolia (override with ESCROW_ADDRESS if needed)
+    address constant DEFAULT_ESCROW = 0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2;
 
     // Simulator mock values (used by `cre workflow simulate --broadcast`)
     bytes32 constant MOCK_WORKFLOW_ID = 0x1111111111111111111111111111111111111111111111111111111111111111;
@@ -31,7 +31,8 @@ contract ConfigureCRE is Script {
 
     function run() external {
         uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
-        AuctionEscrow escrow = AuctionEscrow(ESCROW);
+        address escrowAddress = vm.envOr("ESCROW_ADDRESS", DEFAULT_ESCROW);
+        AuctionEscrow escrow = AuctionEscrow(escrowAddress);
 
         bool useMock = vm.envOr("USE_MOCK", false);
 
@@ -50,7 +51,7 @@ contract ConfigureCRE is Script {
             workflowOwner = vm.envAddress("WORKFLOW_OWNER");
         }
 
-        console2.log("AuctionEscrow:", ESCROW);
+        console2.log("AuctionEscrow:", escrowAddress);
         console2.log("workflowId:");
         console2.logBytes32(workflowId);
         console2.log("workflowName:");
