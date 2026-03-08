@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { Miniflare } from 'miniflare'
 import { privateKeyToAccount } from 'viem/accounts'
 import app, { type Env } from '../src/index'
+import * as chainClient from '../src/lib/chain-client'
 import { applySchema, createTestMiniflare, randomAuctionId } from './setup'
 import { sha256Hex } from '../src/lib/x402-policy'
 import {
@@ -263,6 +264,34 @@ describe('API routes (Hono)', () => {
     expect(json.auction).toBeTruthy()
     expect(json.snapshot).toBeTruthy()
     expect(json.snapshot.auctionId).toBe(auctionId)
+  })
+
+  it('GET /auctions/:id reconciles SETTLED status from chain when room lags at CLOSED', async () => {
+    const auctionId = randomAuctionId()
+    await db
+      .prepare(
+        'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .bind(auctionId, '0xhash', 2, '1', '0', Math.floor(Date.now() / 1000) - 60)
+      .run()
+
+    const stateSpy = vi
+      .spyOn(chainClient.publicClient, 'readContract')
+      .mockResolvedValue(3n)
+
+    const res = await app.request(`http://localhost/auctions/${auctionId}`, {}, env)
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.auction.status).toBe(3)
+    expect(json.snapshot.status).toBe(3)
+
+    const row = await db
+      .prepare('SELECT status FROM auctions WHERE auction_id = ?')
+      .bind(auctionId)
+      .first<{ status: number }>()
+    expect(row?.status).toBe(3)
+
+    stateSpy.mockRestore()
   })
 
   it('POST /auctions/:id/action proxies to room /action', async () => {

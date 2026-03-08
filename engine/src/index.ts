@@ -7,7 +7,7 @@ import { type AuctionEvent, type ItemMetadata, ActionType } from './types/engine
 import { getBondStatus, verifyBondFromReceipt } from './lib/bond-watcher'
 import { createX402Middleware } from './middleware/x402'
 import { pinToIpfs } from './lib/ipfs'
-import { createSequencerClient, auctionRegistryAbi } from './lib/chain-client'
+import { createSequencerClient, auctionRegistry, auctionRegistryAbi } from './lib/chain-client'
 import { ADDRESSES } from './lib/addresses'
 import { resolveNftMetadata } from './lib/nft-metadata'
 import { getNftEscrowStatus } from './lib/nft-escrow'
@@ -569,9 +569,33 @@ app.get('/auctions/:id', async (c) => {
   const snapshotRes = await room.fetch(makeRoomRequest('/snapshot', auctionId))
   const snapshot = await snapshotRes.json()
 
+  const auctionRecord = auction as Record<string, unknown>
+  const snapshotRecord = snapshot as Record<string, unknown>
+  const localStatus = Number(snapshotRecord.status ?? auctionRecord.status ?? 0)
+
+  // Best-effort status reconciliation: CRE settlement updates the registry after
+  // the room has already closed, so read surfaces can temporarily lag at CLOSED.
+  // When the chain is ahead, reflect SETTLED immediately and sync D1.
+  if (localStatus === 2) {
+    try {
+      const chainStatus = Number(
+        await auctionRegistry.read.getAuctionState([auctionId as `0x${string}`]),
+      )
+      if (chainStatus === 3) {
+        auctionRecord.status = 3
+        snapshotRecord.status = 3
+        await c.env.AUCTION_DB
+          .prepare('UPDATE auctions SET status = 3 WHERE auction_id = ? AND status != 3')
+          .bind(auctionId)
+          .run()
+      }
+    } catch (err) {
+      console.warn('[GET /auctions/:id] failed to reconcile on-chain status:', err)
+    }
+  }
+
   // Best-effort NftEscrow deposit status (only when auction has NFT fields)
   let nftEscrowState: string | null = null
-  const auctionRecord = auction as Record<string, unknown>
   if (auctionRecord.nft_contract && auctionRecord.nft_token_id) {
     const escrowStatus = await getNftEscrowStatus(auctionId)
     nftEscrowState = escrowStatus.state

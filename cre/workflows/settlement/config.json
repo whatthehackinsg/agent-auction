@@ -6,5 +6,5 @@
   "gasLimit": "500000",
   "skipReplayVerification": "false",
   "isTestnet": "true",
-  "useFinalized": "true"
+  "useFinalized": "false"
 }
