@@ -26,6 +26,7 @@ export default function AuctionsPage() {
   }, [])
 
   const statusOrder: Record<string, number> = { OPEN: 0, CLOSED: 1, SETTLED: 2, CANCELLED: 3, NONE: 4 }
+  const nftFilter = 'all'
 
   const filteredAuctions = (nftFilter === 'all'
     ? auctions
