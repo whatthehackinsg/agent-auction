@@ -9,7 +9,7 @@ import {IAuctionTypes} from "../src/interfaces/IAuctionTypes.sol";
 /// @dev Run: forge script script/CreateTestAuction.s.sol --rpc-url $BASE_SEPOLIA_RPC --broadcast
 contract CreateTestAuction is Script {
     // Deployed AuctionRegistry on Base Sepolia
-    address constant REGISTRY = 0xFEc7a05707AF85C6b248314E20FF8EfF590c3639;
+    address constant REGISTRY = 0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F;
 
     // Test auction params
     bytes32 constant AUCTION_ID = keccak256("test-auction-cre-002");

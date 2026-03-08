@@ -2,7 +2,7 @@
   "chainId": 84532,
   "network": "base-sepolia",
   "deployer": "0x633ec0e633AA4d8BbCCEa280331A935747416737",
-  "deployedAt": "2026-02-22",
+  "deployedAt": "2026-03-08",
 
   "entryPoint": {
     "address": "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
@@ -15,10 +15,9 @@
       "abi": "../contracts/out/MockUSDC.sol/MockUSDC.json",
       "note": "ERC-20 mock USDC (6 decimals)"
     },
-    "MockIdentityRegistry": {
-      "address": "0x68E06c33D4957102362ACffC2BFF9E6b38199318",
-      "abi": "../contracts/out/MockIdentityRegistry.sol/MockIdentityRegistry.json",
-      "note": "Mock ERC-8004 IdentityRegistry — ownerOf(agentId) returns registered owner"
+    "IdentityRegistry": {
+      "address": "0x8004A818BFB912233c491871b3d84c89A494BD9e",
+      "note": "Canonical ERC-8004 IdentityRegistry on Base Sepolia"
     },
     "MockKeystoneForwarder": {
       "address": "0x846ae85403D1BBd3B343F1b214D297969b39Ce23",
@@ -40,17 +39,22 @@
       "note": "EIP-4337 gas sponsor — 0.01 ETH staked, 0.05 ETH deposited"
     },
     "AuctionRegistry": {
-      "address": "0xFEc7a05707AF85C6b248314E20FF8EfF590c3639",
+      "address": "0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F",
       "abi": "../contracts/out/AuctionRegistry.sol/AuctionRegistry.json",
-      "note": "Auction lifecycle: OPEN → CLOSED → SETTLED/CANCELLED (EIP-712 sequencer sigs). V2 — redeployed to rebind escrow."
+      "note": "Auction lifecycle: OPEN → CLOSED → SETTLED/CANCELLED (EIP-712 sequencer sigs). V3 — redeployed for the 8-field settlement packet with replayContentHash."
     },
     "AuctionEscrow": {
-      "address": "0x20944f46AB83F7eA40923D7543AF742Da829743c",
+      "address": "0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2",
       "abi": "../contracts/out/AuctionEscrow.sol/AuctionEscrow.json",
-      "note": "USDC bond escrow + CRE settlement via IReceiver.onReport(). V2 — uses real KeystoneForwarder."
+      "note": "USDC bond escrow + CRE settlement via IReceiver.onReport(). V3 — bound to AuctionRegistry v3 and real KeystoneForwarder."
+    },
+    "NftEscrow": {
+      "address": "0x110fA3cc158621a85BfCcCA7F7B093356FCea020",
+      "abi": "../contracts/out/NftEscrow.sol/NftEscrow.json",
+      "note": "NFT custody escrow bound to AuctionRegistry v3."
     },
     "AgentPrivacyRegistry": {
-      "address": "0x857E1049A5eE2cCA03a5C95F32089FECe51Ce8ff",
+      "address": "0x5b4f09A5D5188dCe1b1ba0caeDBcEb52CaCD1902",
       "abi": "../contracts/out/AgentPrivacyRegistry.sol/AgentPrivacyRegistry.json",
       "note": "ZK privacy commitment sidecar — stores registration commitments and Merkle root for membership proofs. NOT identity authority."
     },
@@ -70,8 +74,7 @@
       "name": "AgentAuction",
       "version": "1",
       "chainId": 84532,
-      "verifyingContract": "0xFEc7a05707AF85C6b248314E20FF8EfF590c3639"
-    }
+      "verifyingContract": "0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F"
     },
     "bundler": {
       "provider": "Pimlico",

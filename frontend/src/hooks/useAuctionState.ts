@@ -9,7 +9,7 @@ const publicClient = createPublicClient({
   transport: http('https://sepolia.base.org'),
 })
 
-const AUCTION_REGISTRY = '0xFEc7a05707AF85C6b248314E20FF8EfF590c3639' as const
+const AUCTION_REGISTRY = '0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F' as const
 
 // Minimal ABI for read functions
 const auctionRegistryAbi = [

@@ -1,20 +1,7 @@
 import { poseidon3 } from 'poseidon-lite'
+import { toBytes, toHex } from 'viem'
 
-// BN254 scalar field modulus — must match engine + packages/crypto
 const F_MODULUS = BigInt('21888242871839275222246405745257275088548364400416034343698204186575808495617')
-
-function toFr(x: bigint): bigint {
-  const r = ((x % F_MODULUS) + F_MODULUS) % F_MODULUS
-  return r
-}
-
-function hexToFr(hex: `0x${string}`): bigint {
-  return toFr(BigInt(hex))
-}
-
-function frToHex(val: bigint): `0x${string}` {
-  return `0x${val.toString(16).padStart(64, '0')}` as `0x${string}`
-}
 
 export interface ReplayEvent {
   seq: number
@@ -85,6 +72,28 @@ export function computeReplayEventHash(
   prevHash: `0x${string}`,
   payloadHash: `0x${string}`,
 ): `0x${string}` {
-  const hash = poseidon3([toFr(BigInt(seq)), hexToFr(prevHash), hexToFr(payloadHash)])
-  return frToHex(hash)
+  const hash = poseidon3([
+    toFr(BigInt(seq)),
+    bytesToFr(toBytes(prevHash)),
+    bytesToFr(toBytes(payloadHash)),
+  ])
+
+  return toHex(frToBytes(toFr(hash)))
+}
+
+function toFr(x: bigint): bigint {
+  return ((x % F_MODULUS) + F_MODULUS) % F_MODULUS
+}
+
+function bytesToFr(bytes: Uint8Array): bigint {
+  let value = BigInt(0)
+  for (const byte of bytes) {
+    value = (value << BigInt(8)) | BigInt(byte)
+  }
+  return toFr(value)
+}
+
+function frToBytes(value: bigint): Uint8Array {
+  const hex = value.toString(16).padStart(64, '0')
+  return new Uint8Array(hex.match(/.{2}/g)!.map((part) => Number.parseInt(part, 16)))
 }

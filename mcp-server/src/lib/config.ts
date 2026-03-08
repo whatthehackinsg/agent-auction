@@ -6,10 +6,12 @@
  * optional for read-only tools (discover, details, events).
  */
 
+import fs from 'node:fs'
 import path from 'node:path'
 import type { Address, Hex } from 'viem'
 
 export type WalletBackendMode = 'auto' | 'agentkit' | 'raw-key'
+export type EngineReadMode = 'x402-buyer' | 'admin-bypass'
 
 export interface CdpWalletBackendConfig {
   apiKeyId: string | null
@@ -34,6 +36,8 @@ export interface ServerConfig {
   port: number
   /** Engine admin key — bypasses x402 gates on engine calls */
   engineAdminKey: string | null
+  /** Engine GET authentication mode for discovery/detail reads */
+  engineReadMode: EngineReadMode
   /** Optional alternate signer for bond funding flows */
   bondFundingPrivateKey: Hex | null
   /** Path to agent-N.json for server-side ZK proof generation */
@@ -53,6 +57,65 @@ export interface ToolIdentityOverrides {
   baseSepoliaRpc?: string | null
 }
 
+export function loadDefaultEnvFileForStartup(options?: {
+  cwd?: string
+  filename?: string
+}): string | null {
+  const cwd = options?.cwd ?? process.cwd()
+  const filename = options?.filename ?? process.env.MCP_ENV_FILE ?? '.env.agentkit.local'
+  const resolved = path.resolve(cwd, filename)
+
+  if (!fs.existsSync(resolved)) {
+    return null
+  }
+
+  const source = fs.readFileSync(resolved, 'utf8')
+  for (const line of source.split(/\r?\n/)) {
+    const parsed = parseEnvLine(line)
+    if (!parsed) continue
+
+    const [key, value] = parsed
+    if (process.env[key] === undefined) {
+      process.env[key] = value
+    }
+  }
+
+  return resolved
+}
+
+function parseEnvLine(line: string): [string, string] | null {
+  const trimmed = line.trim()
+  if (!trimmed || trimmed.startsWith('#')) {
+    return null
+  }
+
+  const normalized = trimmed.startsWith('export ') ? trimmed.slice(7).trimStart() : trimmed
+  const separatorIndex = normalized.indexOf('=')
+  if (separatorIndex <= 0) {
+    return null
+  }
+
+  const key = normalized.slice(0, separatorIndex).trim()
+  if (!key) {
+    return null
+  }
+
+  let value = normalized.slice(separatorIndex + 1).trim()
+  if (
+    (value.startsWith('"') && value.endsWith('"'))
+    || (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    value = value.slice(1, -1)
+  } else {
+    const commentIndex = value.search(/\s+#/)
+    if (commentIndex >= 0) {
+      value = value.slice(0, commentIndex).trimEnd()
+    }
+  }
+
+  return [key, value]
+}
+
 export function loadConfig(): ServerConfig {
   const engineUrl = process.env.ENGINE_URL ?? 'http://localhost:8787'
   const rawWalletBackendMode = process.env.MCP_WALLET_BACKEND ?? 'auto'
@@ -61,6 +124,7 @@ export function loadConfig(): ServerConfig {
   const agentId = process.env.AGENT_ID ?? null
   const port = parseInt(process.env.MCP_PORT ?? '3100', 10)
   const engineAdminKey = process.env.ENGINE_ADMIN_KEY ?? null
+  const rawEngineReadMode = process.env.MCP_ENGINE_READ_MODE ?? 'x402-buyer'
   const rawBondFundingKey = process.env.BOND_FUNDING_PRIVATE_KEY ?? null
   const agentStateFile = process.env.AGENT_STATE_FILE ?? null
   const configuredStateDir = process.env.AGENT_STATE_DIR ?? null
@@ -73,6 +137,7 @@ export function loadConfig(): ServerConfig {
   let agentPrivateKey: Hex | null = null
   let bondFundingPrivateKey: Hex | null = null
   let walletBackendMode: WalletBackendMode
+  let engineReadMode: EngineReadMode
   let cdpWalletAddress: Address | null = null
 
   if (
@@ -83,6 +148,15 @@ export function loadConfig(): ServerConfig {
     throw new Error('MCP_WALLET_BACKEND must be one of: auto, agentkit, raw-key')
   }
   walletBackendMode = rawWalletBackendMode
+
+  if (rawEngineReadMode !== 'x402-buyer' && rawEngineReadMode !== 'admin-bypass') {
+    throw new Error('MCP_ENGINE_READ_MODE must be one of: x402-buyer, admin-bypass')
+  }
+  engineReadMode = rawEngineReadMode
+
+  if (engineReadMode === 'admin-bypass' && !engineAdminKey) {
+    throw new Error('ENGINE_ADMIN_KEY is required when MCP_ENGINE_READ_MODE=admin-bypass')
+  }
 
   if (rawKey) {
     if (!/^0x[0-9a-fA-F]{64}$/.test(rawKey)) {
@@ -123,6 +197,7 @@ export function loadConfig(): ServerConfig {
     agentId,
     port,
     engineAdminKey,
+    engineReadMode,
     bondFundingPrivateKey,
     agentStateFile,
     agentStateDir,

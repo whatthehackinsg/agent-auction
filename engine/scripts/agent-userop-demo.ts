@@ -39,7 +39,7 @@ const ADDRESSES = {
   entryPoint: entryPoint07Address,
   agentAccountFactory: "0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD" as Address,
   agentPaymaster: "0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d" as Address,
-  auctionEscrow: "0x20944f46AB83F7eA40923D7543AF742Da829743c" as Address,
+  auctionEscrow: "0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2" as Address,
   mockUSDC: "0xfEE786495d165b16dc8e68B6F8281193e041737d" as Address,
 } as const
 

@@ -21,6 +21,9 @@ contract HelperConfig is Script {
 
     /// @dev Base Sepolia chain ID
     uint256 public constant BASE_SEPOLIA_CHAIN_ID = 84_532;
+    address public constant BASE_SEPOLIA_MOCK_USDC = 0xfEE786495d165b16dc8e68B6F8281193e041737d;
+    address public constant BASE_SEPOLIA_IDENTITY_REGISTRY = 0x8004A818BFB912233c491871b3d84c89A494BD9e;
+    address public constant BASE_SEPOLIA_KEYSTONE_FORWARDER = 0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5;
 
     /// @dev Anvil default private key (account[0])
     uint256 public constant ANVIL_DEFAULT_KEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
@@ -46,16 +49,16 @@ contract HelperConfig is Script {
     /* ── Chain configs ──────────────────────────────────────────── */
 
     function _getBaseSepoliaConfig() internal view returns (NetworkConfig memory) {
-        // For Base Sepolia we still deploy our own mocks for USDC, IdentityRegistry,
-        // and KeystoneForwarder since the real ones may not be available yet.
-        // Update these addresses once real contracts are deployed.
         uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
         address sequencer = vm.envOr("SEQUENCER_ADDRESS", vm.addr(deployerKey));
+        address usdc = vm.envOr("USDC_ADDRESS", BASE_SEPOLIA_MOCK_USDC);
+        address identityRegistry = vm.envOr("IDENTITY_REGISTRY_ADDRESS", BASE_SEPOLIA_IDENTITY_REGISTRY);
+        address keystoneForwarder = vm.envOr("KEYSTONE_FORWARDER_ADDRESS", BASE_SEPOLIA_KEYSTONE_FORWARDER);
 
         return NetworkConfig({
-            usdc: address(0), // Will deploy MockUSDC
-            identityRegistry: address(0), // Will deploy MockIdentityRegistry
-            keystoneForwarder: address(0), // Will deploy MockKeystoneForwarder
+            usdc: usdc,
+            identityRegistry: identityRegistry,
+            keystoneForwarder: keystoneForwarder,
             sequencer: sequencer,
             deployerKey: deployerKey
         });

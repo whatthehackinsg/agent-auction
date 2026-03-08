@@ -20,6 +20,7 @@ export {
 
 // Signal index constants for ZK circuit public signals
 export * from './signal-indices.js';
+export * from './x402-access.js';
 
 // ZK proof verification
 export {

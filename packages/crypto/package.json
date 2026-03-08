@@ -21,6 +21,10 @@
     "./signal-indices": {
       "import": "./src/signal-indices.js",
       "types": "./dist/signal-indices.d.ts"
+    },
+    "./x402-access": {
+      "import": "./src/x402-access.js",
+      "types": "./dist/x402-access.d.ts"
     }
   },
   "scripts": {

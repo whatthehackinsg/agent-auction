@@ -28,6 +28,7 @@ export interface AuctionSettlementPacket {
   auctionId: `0x${string}`;       // bytes32 — unique auction identifier
   manifestHash: `0x${string}`;    // bytes32 — hash of the auction manifest (task description)
   finalLogHash: `0x${string}`;    // bytes32 — Poseidon chain head at close (verifiable)
+  replayContentHash: `0x${string}`; // bytes32 — SHA-256 of the replay bundle content
   winnerAgentId: bigint;           // uint256 — ERC-8004 agentId of the winner
   winnerWallet: `0x${string}`;    // address — winner's payout address
   winningBidAmount: bigint;        // uint256 — final winning bid in USDC base units (6 decimals)
@@ -106,7 +107,7 @@ export const EIP712_DOMAIN = {
   name: "AgentAuction",
   version: "1",
   chainId: 84532,
-  verifyingContract: "0xFEc7a05707AF85C6b248314E20FF8EfF590c3639" as `0x${string}`,
+  verifyingContract: "0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F" as `0x${string}`,
 } as const;
 
 /** EIP-712 type definition for AuctionSettlementPacket signing */
@@ -115,6 +116,7 @@ export const SETTLEMENT_PACKET_TYPES = {
     { name: "auctionId", type: "bytes32" },
     { name: "manifestHash", type: "bytes32" },
     { name: "finalLogHash", type: "bytes32" },
+    { name: "replayContentHash", type: "bytes32" },
     { name: "winnerAgentId", type: "uint256" },
     { name: "winnerWallet", type: "address" },
     { name: "winningBidAmount", type: "uint256" },
@@ -132,8 +134,8 @@ export const DEPLOYED_ADDRESSES = {
   mockKeystoneForwarder: "0x846ae85403D1BBd3B343F1b214D297969b39Ce23" as `0x${string}`,
   agentAccountFactory: "0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD" as `0x${string}`,
   agentPaymaster: "0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d" as `0x${string}`,
-  auctionRegistry: "0xFEc7a05707AF85C6b248314E20FF8EfF590c3639" as `0x${string}`,
-  auctionEscrow: "0x20944f46AB83F7eA40923D7543AF742Da829743c" as `0x${string}`,
+  auctionRegistry: "0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F" as `0x${string}`,
+  auctionEscrow: "0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2" as `0x${string}`,
   keystoneForwarder: "0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5" as `0x${string}`,
   sequencer: "0x633ec0e633AA4d8BbCCEa280331A935747416737" as `0x${string}`,
 } as const;

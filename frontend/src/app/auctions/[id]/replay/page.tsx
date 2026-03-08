@@ -71,11 +71,14 @@ export default function ReplayPage() {
       }
     }
 
-    const rows = bundle.events.map((event, idx) => {
-      const recomputed = computeReplayEventHash(event.seq, event.prevHash, event.payloadHash)
-      const expectedPrev = idx === 0 ? ZERO_HASH : bundle.events[idx - 1].eventHash
+    let runningPrev = ZERO_HASH
+
+    const rows = bundle.events.map((event) => {
+      const expectedPrev = runningPrev
       const prevOk = event.prevHash.toLowerCase() === expectedPrev.toLowerCase()
-      const ok = recomputed.toLowerCase() === event.eventHash.toLowerCase()
+      const recomputed = computeReplayEventHash(event.seq, expectedPrev, event.payloadHash)
+      const ok = prevOk && recomputed.toLowerCase() === event.eventHash.toLowerCase()
+      runningPrev = recomputed
       return {
         seq: event.seq,
         expected: event.eventHash,
@@ -85,7 +88,7 @@ export default function ReplayPage() {
       }
     })
 
-    const finalComputed = bundle.events.length > 0 ? bundle.events[bundle.events.length - 1].eventHash : ZERO_HASH
+    const finalComputed = rows.length > 0 ? rows[rows.length - 1].recomputed : ZERO_HASH
     const allEventsVerified = rows.length > 0 && rows.every((r) => r.ok && r.prevOk)
 
     return { rows, finalComputed, allEventsVerified }

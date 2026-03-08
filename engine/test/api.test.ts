@@ -1,8 +1,15 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { Miniflare } from 'miniflare'
+import { privateKeyToAccount } from 'viem/accounts'
 import app, { type Env } from '../src/index'
+import * as chainClient from '../src/lib/chain-client'
 import { applySchema, createTestMiniflare, randomAuctionId } from './setup'
 import { sha256Hex } from '../src/lib/x402-policy'
+import {
+  buildX402AccessTypedData,
+  X402_ACCESS_ISSUED_AT_HEADER,
+  X402_ACCESS_SIGNATURE_HEADER,
+} from '../../packages/crypto/src/x402-access.js'
 
 type Call = {
   url: string
@@ -74,6 +81,9 @@ function createMockRoomNamespace() {
 
 const TEST_ADMIN_KEY = 'test-admin-key'
 const adminHeaders = { 'Content-Type': 'application/json', 'X-ENGINE-ADMIN-KEY': TEST_ADMIN_KEY }
+const TEST_X402_ACCOUNT = privateKeyToAccount(
+  '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+)
 
 describe('API routes (Hono)', () => {
   let mf: Miniflare
@@ -254,6 +264,34 @@ describe('API routes (Hono)', () => {
     expect(json.auction).toBeTruthy()
     expect(json.snapshot).toBeTruthy()
     expect(json.snapshot.auctionId).toBe(auctionId)
+  })
+
+  it('GET /auctions/:id reconciles SETTLED status from chain when room lags at CLOSED', async () => {
+    const auctionId = randomAuctionId()
+    await db
+      .prepare(
+        'INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .bind(auctionId, '0xhash', 2, '1', '0', Math.floor(Date.now() / 1000) - 60)
+      .run()
+
+    const stateSpy = vi
+      .spyOn(chainClient.publicClient, 'readContract')
+      .mockResolvedValue(3n)
+
+    const res = await app.request(`http://localhost/auctions/${auctionId}`, {}, env)
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.auction.status).toBe(3)
+    expect(json.snapshot.status).toBe(3)
+
+    const row = await db
+      .prepare('SELECT status FROM auctions WHERE auction_id = ?')
+      .bind(auctionId)
+      .first<{ status: number }>()
+    expect(row?.status).toBe(3)
+
+    stateSpy.mockRestore()
   })
 
   it('POST /auctions/:id/action proxies to room /action', async () => {
@@ -607,6 +645,98 @@ describe('API routes (Hono)', () => {
       env,
     )
     expect(bypassRes.status).toBe(200)
+
+    delete env.X402_MODE
+    delete env.X402_RECEIVER_ADDRESS
+    delete env.ENGINE_X402_DISCOVERY
+  })
+
+  it('x402 access signatures reuse discovery entitlement without repayment', async () => {
+    env.X402_MODE = 'on'
+    env.X402_RECEIVER_ADDRESS = '0x' + '11'.repeat(20)
+    env.ENGINE_X402_DISCOVERY = 'true'
+
+    await db
+      .prepare('INSERT INTO x402_entitlements (payer_wallet, resource_scope, granted_at, receipt_hash) VALUES (?, ?, ?, ?)')
+      .bind(TEST_X402_ACCOUNT.address, 'discovery', Math.floor(Date.now() / 1000), '0xentitlement')
+      .run()
+
+    const issuedAt = Math.floor(Date.now() / 1000)
+    const signature = await TEST_X402_ACCOUNT.signTypedData(
+      buildX402AccessTypedData({
+        scope: 'discovery',
+        engineOrigin: 'http://localhost',
+        issuedAt,
+      }),
+    )
+
+    const res = await app.request('http://localhost/auctions', {
+      headers: {
+        [X402_ACCESS_ISSUED_AT_HEADER]: String(issuedAt),
+        [X402_ACCESS_SIGNATURE_HEADER]: signature,
+      },
+    }, env)
+
+    expect(res.status).toBe(200)
+
+    delete env.X402_MODE
+    delete env.X402_RECEIVER_ADDRESS
+    delete env.ENGINE_X402_DISCOVERY
+  })
+
+  it('x402 access signatures are room-scoped for auction detail entitlements', async () => {
+    const entitledAuctionId = randomAuctionId()
+    const otherAuctionId = randomAuctionId()
+    await db
+      .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(entitledAuctionId, '0x' + 'ab'.repeat(32), 1, '1', '0', Math.floor(Date.now() / 1000) + 60)
+      .run()
+    await db
+      .prepare('INSERT INTO auctions (auction_id, manifest_hash, status, reserve_price, deposit_amount, deadline) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(otherAuctionId, '0x' + 'cd'.repeat(32), 1, '1', '0', Math.floor(Date.now() / 1000) + 60)
+      .run()
+
+    env.X402_MODE = 'on'
+    env.X402_RECEIVER_ADDRESS = '0x' + '11'.repeat(20)
+    env.ENGINE_X402_DISCOVERY = 'true'
+
+    await db
+      .prepare('INSERT INTO x402_entitlements (payer_wallet, resource_scope, granted_at, receipt_hash) VALUES (?, ?, ?, ?)')
+      .bind(TEST_X402_ACCOUNT.address, `auction:${entitledAuctionId}`, Math.floor(Date.now() / 1000), '0xroom')
+      .run()
+
+    const issuedAt = Math.floor(Date.now() / 1000)
+    const signature = await TEST_X402_ACCOUNT.signTypedData(
+      buildX402AccessTypedData({
+        scope: `auction:${entitledAuctionId}`,
+        engineOrigin: 'http://localhost',
+        issuedAt,
+      }),
+    )
+
+    const entitledRes = await app.request(
+      `http://localhost/auctions/${entitledAuctionId}`,
+      {
+        headers: {
+          [X402_ACCESS_ISSUED_AT_HEADER]: String(issuedAt),
+          [X402_ACCESS_SIGNATURE_HEADER]: signature,
+        },
+      },
+      env,
+    )
+    expect(entitledRes.status).toBe(200)
+
+    const otherRes = await app.request(
+      `http://localhost/auctions/${otherAuctionId}`,
+      {
+        headers: {
+          [X402_ACCESS_ISSUED_AT_HEADER]: String(issuedAt),
+          [X402_ACCESS_SIGNATURE_HEADER]: signature,
+        },
+      },
+      env,
+    )
+    expect(otherRes.status).toBe(402)
 
     delete env.X402_MODE
     delete env.X402_RECEIVER_ADDRESS

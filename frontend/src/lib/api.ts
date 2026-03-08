@@ -8,17 +8,7 @@ if (process.env.NODE_ENV === 'production' && !configuredApiBaseUrl) {
 export const API_BASE_URL = configuredApiBaseUrl ?? 'http://localhost:8787'
 
 export async function fetcher<T>(url: string): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${url}`)
-  // If x402 gated, fall back to admin proxy (keeps admin key server-side)
-  if (res.status === 402) {
-    const proxyRes = await fetch(`/api/admin${url}`)
-    if (!proxyRes.ok) {
-      const text = await proxyRes.text().catch(() => '')
-      const detail = text ? ` body=${text.slice(0, 300)}` : ''
-      throw new Error(`API request failed: status=${proxyRes.status}${detail}`)
-    }
-    return proxyRes.json() as Promise<T>
-  }
+  const res = await fetch(`/api/admin${url}`)
   if (!res.ok) {
     const text = await res.text().catch(() => '')
     const detail = text ? ` body=${text.slice(0, 300)}` : ''

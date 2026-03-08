@@ -1,12 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Miniflare } from 'miniflare'
 import {
+  extractPayerWalletFromPaymentHeader,
   getPaymentSignatureHeader,
   hasX402Receipt,
+  hasX402Entitlement,
+  resolveX402EntitlementScope,
   resolveX402RuntimeConfig,
   resolveAuctionX402Policy,
   validateAuctionX402Policy,
   sha256Hex,
+  storeX402Entitlement,
   storeX402Receipt,
   type AuctionX402Policy,
   type X402RuntimeConfig,
@@ -69,6 +73,48 @@ describe('x402 policy helpers', () => {
     await storeX402Receipt(db, hash, Math.floor(Date.now() / 1000))
     expect(await hasX402Receipt(db, hash)).toBe(true)
   })
+
+  it('stores and looks up x402 entitlement by wallet and scope', async () => {
+    const wallet = '0x' + '22'.repeat(20)
+    const scope = 'auction:0x' + 'ab'.repeat(32)
+
+    expect(await hasX402Entitlement(db, wallet, scope)).toBe(false)
+    await storeX402Entitlement(db, wallet, scope, Math.floor(Date.now() / 1000))
+    expect(await hasX402Entitlement(db, wallet, scope)).toBe(true)
+  })
+
+  it('extracts payer wallet from an exact payment header', () => {
+    const paymentPayload = {
+      x402Version: 2,
+      resource: 'http://localhost/auctions',
+      accepted: {
+        scheme: 'exact',
+        network: 'eip155:84532',
+        maxAmountRequired: '1000',
+        resource: 'http://localhost/auctions',
+        description: 'Auction discovery list',
+        mimeType: 'application/json',
+        outputSchema: undefined,
+        payTo: '0x' + '11'.repeat(20),
+        maxTimeoutSeconds: 300,
+        asset: '0x' + '33'.repeat(20),
+        amount: '1000',
+      },
+      payload: {
+        authorization: {
+          from: '0x' + '44'.repeat(20),
+          to: '0x' + '11'.repeat(20),
+          value: '1000',
+          validAfter: '0',
+          validBefore: '9999999999',
+          nonce: '0x' + '55'.repeat(32),
+        },
+        signature: '0x' + '66'.repeat(65),
+      },
+    }
+    const header = Buffer.from(JSON.stringify(paymentPayload), 'utf8').toString('base64')
+    expect(extractPayerWalletFromPaymentHeader(header)).toBe('0x' + '44'.repeat(20))
+  })
 })
 
 // ── extractAuctionIdFromPath ────────────────────────────────────────
@@ -98,6 +144,22 @@ describe('extractAuctionIdFromPath', () => {
   it('returns null for empty/root path', () => {
     expect(extractAuctionIdFromPath('/')).toBeNull()
     expect(extractAuctionIdFromPath('')).toBeNull()
+  })
+})
+
+describe('resolveX402EntitlementScope', () => {
+  it('maps discovery list to discovery scope', () => {
+    expect(resolveX402EntitlementScope('/auctions')).toBe('discovery')
+  })
+
+  it('maps room detail to auction-specific scope', () => {
+    const auctionId = '0x' + 'ef'.repeat(32)
+    expect(resolveX402EntitlementScope(`/auctions/${auctionId}`)).toBe(`auction:${auctionId}`)
+  })
+
+  it('returns null for non-entitled paths', () => {
+    expect(resolveX402EntitlementScope('/health')).toBeNull()
+    expect(resolveX402EntitlementScope('/auctions/0xabc/events')).toBeNull()
   })
 })
 
