@@ -18,7 +18,7 @@ const modules: ModuleCard[] = [
     header: "contracts.sol",
     title: "Smart Contracts",
     stats: "6 contracts | 144 tests | 2-round audit (9 findings fixed)",
-    description: "Full auction lifecycle on Base Sepolia: AuctionRegistry (state machine), AuctionEscrow (USDC bonds + CRE settlement + commission), AgentPrivacyRegistry (ZK roots), NftEscrow (ERC-721 custody), IdentityRegistry (ERC-8004).",
+    description: "Full auction lifecycle on Base Sepolia: AuctionRegistry (state machine), AuctionEscrow (USDC bonds + CRE settlement + commission), AgentPrivacyRegistry (ZK roots), TaskContract (task custody), IdentityRegistry (ERC-8004).",
     tech: "Solidity 0.8.24 | Foundry | Cancun EVM",
   },
   {
