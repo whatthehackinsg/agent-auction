@@ -2,7 +2,7 @@
   "chainId": 84532,
   "network": "base-sepolia",
   "deployer": "0x633ec0e633AA4d8BbCCEa280331A935747416737",
-  "deployedAt": "2026-03-08",
+  "deployedAt": "2026-03-09",
 
   "entryPoint": {
     "address": "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
@@ -39,19 +39,19 @@
       "note": "EIP-4337 gas sponsor — 0.01 ETH staked, 0.05 ETH deposited"
     },
     "AuctionRegistry": {
-      "address": "0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F",
+      "address": "0xAe416531962709cb26886851888aEc80ef29bB45",
       "abi": "../contracts/out/AuctionRegistry.sol/AuctionRegistry.json",
-      "note": "Auction lifecycle: OPEN → CLOSED → SETTLED/CANCELLED (EIP-712 sequencer sigs). V3 — redeployed for the 8-field settlement packet with replayContentHash."
+      "note": "Auction lifecycle: OPEN → CLOSED → SETTLED/CANCELLED (EIP-712 sequencer sigs). V4 — bound to the ERC165-compatible CRE settlement stack."
     },
     "AuctionEscrow": {
-      "address": "0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2",
+      "address": "0x5a1af9fDD97162c184496519E40afCf864061329",
       "abi": "../contracts/out/AuctionEscrow.sol/AuctionEscrow.json",
-      "note": "USDC bond escrow + CRE settlement via IReceiver.onReport(). V3 — bound to AuctionRegistry v3 and real KeystoneForwarder."
+      "note": "USDC bond escrow + CRE settlement via IReceiver.onReport(). V4 — implements ERC165 for KeystoneForwarder compatibility."
     },
     "NftEscrow": {
-      "address": "0x110fA3cc158621a85BfCcCA7F7B093356FCea020",
+      "address": "0x298C51ca785f2016d42550C6FF052D40f7061519",
       "abi": "../contracts/out/NftEscrow.sol/NftEscrow.json",
-      "note": "NFT custody escrow bound to AuctionRegistry v3."
+      "note": "NFT custody escrow bound to AuctionRegistry v4."
     },
     "AgentPrivacyRegistry": {
       "address": "0x5b4f09A5D5188dCe1b1ba0caeDBcEb52CaCD1902",
@@ -74,7 +74,7 @@
       "name": "AgentAuction",
       "version": "1",
       "chainId": 84532,
-      "verifyingContract": "0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F"
+      "verifyingContract": "0xAe416531962709cb26886851888aEc80ef29bB45"
     },
     "bundler": {
       "provider": "Pimlico",

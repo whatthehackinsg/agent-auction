@@ -11,9 +11,9 @@ const deployment = {
 } as const;
 
 const contracts = [
-  { name: "AuctionRegistry (v3)", address: "0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F" },
-  { name: "AuctionEscrow (v3)", address: "0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2" },
-  { name: "TaskContract (v3)", address: "0x110fA3cc158621a85BfCcCA7F7B093356FCea020" },
+  { name: "AuctionRegistry (v4)", address: "0xAe416531962709cb26886851888aEc80ef29bB45" },
+  { name: "AuctionEscrow (v4)", address: "0x5a1af9fDD97162c184496519E40afCf864061329" },
+  { name: "NftEscrow (v4)", address: "0x298C51ca785f2016d42550C6FF052D40f7061519" },
   { name: "IdentityRegistry (ERC-8004)", address: "0x8004A818BFB912233c491871b3d84c89A494BD9e" },
   { name: "AgentPrivacyRegistry", address: "0x5b4f09A5D5188dCe1b1ba0caeDBcEb52CaCD1902" },
   { name: "KeystoneForwarder", address: "0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5" },

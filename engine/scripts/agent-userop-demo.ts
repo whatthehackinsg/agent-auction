@@ -6,7 +6,7 @@
  *
  * Prerequisites (run once via cast — see docs):
  *   1. Agent registered in IdentityRegistry
- *   2. AgentPaymaster.setEscrow(v2)
+ *   2. AgentPaymaster.setEscrow(v4)
  *   3. AgentPaymaster.registerAgent(agentAccountAddress, agentId)
  *   4. MockUSDC minted to AgentAccount
  *
@@ -39,7 +39,7 @@ const ADDRESSES = {
   entryPoint: entryPoint07Address,
   agentAccountFactory: "0x076d3C6c50b72D78be0C5190c392e6e5Ac7FD8aD" as Address,
   agentPaymaster: "0xd71a4b73737d4E1a9A73662Cf93690AB5A4fE32d" as Address,
-  auctionEscrow: "0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2" as Address,
+  auctionEscrow: "0x5a1af9fDD97162c184496519E40afCf864061329" as Address,
   mockUSDC: "0xfEE786495d165b16dc8e68B6F8281193e041737d" as Address,
 } as const
 

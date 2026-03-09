@@ -5,6 +5,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IReceiver} from "@chainlink/contracts/src/v0.8/keystone/interfaces/IReceiver.sol";
 import {IAuctionTypes} from "./interfaces/IAuctionTypes.sol";
 
@@ -25,7 +26,7 @@ interface IERC8004RegistryEscrow {
 /// @dev Implements IReceiver for KeystoneForwarder integration.
 ///      Solvency invariant: usdc.balanceOf(this) >= totalBonded + totalWithdrawable
 ///      Ref: full_contract_arch(amended).md Section 8
-contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
+contract AuctionEscrow is IReceiver, IERC165, Ownable, ReentrancyGuard, IAuctionTypes {
     using SafeERC20 for IERC20;
 
     /* ── Immutables ─────────────────────────────────────────────── */
@@ -281,6 +282,12 @@ contract AuctionEscrow is IReceiver, Ownable, ReentrancyGuard, IAuctionTypes {
         if (workflowOwner != expectedAuthor) revert InvalidReport();
 
         _processReport(report);
+    }
+
+    /// @notice ERC165 interface advertisement required by KeystoneForwarder.
+    /// @dev The live forwarder checks this before delivering `onReport`.
+    function supportsInterface(bytes4 interfaceId) public pure returns (bool) {
+        return interfaceId == type(IReceiver).interfaceId || interfaceId == type(IERC165).interfaceId;
     }
 
     function _setCREConfigured() internal {

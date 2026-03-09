@@ -11,19 +11,19 @@
       "types": "./dist/index.d.ts"
     },
     "./poseidon-chain": {
-      "import": "./src/poseidon-chain.js",
+      "import": "./dist/poseidon-chain.js",
       "types": "./dist/poseidon-chain.d.ts"
     },
     "./replay-bundle": {
-      "import": "./src/replay-bundle.js",
+      "import": "./dist/replay-bundle.js",
       "types": "./dist/replay-bundle.d.ts"
     },
     "./signal-indices": {
-      "import": "./src/signal-indices.js",
+      "import": "./dist/signal-indices.js",
       "types": "./dist/signal-indices.d.ts"
     },
     "./x402-access": {
-      "import": "./src/x402-access.js",
+      "import": "./dist/x402-access.js",
       "types": "./dist/x402-access.d.ts"
     }
   },

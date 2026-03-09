@@ -22,7 +22,7 @@ import {AuctionEscrow} from "../src/AuctionEscrow.sol";
 ///   USE_MOCK             — If "true", use simulator default mock values
 contract ConfigureCRE is Script {
     // Default deployed AuctionEscrow on Base Sepolia (override with ESCROW_ADDRESS if needed)
-    address constant DEFAULT_ESCROW = 0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2;
+    address constant DEFAULT_ESCROW = 0x5a1af9fDD97162c184496519E40afCf864061329;
 
     // Simulator mock values (used by `cre workflow simulate --broadcast`)
     bytes32 constant MOCK_WORKFLOW_ID = 0x1111111111111111111111111111111111111111111111111111111111111111;

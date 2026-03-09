@@ -117,7 +117,7 @@ export function registerBondTools(
       description:
         'Submit a USDC bond transfer proof to the engine for verification. ' +
         'The USDC transfer must have already been executed on-chain (transfer to AuctionEscrow at ' +
-        '0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2). ' +
+        '0x5a1af9fDD97162c184496519E40afCf864061329). ' +
         'Provide the transaction hash as proof.',
       inputSchema: z.object({
         auctionId: z.string().describe('The 0x-prefixed bytes32 auction ID'),

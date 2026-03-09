@@ -3,9 +3,11 @@ pragma solidity ^0.8.24;
 
 import {Test, console} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {AuctionEscrow} from "../src/AuctionEscrow.sol";
 import {AuctionRegistry} from "../src/AuctionRegistry.sol";
 import {MockKeystoneForwarder} from "../src/MockKeystoneForwarder.sol";
+import {IReceiver} from "@chainlink/contracts/src/v0.8/keystone/interfaces/IReceiver.sol";
 import {IAuctionTypes} from "../src/interfaces/IAuctionTypes.sol";
 
 /// @dev Minimal mock ERC-20 for testing
@@ -271,6 +273,16 @@ contract AuctionEscrowTest is Test {
     }
 
     /* ── onReport (CRE settlement via MockKeystoneForwarder) ────── */
+
+    function test_supportsInterface_advertisesReceiverAndERC165() public view {
+        assertTrue(
+            escrow.supportsInterface(type(IReceiver).interfaceId), "AuctionEscrow should advertise IReceiver"
+        );
+        assertTrue(
+            escrow.supportsInterface(type(IERC165).interfaceId), "AuctionEscrow should advertise IERC165"
+        );
+        assertFalse(escrow.supportsInterface(bytes4(0xffffffff)), "AuctionEscrow should reject unknown interfaces");
+    }
 
     function test_onReport_settlesAuction() public {
         // Record bonds for winner and loser

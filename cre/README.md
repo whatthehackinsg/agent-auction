@@ -78,12 +78,12 @@ Important fields:
 
 ## Escrow Configuration
 
-Any real KeystoneForwarder path is fail-closed until `AuctionEscrow.configureCRE(...)` is set:
+Any real KeystoneForwarder path is fail-closed until `AuctionEscrow.configureCRE(...)` is set on the active escrow:
 
 ```bash
 cast send $ESCROW "configureCRE(bytes32,bytes10,address)" \
   $WORKFLOW_ID \
-  $(cast --format-bytes32 "auctSettle" | cut -c1-22) \
+  $WORKFLOW_NAME \
   $WORKFLOW_OWNER \
   --rpc-url $BASE_SEPOLIA_RPC \
   --private-key $DEPLOYER_PRIVATE_KEY
@@ -93,8 +93,8 @@ cast send $ESCROW "configureCRE(bytes32,bytes10,address)" \
 
 | Contract | Address |
 |---|---|
-| AuctionRegistry | `0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F` |
-| AuctionEscrow | `0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2` |
+| AuctionRegistry | `0xAe416531962709cb26886851888aEc80ef29bB45` |
+| AuctionEscrow | `0x5a1af9fDD97162c184496519E40afCf864061329` |
 | KeystoneForwarder | `0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5` |
 
 ## Confirmed Result

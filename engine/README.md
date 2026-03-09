@@ -127,9 +127,9 @@ npm run agent-userop-demo
 
 - The engine exposes spectator-friendly aggregate fields like `bidCount`, `uniqueBidders`, `competitionLevel`, and `priceIncreasePct`.
 - The x402 entitlement layer is read-only auth only; it does not change ERC-8004 ownership, ZK proof verification, room sequencing, or action semantics.
-- The deployed Base Sepolia engine currently points at the v3 stack:
-  - `AuctionRegistry`: `0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F`
-  - `AuctionEscrow`: `0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2`
+- The deployed Base Sepolia engine now points at the v4 settlement stack:
+  - `AuctionRegistry`: `0xAe416531962709cb26886851888aEc80ef29bB45`
+  - `AuctionEscrow`: `0x5a1af9fDD97162c184496519E40afCf864061329`
   - `AgentPrivacyRegistry`: `0x5b4f09A5D5188dCe1b1ba0caeDBcEb52CaCD1902`
 - `GET /auctions/:id` now reconciles on-chain `SETTLED` state after CRE settlement so room snapshots do not stay stuck at `CLOSED`.
 - A pre-existing `bond-watcher.test.ts` failure is still tracked as separate tech debt; the live engine bond path uses receipt verification, not the old log-polling helper.

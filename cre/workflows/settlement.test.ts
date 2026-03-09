@@ -47,8 +47,8 @@ const AUCTION_ENDED_SIGNATURE = keccak256(
 
 const BASE_CONFIG = {
   chainSelectorName: CHAIN_SELECTOR_NAME,
-  auctionRegistryAddress: "0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F",
-  auctionEscrowAddress: "0xb23D3bca2728e407A3b8c8ab63C8Ed6538c4bca2",
+  auctionRegistryAddress: "0xAe416531962709cb26886851888aEc80ef29bB45",
+  auctionEscrowAddress: "0x5a1af9fDD97162c184496519E40afCf864061329",
   replayBundleBaseUrl: "https://replay.auction-platform.io",
   gasLimit: "500000",
 };

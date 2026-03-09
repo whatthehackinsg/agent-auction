@@ -26,7 +26,7 @@ import {
   DEFAULT_BACKFILL_LOG_WINDOW,
 } from './settlement-watcher-lib'
 
-const AUCTION_REGISTRY = '0xB2FB10e98B2707A4C27434665E3C864ecaea0b7F'
+const AUCTION_REGISTRY = '0xAe416531962709cb26886851888aEc80ef29bB45'
 const WORKFLOW_DIR = path.resolve(import.meta.dir, '../workflows/settlement')
 const CRE_PROJECT_ROOT = path.resolve(import.meta.dir, '..')
 
