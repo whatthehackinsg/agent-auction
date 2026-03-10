@@ -11,12 +11,12 @@ import { useAuctionState } from '@/hooks'
 import { formatUsdc, truncateHex } from '@/lib/format'
 
 const BASESCAN = 'https://sepolia.basescan.org'
-const AUCTION_ESCROW = '0x5a1af9fDD97162c184496519E40afCf864061329'
 
 export default function SettlementPage() {
   const params = useParams<{ id: string }>()
   const auctionId = params?.id
-  const { stateLabel, winner, isLoading, error } = useAuctionState(auctionId)
+  const { stateLabel, winner, isLoading, error, escrowAddress, registryVersion } = useAuctionState(auctionId)
+  const resolvedEscrow = escrowAddress ?? '0x5a1af9fDD97162c184496519E40afCf864061329'
 
   return (
     <AuctionShell>
@@ -49,7 +49,9 @@ export default function SettlementPage() {
           <PixelPanel accent="mint" headerLabel="auction.state">
             <div className="flex items-center gap-3">
               <StatusPill status={(stateLabel as 'NONE' | 'OPEN' | 'CLOSED' | 'SETTLED' | 'CANCELLED') ?? 'NONE'} />
-              <span className="font-mono text-xs text-[#9B9BB8]">on-chain registry verdict</span>
+              <span className="font-mono text-xs text-[#9B9BB8]">
+                on-chain registry verdict{registryVersion ? ` (${registryVersion})` : ''}
+              </span>
             </div>
 
             {stateLabel !== 'SETTLED' ? (
@@ -71,9 +73,9 @@ export default function SettlementPage() {
               {'// settlement path: AuctionEnded -> CRE workflow -> AuctionEscrow.onReport'}
             </p>
             <p className="mt-3 font-mono text-xs text-[#9B9BB8]">escrow contract</p>
-            <p className="font-mono text-xs text-[#EEEEF5]">{truncateHex(AUCTION_ESCROW, 14, 10)}</p>
+            <p className="font-mono text-xs text-[#EEEEF5]">{truncateHex(resolvedEscrow, 14, 10)}</p>
             <div className="mt-4">
-              <a href={`${BASESCAN}/address/${AUCTION_ESCROW}`} target="_blank" rel="noreferrer noopener">
+              <a href={`${BASESCAN}/address/${resolvedEscrow}`} target="_blank" rel="noreferrer noopener">
                 <PixelButton size="sm">[ verify_on_basescan ]</PixelButton>
               </a>
             </div>
