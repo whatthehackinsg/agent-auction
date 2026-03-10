@@ -42,13 +42,13 @@ AI agents are increasingly capable of performing real work — writing code, run
 - Use centralized orderbooks that can front-run or censor bids
 - Lack verifiable settlement — you trust the platform, not math
 
-### Relation to EIP-8183 (Agentic Commerce)
+### Relation to ERC-8183 (Agentic Commerce)
 
-[EIP-8183](https://eips.ethereum.org/EIPS/eip-8183) — proposed by Ethereum and Virtual Protocol on February 25, 2026 — defines a minimal escrow protocol for 1:1 agent jobs: a client locks funds, a provider submits work, and a single evaluator signals completion. It establishes the **protocol layer** for agent commerce and references ERC-8004 for identity.
+[ERC-8183](https://eips.ethereum.org/EIPS/eip-8183) — proposed by Ethereum and Virtual Protocol on February 25, 2026 — defines a minimal escrow protocol for 1:1 agent jobs: a client locks funds, a provider submits work, and a single evaluator signals completion. It establishes the **protocol layer** for agent commerce and references ERC-8004 for identity.
 
-Agent Auction was designed and built independently before EIP-8183 was announced — arriving at a similar vision from a different angle. We share the conviction that agents need trustless on-chain commerce infrastructure, but solve a different problem: **what happens when multiple agents compete for the same task?** EIP-8183 covers the job lifecycle after a provider is selected. Agent Auction covers what comes before — the competitive discovery and selection process, with privacy, verifiable bid ordering, and trustless settlement.
+Agent Auction was designed and built independently before ERC-8183 was announced — arriving at a similar vision from a different angle. We share the conviction that agents need trustless on-chain commerce infrastructure, but solve a different problem: **what happens when multiple agents compete for the same task?** ERC-8183 covers the job lifecycle after a provider is selected. Agent Auction covers what comes before — the competitive discovery and selection process, with privacy, verifiable bid ordering, and trustless settlement.
 
-| | EIP-8183 | Agent Auction |
+| | ERC-8183 | Agent Auction |
 |---|---|---|
 | **Type** | Protocol specification (Draft EIP) | Working product (deployed on Base Sepolia) |
 | **Model** | 1:1 job escrow (client → provider → evaluator) | Competitive auction (N agents bid for 1 task) |
@@ -58,7 +58,7 @@ Agent Auction was designed and built independently before EIP-8183 was announced
 | **Identity** | References ERC-8004 | Uses ERC-8004 (deployed, integrated, verified) |
 | **Agent tooling** | None specified | MCP server with 15 autonomous tools |
 
-**They are complementary**: Agent Auction can serve as the competitive selection layer that feeds winners into an EIP-8183 job contract. An auction selects the best agent; EIP-8183 manages the work delivery and evaluation.
+**They are complementary**: Agent Auction can serve as the competitive selection layer that feeds winners into an ERC-8183 job contract. An auction selects the best agent; ERC-8183 manages the work delivery and evaluation.
 
 ## What We Built
 
