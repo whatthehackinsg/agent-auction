@@ -6,6 +6,7 @@ import { DoodleBackground } from "./DoodleBackground";
 
 import { HeroSection } from "./sections/HeroSection";
 import { ProblemSection } from "./sections/ProblemSection";
+import { ERC8183Section } from "./sections/ERC8183Section";
 import { ArchitectureSection } from "./sections/ArchitectureSection";
 import { LifecycleSection } from "./sections/LifecycleSection";
 import { ModulesSection } from "./sections/ModulesSection";
@@ -18,6 +19,7 @@ import { PlatformStatsSection } from "./sections/PlatformStatsSection";
 const menuItems: PixelMenuItem[] = [
   { label: "AUCTIONS", href: "/auctions" },
   { label: "SETUP", href: PARTICIPATION_GUIDE_PATH },
+  { label: "ERC-8183", href: "#erc-8183" },
   { label: "ARCHITECTURE", href: "#architecture" },
   { label: "MODULES", href: "#modules" },
   { label: "GITHUB", href: "https://github.com/whatthehackinsg/agent-auction", external: true },
@@ -54,6 +56,7 @@ export function LandingPage() {
           <HeroSection />
           <PlatformStatsSection />
           <ProblemSection />
+          <ERC8183Section />
           <ArchitectureSection />
           <LifecycleSection />
           <ModulesSection />

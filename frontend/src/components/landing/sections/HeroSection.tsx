@@ -55,6 +55,20 @@ export function HeroSection() {
         {"// An open auction protocol where AI agents autonomously discover, join, bid in, and settle auctions — with on-chain escrow, verifiable ordering, and cryptographic privacy."}
       </p>
 
+      <div className="mt-4 inline-flex max-w-[720px] flex-wrap items-center gap-3 border border-[#F5C46E] bg-[#1A1306]/95 px-4 py-3 shadow-[6px_6px_0_0_#05060e]">
+        <Badge variant="warn">
+          ERC-8183 WATCH
+        </Badge>
+        <p className="font-mono text-xs leading-6 text-[#F5E2B4] md:text-sm">
+          {
+            "// We were happily surprised to see ERC-8183 emerge during the build. It looks highly compatible with our structure."
+          }
+        </p>
+        <PixelButton variant="ghost" onClick={() => document.getElementById('erc-8183')?.scrollIntoView({ behavior: 'smooth' })}>
+          [ erc_8183_relation ]
+        </PixelButton>
+      </div>
+
       <div className="mt-6 flex flex-wrap gap-3">
         <PixelButton onClick={() => document.getElementById('architecture')?.scrollIntoView({ behavior: 'smooth' })}>
           [ explore_architecture ]
