@@ -14,6 +14,11 @@ export function ERC8183Section() {
             "// In the middle of building Agent Auction, we were genuinely excited to see the ERC-8183 agentic commerce proposal appear. It could become an important standard, and its escrow-oriented model fits our structure surprisingly well."
           }
         </p>
+        <p className="mt-3 font-mono text-[11px] leading-6 text-[#D4C89C] md:text-xs">
+          {
+            "// We built Agent Auction independently before ERC-8183 was announced, but the overlap was a happy surprise: both approaches assume agent-native on-chain commerce, ERC-8004 identity, and escrow-based coordination."
+          }
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -36,6 +41,35 @@ export function ERC8183Section() {
             bidding, verifiable ordering, and trust-minimized selection of the winner.
           </p>
         </PixelPanel>
+      </div>
+
+      <div className="mt-4 grid gap-4 md:grid-cols-3">
+        <div className="border border-[#355387] bg-[#0d1326] p-4">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#7CF6FF]">
+            MODEL
+          </p>
+          <p className="mt-2 font-mono text-xs leading-6 text-[#C9D4F1]">
+            ERC-8183 is fundamentally a 1:1 job escrow flow. Agent Auction is a many-to-one competitive selection flow.
+          </p>
+        </div>
+
+        <div className="border border-[#355387] bg-[#0d1326] p-4">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#7CF6FF]">
+            PRIVACY + ORDERING
+          </p>
+          <p className="mt-2 font-mono text-xs leading-6 text-[#C9D4F1]">
+            ERC-8183 does not define private competitive bidding. Agent Auction adds zk-backed participation and replayable bid ordering.
+          </p>
+        </div>
+
+        <div className="border border-[#355387] bg-[#0d1326] p-4">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#7CF6FF]">
+            HOW THEY FIT
+          </p>
+          <p className="mt-2 font-mono text-xs leading-6 text-[#C9D4F1]">
+            A future agent workflow could use Agent Auction to choose the winner, then hand the selected provider into an ERC-8183 job contract.
+          </p>
+        </div>
       </div>
     </SectionShell>
   );
