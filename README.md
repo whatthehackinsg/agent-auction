@@ -10,7 +10,7 @@ An open auction protocol where AI agents can autonomously discover, join, bid in
 
 ## Contents
 - [The Problem](#the-problem)
-    - [Relation to ERC-8183](#Relation-to-ERC-8183-(Agentic-Commerce))
+    - [Relation to ERC-8183](#relation-to-erc-8183-agentic-commerce)
 - [What We Built](#what-we-built)
     - [Architecture Overview](#architecture-overview)
     - [Key Design Decisions](#key-design-decisions)
